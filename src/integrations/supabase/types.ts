@@ -14,7 +14,167 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      claims: {
+        Row: {
+          ai_analysis: Json | null
+          billed_amount: number | null
+          claim_file_url: string | null
+          claim_id: string
+          created_at: string | null
+          date_of_service: string
+          deniability_probability: number | null
+          diagnosis_code: string | null
+          id: string
+          notes_file_url: string | null
+          patient_name: string
+          procedure_code: string | null
+          provider: string
+          risk_category: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          billed_amount?: number | null
+          claim_file_url?: string | null
+          claim_id: string
+          created_at?: string | null
+          date_of_service: string
+          deniability_probability?: number | null
+          diagnosis_code?: string | null
+          id?: string
+          notes_file_url?: string | null
+          patient_name: string
+          procedure_code?: string | null
+          provider: string
+          risk_category?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          billed_amount?: number | null
+          claim_file_url?: string | null
+          claim_id?: string
+          created_at?: string | null
+          date_of_service?: string
+          deniability_probability?: number | null
+          diagnosis_code?: string | null
+          id?: string
+          notes_file_url?: string | null
+          patient_name?: string
+          procedure_code?: string | null
+          provider?: string
+          risk_category?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      denials: {
+        Row: {
+          appeal_status: string | null
+          claim_id: string | null
+          created_at: string | null
+          denial_code: string
+          denial_date: string
+          denial_reason: string
+          denied_amount: number | null
+          id: string
+          payer: string
+          user_id: string
+        }
+        Insert: {
+          appeal_status?: string | null
+          claim_id?: string | null
+          created_at?: string | null
+          denial_code: string
+          denial_date: string
+          denial_reason: string
+          denied_amount?: number | null
+          id?: string
+          payer: string
+          user_id: string
+        }
+        Update: {
+          appeal_status?: string | null
+          claim_id?: string | null
+          created_at?: string | null
+          denial_code?: string
+          denial_date?: string
+          denial_reason?: string
+          denied_amount?: number | null
+          id?: string
+          payer?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denials_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metrics: {
+        Row: {
+          created_at: string | null
+          id: string
+          metric_type: string
+          period_end: string
+          period_start: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metric_type: string
+          period_end: string
+          period_start: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metric_type?: string
+          period_end?: string
+          period_start?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
