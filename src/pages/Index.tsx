@@ -3,6 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import DashboardMetrics from "@/components/DashboardMetrics";
 import ClaimUploadReview from "@/components/ClaimUploadReview";
 import DenialsList from "@/components/DenialsList";
+import RecentClaims from "@/components/RecentClaims";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 
 const Index = () => {
@@ -14,10 +15,14 @@ const Index = () => {
         return (
           <div className="space-y-6">
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">Revenue Cycle Dashboard</h1>
-              <p className="text-muted-foreground">Real-time overview of your RCM performance</p>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Healthcare RCM Dashboard</h1>
+              <p className="text-muted-foreground">Real-time revenue cycle performance metrics</p>
             </div>
             <DashboardMetrics />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RecentClaims />
+              <AnalyticsCharts />
+            </div>
             <DenialsList />
           </div>
         );

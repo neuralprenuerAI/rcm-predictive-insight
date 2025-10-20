@@ -1,90 +1,46 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, AlertCircle, CheckCircle2, Clock } from "lucide-react";
-
-interface MetricCardProps {
-  title: string;
-  value: string;
-  change: number;
-  icon: React.ReactNode;
-  trend?: "up" | "down";
-}
-
-function MetricCard({ title, value, change, icon, trend }: MetricCardProps) {
-  const isPositive = trend === "up" ? change > 0 : change < 0;
-  
-  return (
-    <Card className="border-border shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-elevated)] transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-          {icon}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold text-foreground">{value}</div>
-        <div className="flex items-center gap-1 mt-1">
-          {isPositive ? (
-            <TrendingUp className="h-4 w-4 text-success" />
-          ) : (
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          )}
-          <span className={`text-xs font-medium ${isPositive ? 'text-success' : 'text-destructive'}`}>
-            {Math.abs(change)}%
-          </span>
-          <span className="text-xs text-muted-foreground ml-1">vs last month</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import { Card, CardContent } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 export default function DashboardMetrics() {
+  const { data: metrics } = useQuery({
+    queryKey: ['dashboard-metrics'],
+    queryFn: async () => {
+      const { data: claims } = await (supabase as any).from('claims').select('*');
+      const { data: denials } = await (supabase as any).from('denials').select('*');
+      
+      const totalClaims = claims?.length || 0;
+      const totalDenials = denials?.length || 0;
+      const denialRate = totalClaims > 0 ? ((totalDenials / totalClaims) * 100).toFixed(1) : '8.2';
+      
+      return [
+        { label: "Days in A/R", value: "42.5", trend: "↓ 2.1 days", positive: true },
+        { label: "Denial Rate", value: `${denialRate}%`, trend: "↓ 1.3%", positive: true },
+        { label: "Clean Claim Rate", value: "91.8%", trend: "↑ 2.5%", positive: true },
+        { label: "Net Collection Rate", value: "96.7%", trend: "↑ 0.8%", positive: true },
+        { label: "Cost to Collect", value: "$3.2", trend: "↓ $0.15", positive: true },
+        { label: "First Pass Resolution", value: "89.3%", trend: "↑ 1.7%", positive: true },
+        { label: "Avg Payment Time", value: "28.4 days", trend: "↓ 3.2 days", positive: true },
+        { label: "Auth Approval Rate", value: "87.6%", trend: "↑ 2.1%", positive: true }
+      ];
+    }
+  });
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <MetricCard
-        title="Total AR Outstanding"
-        value="$2.4M"
-        change={-12.5}
-        trend="down"
-        icon={<DollarSign className="h-4 w-4 text-primary" />}
-      />
-      <MetricCard
-        title="Denial Rate"
-        value="8.2%"
-        change={-15.3}
-        trend="down"
-        icon={<AlertCircle className="h-4 w-4 text-destructive" />}
-      />
-      <MetricCard
-        title="Clean Claim Rate"
-        value="94.5%"
-        change={6.2}
-        trend="up"
-        icon={<CheckCircle2 className="h-4 w-4 text-success" />}
-      />
-      <MetricCard
-        title="Avg Days to Payment"
-        value="28.3"
-        change={-8.1}
-        trend="down"
-        icon={<Clock className="h-4 w-4 text-warning" />}
-      />
-      <MetricCard
-        title="Collections This Month"
-        value="$1.8M"
-        change={11.4}
-        trend="up"
-        icon={<DollarSign className="h-4 w-4 text-success" />}
-      />
-      <MetricCard
-        title="Pending Appeals"
-        value="142"
-        change={-22.0}
-        trend="down"
-        icon={<AlertCircle className="h-4 w-4 text-warning" />}
-      />
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {metrics?.map((metric, index) => (
+        <Card key={index} className="border-border shadow-[var(--shadow-card)]">
+          <CardContent className="pt-6">
+            <div className="text-sm text-muted-foreground mb-1">{metric.label}</div>
+            <div className="text-3xl font-bold text-foreground mb-1">{metric.value}</div>
+            <div className={`flex items-center gap-1 text-sm ${metric.positive ? 'text-green-600' : 'text-red-600'}`}>
+              {metric.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              <span>{metric.trend}</span>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
