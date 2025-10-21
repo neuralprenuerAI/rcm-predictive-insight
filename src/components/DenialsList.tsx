@@ -12,7 +12,7 @@ interface Denial {
   claim_id: string;
   patient_name: string;
   payer: string;
-  amount: number;
+  denied_amount: number | string | null;
   denial_date: string;
   carc_code: string;
   carc_description: string;
@@ -92,7 +92,7 @@ export default function DenialsList() {
                   <TableCell className="font-medium">{denial.claim_id}</TableCell>
                   <TableCell>{denial.patient_name}</TableCell>
                   <TableCell>{denial.payer}</TableCell>
-                  <TableCell className="font-medium">${denial.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">${Number(denial.denied_amount ?? 0).toFixed(2)}</TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       <Badge variant="outline" className="text-xs">{denial.carc_code}</Badge>

@@ -77,7 +77,7 @@ export default function RecentClaims() {
                 <TableRow key={claim.id}>
                   <TableCell className="font-medium">{claim.claim_id}</TableCell>
                   <TableCell>{claim.patient_name}</TableCell>
-                  <TableCell>${claim.billed_amount?.toFixed(2) || '0.00'}</TableCell>
+                  <TableCell>${Number(claim.billed_amount ?? 0).toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusVariant(claim.status)}>
                       {claim.status}
