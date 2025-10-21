@@ -99,11 +99,22 @@ const ClaimUploadReview = () => {
     setReviewResult(null);
 
     try {
-      // Parse PDFs
-      const claimText = await parsePDF(claimFile);
-      const notesText = await parsePDF(notesFile);
+      // Parse PDFs with timeouts to avoid hanging
+      const withTimeout = async <T,>(p: Promise<T>, ms: number, message: string): Promise<T> => {
+        return await new Promise<T>((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error(message)), ms);
+          p.then((v) => { clearTimeout(t); resolve(v); })
+           .catch((e) => { clearTimeout(t); reject(e); });
+        });
+      };
+
+      console.log('Parsing claim PDF...');
+      const claimText = await withTimeout(parsePDF(claimFile), 45000, 'Parsing claim PDF timed out');
+      console.log('Parsing notes PDF...');
+      const notesText = await withTimeout(parsePDF(notesFile), 45000, 'Parsing notes PDF timed out');
 
       // Upload files to storage
+      console.log('Uploading files to storage...');
       const claimPath = `${user.id}/${Date.now()}_claim.pdf`;
       const notesPath = `${user.id}/${Date.now()}_notes.pdf`;
 
@@ -119,11 +130,14 @@ const ClaimUploadReview = () => {
       const { data: claimUrlData } = supabase.storage.from('claim-files').getPublicUrl(claimPath);
       const { data: notesUrlData } = supabase.storage.from('claim-files').getPublicUrl(notesPath);
 
-      // Analyze with AI
+      // Analyze with AI (with timeout)
       console.log('Calling analyze-claim function...');
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-claim', {
-        body: { claimText, notesText }
-      });
+      const analysisResp = await withTimeout(
+        supabase.functions.invoke('analyze-claim', { body: { claimText, notesText } }),
+        60000,
+        'AI analysis timed out'
+      );
+      const { data: analysisData, error: analysisError } = analysisResp as { data: any; error: any };
 
       console.log('Analysis response:', { analysisData, analysisError });
 
@@ -134,6 +148,13 @@ const ClaimUploadReview = () => {
 
       if (!analysisData) {
         throw new Error('No analysis data returned from function');
+      }
+
+      if (
+        typeof analysisData.deniabilityProbability !== 'number' ||
+        !analysisData.riskCategory
+      ) {
+        throw new Error('Invalid analysis format received');
       }
 
       // Save to database
