@@ -14,6 +14,117 @@ export type Database = {
   }
   public: {
     Tables: {
+      appeals: {
+        Row: {
+          claim_id: string | null
+          content: string | null
+          created_at: string
+          denial_id: string | null
+          id: string
+          notes: string | null
+          outcome: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claim_id?: string | null
+          content?: string | null
+          created_at?: string
+          denial_id?: string | null
+          id?: string
+          notes?: string | null
+          outcome?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claim_id?: string | null
+          content?: string | null
+          created_at?: string
+          denial_id?: string | null
+          id?: string
+          notes?: string | null
+          outcome?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appeals_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appeals_denial_id_fkey"
+            columns: ["denial_id"]
+            isOneToOne: false
+            referencedRelation: "denials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      authorizations: {
+        Row: {
+          auth_number: string | null
+          cpt_codes: string[] | null
+          created_at: string
+          decision_date: string | null
+          denial_reason: string | null
+          diagnosis_codes: string[] | null
+          id: string
+          notes: string | null
+          patient_name: string
+          payer: string
+          request_date: string
+          service: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth_number?: string | null
+          cpt_codes?: string[] | null
+          created_at?: string
+          decision_date?: string | null
+          denial_reason?: string | null
+          diagnosis_codes?: string[] | null
+          id?: string
+          notes?: string | null
+          patient_name: string
+          payer: string
+          request_date: string
+          service?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth_number?: string | null
+          cpt_codes?: string[] | null
+          created_at?: string
+          decision_date?: string | null
+          denial_reason?: string | null
+          diagnosis_codes?: string[] | null
+          id?: string
+          notes?: string | null
+          patient_name?: string
+          payer?: string
+          request_date?: string
+          service?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       claims: {
         Row: {
           ai_analysis: Json | null
@@ -151,6 +262,56 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          adjustments: Json | null
+          amount: number
+          claim_id: string | null
+          created_at: string
+          id: string
+          method: string | null
+          payer: string
+          payment_date: string
+          reference: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          adjustments?: Json | null
+          amount: number
+          claim_id?: string | null
+          created_at?: string
+          id?: string
+          method?: string | null
+          payer: string
+          payment_date: string
+          reference?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          adjustments?: Json | null
+          amount?: number
+          claim_id?: string | null
+          created_at?: string
+          id?: string
+          method?: string | null
+          payer?: string
+          payment_date?: string
+          reference?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -172,6 +333,36 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string
+          default_date_range: string
+          id: string
+          notify_email: boolean
+          theme: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_date_range?: string
+          id?: string
+          notify_email?: boolean
+          theme?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_date_range?: string
+          id?: string
+          notify_email?: boolean
+          theme?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

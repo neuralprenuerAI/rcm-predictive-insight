@@ -6,6 +6,10 @@ import ClaimUploadReview from "@/components/ClaimUploadReview";
 import DenialsList from "@/components/DenialsList";
 import RecentClaims from "@/components/RecentClaims";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
+import DenialsAppeals from "./DenialsAppeals";
+import Authorizations from "./Authorizations";
+import PaymentPosting from "./PaymentPosting";
+import Settings from "./Settings";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -61,19 +65,13 @@ const Index = () => {
       case "analytics":
         return <AnalyticsCharts />;
       case "denials":
+        return <DenialsAppeals />;
       case "authorizations":
+        return <Authorizations />;
       case "payment-posting":
+        return <PaymentPosting />;
       case "settings":
-        return (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-foreground mb-2">
-                {activeView.charAt(0).toUpperCase() + activeView.slice(1).replace("-", " ")}
-              </h2>
-              <p className="text-muted-foreground">Module coming soon</p>
-            </div>
-          </div>
-        );
+        return <Settings />;
       default:
         return null;
     }
