@@ -9,7 +9,7 @@ interface Claim {
   id: string;
   claim_id: string;
   patient_name: string;
-  amount: number;
+  billed_amount: number | null;
   status: string;
   payer: string;
 }
@@ -77,7 +77,7 @@ export default function RecentClaims() {
                 <TableRow key={claim.id}>
                   <TableCell className="font-medium">{claim.claim_id}</TableCell>
                   <TableCell>{claim.patient_name}</TableCell>
-                  <TableCell>${claim.amount.toFixed(2)}</TableCell>
+                  <TableCell>${claim.billed_amount?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusVariant(claim.status)}>
                       {claim.status}
