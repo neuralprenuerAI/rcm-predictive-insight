@@ -120,11 +120,21 @@ const ClaimUploadReview = () => {
       const { data: notesUrlData } = supabase.storage.from('claim-files').getPublicUrl(notesPath);
 
       // Analyze with AI
+      console.log('Calling analyze-claim function...');
       const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-claim', {
         body: { claimText, notesText }
       });
 
-      if (analysisError) throw analysisError;
+      console.log('Analysis response:', { analysisData, analysisError });
+
+      if (analysisError) {
+        console.error('Analysis error:', analysisError);
+        throw analysisError;
+      }
+
+      if (!analysisData) {
+        throw new Error('No analysis data returned from function');
+      }
 
       // Save to database
       const claimData = {
