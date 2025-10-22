@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_connections: {
+        Row: {
+          api_key_encrypted: string | null
+          api_url: string
+          configuration: Json | null
+          connection_name: string
+          connection_type: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          last_sync: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          api_url: string
+          configuration?: Json | null
+          connection_name: string
+          connection_type: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          last_sync?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          api_url?: string
+          configuration?: Json | null
+          connection_name?: string
+          connection_type?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          last_sync?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       appeals: {
         Row: {
           claim_id: string | null
@@ -185,6 +227,33 @@ export type Database = {
         }
         Relationships: []
       }
+      cpt_requirements: {
+        Row: {
+          cms_requirements: string | null
+          cpt_code: string
+          id: string
+          payer_specific: Json | null
+          requires_prior_auth: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          cms_requirements?: string | null
+          cpt_code: string
+          id?: string
+          payer_specific?: Json | null
+          requires_prior_auth?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          cms_requirements?: string | null
+          cpt_code?: string
+          id?: string
+          payer_specific?: Json | null
+          requires_prior_auth?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       denials: {
         Row: {
           appeal_status: string | null
@@ -232,6 +301,36 @@ export type Database = {
           },
         ]
       }
+      generated_letters: {
+        Row: {
+          content: string
+          generated_at: string
+          id: string
+          letter_type: string
+          metadata: Json | null
+          related_id: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          generated_at?: string
+          id?: string
+          letter_type: string
+          metadata?: Json | null
+          related_id?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          generated_at?: string
+          id?: string
+          letter_type?: string
+          metadata?: Json | null
+          related_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       metrics: {
         Row: {
           created_at: string | null
@@ -259,6 +358,42 @@ export type Database = {
           period_start?: string
           user_id?: string
           value?: number
+        }
+        Relationships: []
+      }
+      payer_connections: {
+        Row: {
+          configuration: Json | null
+          created_at: string
+          credentials_encrypted: string | null
+          id: string
+          is_active: boolean | null
+          payer_name: string
+          portal_url: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          configuration?: Json | null
+          created_at?: string
+          credentials_encrypted?: string | null
+          id?: string
+          is_active?: boolean | null
+          payer_name: string
+          portal_url: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          configuration?: Json | null
+          created_at?: string
+          credentials_encrypted?: string | null
+          id?: string
+          is_active?: boolean | null
+          payer_name?: string
+          portal_url?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

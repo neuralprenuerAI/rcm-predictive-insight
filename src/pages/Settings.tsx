@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Settings as SettingsIcon, User, Bell, Palette } from "lucide-react";
+import ConnectionsManager from "@/components/ConnectionsManager";
 
 interface UserSettings {
   id: string;
@@ -193,6 +194,8 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <ConnectionsManager />
 
       <Button onClick={() => saveSettings.mutate()} className="w-full">
         Save Settings

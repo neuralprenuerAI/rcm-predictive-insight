@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, AlertCircle, Clock } from "lucide-react";
+import { FileText, AlertCircle, Clock, Wand2 } from "lucide-react";
 
 interface Denial {
   id: string;
@@ -101,6 +101,32 @@ export default function DenialsAppeals() {
     }
   });
 
+  const generateAppealLetter = useMutation({
+    mutationFn: async (denialId: string) => {
+      const { data, error } = await supabase.functions.invoke('generate-appeal-letter', {
+        body: { denialId }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Appeal letter generated successfully");
+      // Open letter in new window for review/printing
+      const letterWindow = window.open('', '_blank');
+      if (letterWindow) {
+        letterWindow.document.write(`
+          <html>
+            <head><title>Appeal Letter</title></head>
+            <body style="font-family: Arial; padding: 40px; max-width: 800px; margin: auto;">
+              <pre style="white-space: pre-wrap;">${data.letter.content}</pre>
+            </body>
+          </html>
+        `);
+      }
+    },
+    onError: () => toast.error("Failed to generate appeal letter")
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -150,17 +176,18 @@ export default function DenialsAppeals() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Dialog open={appealDialog} onOpenChange={setAppealDialog}>
-                        <DialogTrigger asChild>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => setSelectedDenial(denial)}
-                          >
-                            <FileText className="h-4 w-4 mr-2" />
-                            Appeal
-                          </Button>
-                        </DialogTrigger>
+                      <div className="flex gap-2">
+                        <Dialog open={appealDialog} onOpenChange={setAppealDialog}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => setSelectedDenial(denial)}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Appeal
+                            </Button>
+                          </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Create Appeal</DialogTitle>
@@ -185,8 +212,17 @@ export default function DenialsAppeals() {
                               Create Appeal
                             </Button>
                           </div>
-                        </DialogContent>
-                      </Dialog>
+                          </DialogContent>
+                        </Dialog>
+                        <Button
+                          size="sm"
+                          onClick={() => generateAppealLetter.mutate(denial.id)}
+                          disabled={generateAppealLetter.isPending}
+                        >
+                          <Wand2 className="h-4 w-4 mr-2" />
+                          {generateAppealLetter.isPending ? "Generating..." : "Generate Letter"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

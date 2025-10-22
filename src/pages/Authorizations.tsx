@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, CheckCircle, XCircle, Clock, Wand2, RefreshCw } from "lucide-react";
 
 interface Authorization {
   id: string;
@@ -46,6 +46,19 @@ export default function Authorizations() {
     }
   });
 
+  const { data: apiConnections = [] } = useQuery({
+    queryKey: ['api-connections'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('api_connections')
+        .select('*')
+        .eq('connection_type', 'ehr')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data;
+    }
+  });
+
   const createAuth = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -72,6 +85,47 @@ export default function Authorizations() {
     onError: () => toast.error("Failed to create authorization")
   });
 
+  const syncEHRVisits = useMutation({
+    mutationFn: async (connectionId: string) => {
+      const { data, error } = await supabase.functions.invoke('sync-ehr-visits', {
+        body: { connectionId }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['authorizations'] });
+      const authsCreated = data.visits.filter((v: any) => v.requires_prior_auth).length;
+      toast.success(`Synced ${data.visits.length} visits, ${authsCreated} require prior authorization`);
+    },
+    onError: () => toast.error("Failed to sync EHR visits")
+  });
+
+  const generatePriorAuthLetter = useMutation({
+    mutationFn: async (authorizationId: string) => {
+      const { data, error } = await supabase.functions.invoke('generate-prior-auth-letter', {
+        body: { authorizationId }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Prior authorization letter generated");
+      const letterWindow = window.open('', '_blank');
+      if (letterWindow) {
+        letterWindow.document.write(`
+          <html>
+            <head><title>Prior Authorization Letter</title></head>
+            <body style="font-family: Arial; padding: 40px; max-width: 800px; margin: auto;">
+              <pre style="white-space: pre-wrap;">${data.letter.content}</pre>
+            </body>
+          </html>
+        `);
+      }
+    },
+    onError: () => toast.error("Failed to generate letter")
+  });
+
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case 'approved': return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -95,13 +149,24 @@ export default function Authorizations() {
           <h1 className="text-3xl font-bold text-foreground mb-2">Prior Authorizations</h1>
           <p className="text-muted-foreground">Request and track prior authorizations</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Request
+        <div className="flex gap-2">
+          {apiConnections.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => syncEHRVisits.mutate(apiConnections[0].id)}
+              disabled={syncEHRVisits.isPending}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {syncEHRVisits.isPending ? "Syncing..." : "Sync EHR"}
             </Button>
-          </DialogTrigger>
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Request
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>New Authorization Request</DialogTitle>
@@ -156,6 +221,7 @@ export default function Authorizations() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -177,6 +243,7 @@ export default function Authorizations() {
                   <TableHead>Status</TableHead>
                   <TableHead>Auth #</TableHead>
                   <TableHead>Decision Date</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,6 +264,17 @@ export default function Authorizations() {
                     <TableCell>{auth.auth_number || '-'}</TableCell>
                     <TableCell>
                       {auth.decision_date ? new Date(auth.decision_date).toLocaleDateString() : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => generatePriorAuthLetter.mutate(auth.id)}
+                        disabled={generatePriorAuthLetter.isPending}
+                      >
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Generate Letter
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
