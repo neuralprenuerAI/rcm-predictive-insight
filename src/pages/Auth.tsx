@@ -96,6 +96,35 @@ const Auth = () => {
     }
   };
 
+  const handleMagicLink = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) throw error;
+      toast.success("Magic link sent! Check your email.");
+    } catch (error: any) {
+      console.error("Magic link error:", error);
+      toast.error(error.message || "Failed to send magic link");
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) throw error;
+      toast.success("Password reset email sent. Check your inbox.");
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      toast.error(error.message || "Failed to send reset email");
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -165,6 +194,25 @@ const Auth = () => {
                     GitHub
                   </Button>
                 </div>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={handleMagicLink}
+                  disabled={!email || isLoading}
+                >
+                  Email magic link
+                </Button>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full text-muted-foreground"
+                  onClick={handlePasswordReset}
+                  disabled={!email || isLoading}
+                >
+                  Forgot password? Send reset link
+                </Button>
               </form>
             </TabsContent>
 
