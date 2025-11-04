@@ -10,17 +10,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Plug, Trash2 } from "lucide-react";
+import { Plus, Plug, Trash2, Key } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import ECWTokenDisplay from "./ECWTokenDisplay";
 
 export default function ConnectionsManager() {
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [payerDialogOpen, setPayerDialogOpen] = useState(false);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [tokenData, setTokenData] = useState<any>(null);
   const [apiFormData, setApiFormData] = useState({
     connection_name: "",
     connection_type: "ehr",
     api_url: "",
-    api_key: ""
+    api_key: "",
+    client_id: "",
+    private_key: "",
+    issuer_url: ""
   });
   const [payerFormData, setPayerFormData] = useState({
     payer_name: "",
@@ -59,12 +65,22 @@ export default function ConnectionsManager() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // For ECW connections, store credentials in JSONB field
+      const credentials = apiFormData.connection_type === "ecw" 
+        ? {
+            client_id: apiFormData.client_id,
+            private_key: apiFormData.private_key,
+            issuer_url: apiFormData.issuer_url
+          }
+        : null;
+
       const { error } = await supabase.from('api_connections').insert({
         user_id: user.id,
         connection_name: apiFormData.connection_name,
         connection_type: apiFormData.connection_type,
         api_url: apiFormData.api_url,
-        api_key_encrypted: apiFormData.api_key, // In production, encrypt this
+        api_key_encrypted: apiFormData.api_key || null,
+        credentials: credentials,
         is_active: true
       });
       if (error) throw error;
@@ -73,9 +89,17 @@ export default function ConnectionsManager() {
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
       toast.success("API connection created");
       setApiDialogOpen(false);
-      setApiFormData({ connection_name: "", connection_type: "ehr", api_url: "", api_key: "" });
+      setApiFormData({ 
+        connection_name: "", 
+        connection_type: "ehr", 
+        api_url: "", 
+        api_key: "",
+        client_id: "",
+        private_key: "",
+        issuer_url: ""
+      });
     },
-    onError: () => toast.error("Failed to create connection")
+    onError: (error: any) => toast.error(error?.message || "Failed to create connection")
   });
 
   const createPayerConnection = useMutation({
@@ -143,6 +167,28 @@ export default function ConnectionsManager() {
     }
   });
 
+  const testECWToken = useMutation({
+    mutationFn: async (connectionId: string) => {
+      const { data, error } = await supabase.functions.invoke('ecw-get-token', {
+        body: { connectionId }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setTokenData(data);
+      setTokenDialogOpen(true);
+      toast.success(`Token obtained successfully! Expires in ${data.expires_in}s`);
+      console.log("Access Token:", data.access_token);
+      console.log("Token Type:", data.token_type);
+      console.log("Scope:", data.scope);
+    },
+    onError: (error: any) => {
+      toast.error(`Token request failed: ${error?.message || 'Unknown error'}`);
+      console.error("Token error:", error);
+    }
+  });
+
   const deletePayerConnection = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('payer_connections').delete().eq('id', id);
@@ -184,7 +230,7 @@ export default function ConnectionsManager() {
                     <DialogTitle>New API Connection</DialogTitle>
                     <DialogDescription>Connect to EHR or other healthcare systems</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto">
                     <div>
                       <Label>Connection Name</Label>
                       <Input
@@ -203,29 +249,76 @@ export default function ConnectionsManager() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="ehr">EHR System</SelectItem>
+                          <SelectItem value="ehr">EHR System (Generic)</SelectItem>
+                          <SelectItem value="ecw">eClinicalWorks FHIR</SelectItem>
                           <SelectItem value="payer">Payer API</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
-                      <Label>API URL</Label>
-                      <Input
-                        value={apiFormData.api_url}
-                        onChange={(e) => setApiFormData({ ...apiFormData, api_url: e.target.value })}
-                        placeholder="https://api.example.com"
-                      />
-                    </div>
-                    <div>
-                      <Label>API Key</Label>
-                      <Input
-                        type="password"
-                        value={apiFormData.api_key}
-                        onChange={(e) => setApiFormData({ ...apiFormData, api_key: e.target.value })}
-                        placeholder="Your API key"
-                      />
-                    </div>
+
+                    {apiFormData.connection_type === "ecw" ? (
+                      <>
+                        <div className="p-3 bg-muted rounded-md text-sm">
+                          <p className="font-semibold mb-1">eClinicalWorks Backend Authentication</p>
+                          <p className="text-muted-foreground">
+                            This uses OAuth 2.0 client credentials flow with JWT assertion (RS384 signing).
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Client ID</Label>
+                          <Input
+                            value={apiFormData.client_id}
+                            onChange={(e) => setApiFormData({ ...apiFormData, client_id: e.target.value })}
+                            placeholder="Your app's client ID from eCW Dev Portal"
+                          />
+                        </div>
+                        <div>
+                          <Label>Issuer URL</Label>
+                          <Input
+                            value={apiFormData.issuer_url}
+                            onChange={(e) => setApiFormData({ ...apiFormData, issuer_url: e.target.value })}
+                            placeholder="https://fhir.eclinicalworks.com/..."
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Get this from the "Add Customer" window in eCW Dev Portal
+                          </p>
+                        </div>
+                        <div>
+                          <Label>Private Key (PEM format)</Label>
+                          <textarea
+                            className="w-full min-h-[120px] px-3 py-2 text-sm border rounded-md"
+                            value={apiFormData.private_key}
+                            onChange={(e) => setApiFormData({ ...apiFormData, private_key: e.target.value })}
+                            placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Your RS384 private key for signing JWT assertions
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <Label>API URL</Label>
+                          <Input
+                            value={apiFormData.api_url}
+                            onChange={(e) => setApiFormData({ ...apiFormData, api_url: e.target.value })}
+                            placeholder="https://api.example.com"
+                          />
+                        </div>
+                        <div>
+                          <Label>API Key</Label>
+                          <Input
+                            type="password"
+                            value={apiFormData.api_key}
+                            onChange={(e) => setApiFormData({ ...apiFormData, api_key: e.target.value })}
+                            placeholder="Your API key"
+                          />
+                        </div>
+                      </>
+                    )}
+                    
                     <Button onClick={() => createAPIConnection.mutate()} className="w-full">
                       Create Connection
                     </Button>
@@ -264,13 +357,26 @@ export default function ConnectionsManager() {
                         />
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => deleteAPIConnection.mutate(conn.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {conn.connection_type === 'ecw' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => testECWToken.mutate(conn.id)}
+                              disabled={testECWToken.isPending}
+                            >
+                              <Key className="h-4 w-4 mr-1" />
+                              Test Token
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteAPIConnection.mutate(conn.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -377,6 +483,11 @@ export default function ConnectionsManager() {
           </TabsContent>
         </Tabs>
       </CardContent>
+      <ECWTokenDisplay 
+        open={tokenDialogOpen} 
+        onOpenChange={setTokenDialogOpen} 
+        tokenData={tokenData} 
+      />
     </Card>
   );
 }
