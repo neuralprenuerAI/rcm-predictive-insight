@@ -73,9 +73,26 @@ const Auth = () => {
 
       toast.success("Signed in successfully!");
     } catch (error: any) {
-      toast.error(error.message || "Failed to sign in");
+      console.error("Sign in error:", error);
+      toast.error(error.message || "Failed to sign in. Please check your credentials.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOAuthLogin = async (provider: 'google' | 'github') => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error("OAuth error:", error);
+      toast.error(error.message || `Failed to sign in with ${provider}`);
     }
   };
 
@@ -118,6 +135,36 @@ const Auth = () => {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or continue with
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleOAuthLogin('google')}
+                    disabled={isLoading}
+                  >
+                    Google
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleOAuthLogin('github')}
+                    disabled={isLoading}
+                  >
+                    GitHub
+                  </Button>
+                </div>
               </form>
             </TabsContent>
 
