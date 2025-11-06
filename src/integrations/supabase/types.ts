@@ -22,6 +22,7 @@ export type Database = {
           connection_name: string
           connection_type: string
           created_at: string
+          credentials: Json | null
           id: string
           is_active: boolean | null
           last_sync: string | null
@@ -35,6 +36,7 @@ export type Database = {
           connection_name: string
           connection_type: string
           created_at?: string
+          credentials?: Json | null
           id?: string
           is_active?: boolean | null
           last_sync?: string | null
@@ -48,6 +50,7 @@ export type Database = {
           connection_name?: string
           connection_type?: string
           created_at?: string
+          credentials?: Json | null
           id?: string
           is_active?: boolean | null
           last_sync?: string | null
