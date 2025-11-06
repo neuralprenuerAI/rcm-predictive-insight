@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Plus, Plug, Trash2, Key } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ECWTokenDisplay from "./ECWTokenDisplay";
+import { KeyPairGenerator } from "./KeyPairGenerator";
 
 export default function ConnectionsManager() {
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
@@ -201,20 +202,23 @@ export default function ConnectionsManager() {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Plug className="h-5 w-5" />
-          Integrations & Connections
-        </CardTitle>
-        <CardDescription>Manage API and payer portal connections</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="api">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="api">API Connections</TabsTrigger>
-            <TabsTrigger value="payer">Payer Portals</TabsTrigger>
-          </TabsList>
+    <div className="space-y-6">
+      <KeyPairGenerator />
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plug className="h-5 w-5" />
+            Integrations & Connections
+          </CardTitle>
+          <CardDescription>Manage API and payer portal connections</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="api">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="api">API Connections</TabsTrigger>
+              <TabsTrigger value="payer">Payer Portals</TabsTrigger>
+            </TabsList>
 
           <TabsContent value="api" className="space-y-4">
             <div className="flex justify-end">
@@ -489,5 +493,6 @@ export default function ConnectionsManager() {
         tokenData={tokenData} 
       />
     </Card>
+    </div>
   );
 }
