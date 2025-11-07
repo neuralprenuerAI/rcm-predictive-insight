@@ -99,7 +99,7 @@ serve(async (req) => {
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-384",
+        hash: "SHA-256",
       },
       false,
       ["sign"]
@@ -121,7 +121,7 @@ serve(async (req) => {
 
     // Create JWT header
     const header = {
-      alg: "RS384",
+      alg: "RS256",
       typ: "JWT",
     };
 
@@ -142,7 +142,7 @@ serve(async (req) => {
 
     const clientAssertion = `${dataToSign}.${encodedSignature}`;
 
-    console.log("JWT generated, requesting access token");
+    console.log("JWT generated, requesting access token", { alg: header.alg, aud: jwtPayload.aud });
 
     // Request access token
     const tokenRequestBody = new URLSearchParams({
@@ -162,9 +162,12 @@ serve(async (req) => {
     });
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error("Token request failed:", errorText);
-      throw new Error(`Token request failed: ${errorText}`);
+      const rawText = await tokenResponse.text();
+      let parsed: any = null;
+      try { parsed = JSON.parse(rawText); } catch (_) {}
+      const message = parsed?.error_description || parsed?.error || rawText;
+      console.error("Token request failed:", parsed ?? rawText);
+      throw new Error(`Token request failed: ${message}`);
     }
 
     const tokenData = await tokenResponse.json();
