@@ -104,6 +104,20 @@ serve(async (req) => {
       ["sign"]
     );
 
+    // Helper function for base64url encoding
+    const base64urlEncode = (data: ArrayBuffer | string): string => {
+      let binary: string;
+      if (typeof data === 'string') {
+        binary = new TextEncoder().encode(data).reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+      } else {
+        binary = new Uint8Array(data).reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+      }
+      return btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+    };
+
     // Create JWT header
     const header = {
       alg: "RS384",
@@ -111,8 +125,8 @@ serve(async (req) => {
     };
 
     // Encode header and payload
-    const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    const encodedPayload = btoa(JSON.stringify(jwtPayload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const encodedHeader = base64urlEncode(JSON.stringify(header));
+    const encodedPayload = base64urlEncode(JSON.stringify(jwtPayload));
     const dataToSign = `${encodedHeader}.${encodedPayload}`;
 
     // Sign the JWT
@@ -123,10 +137,7 @@ serve(async (req) => {
     );
 
     // Encode signature
-    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
+    const encodedSignature = base64urlEncode(signature);
 
     const clientAssertion = `${dataToSign}.${encodedSignature}`;
 
