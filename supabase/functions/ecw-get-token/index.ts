@@ -76,9 +76,10 @@ serve(async (req) => {
       sub: credentials.client_id,
       aud: tokenUrl,
       jti: crypto.randomUUID(),
+      iat: now,
+      nbf: now,
       exp: now + 300, // 5 minutes expiration
     };
-
     // Import private key for signing
     const privateKeyPem = credentials.private_key;
     
@@ -147,6 +148,7 @@ serve(async (req) => {
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
       scope: "system/Patient.read system/Group.read",
+      client_id: credentials.client_id,
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: clientAssertion,
     });
