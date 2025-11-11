@@ -99,7 +99,7 @@ serve(async (req) => {
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256",
+        hash: "SHA-384",
       },
       false,
       ["sign"]
@@ -121,7 +121,7 @@ serve(async (req) => {
 
     // Create JWT header
     const header = {
-      alg: "RS256",
+      alg: "RS384",
       typ: "JWT",
     };
 
