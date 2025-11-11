@@ -47,6 +47,8 @@ serve(async (req) => {
       client_id: string;
       private_key: string;
       issuer_url: string;
+      kid?: string;
+      scope?: string;
     };
 
     // Get token URL from metadata
@@ -71,13 +73,14 @@ serve(async (req) => {
 
     // Generate JWT for client assertion
     const now = Math.floor(Date.now() / 1000);
+    const skew = 30; // allow small clock skew
     const jwtPayload = {
       iss: credentials.client_id,
       sub: credentials.client_id,
       aud: tokenUrl,
       jti: crypto.randomUUID(),
-      iat: now,
-      nbf: now,
+      iat: now - skew,
+      nbf: now - skew,
       exp: now + 300, // 5 minutes expiration
     };
     // Import private key for signing
@@ -123,6 +126,7 @@ serve(async (req) => {
     const header = {
       alg: "RS384",
       typ: "JWT",
+      ...(credentials.kid ? { kid: credentials.kid } : {}),
     };
 
     // Encode header and payload
@@ -147,7 +151,7 @@ serve(async (req) => {
     // Request access token
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
-      scope: "system/Patient.read system/Group.read",
+      scope: credentials.scope || "system/Patient.read system/Group.read",
       client_id: credentials.client_id,
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: clientAssertion,
