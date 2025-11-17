@@ -179,13 +179,28 @@ export default function ConnectionsManager() {
     onSuccess: (data) => {
       setTokenData(data);
       setTokenDialogOpen(true);
-      toast.success(`Token obtained successfully! Expires in ${data.expires_in}s`);
-      console.log("Access Token:", data.access_token);
-      console.log("Token Type:", data.token_type);
-      console.log("Scope:", data.scope);
+      toast.success("Connection successful!", {
+        description: `Access token obtained. Expires in ${data.expires_in}s`,
+      });
     },
     onError: (error: any) => {
-      toast.error(`Token request failed: ${error?.message || 'Unknown error'}`);
+      const errorMessage = error?.message || 'Unknown error';
+      
+      // Provide specific guidance based on error type
+      let description = '';
+      if (errorMessage.includes('invalid_client')) {
+        description = 'Client ID or credentials are incorrect. Please verify your Client ID and Private Key.';
+      } else if (errorMessage.includes('invalid_grant')) {
+        description = 'JWT signature verification failed. Check that your Private Key matches the Public Key registered with ECW.';
+      } else if (errorMessage.includes('unauthorized')) {
+        description = 'Authorization failed. Ensure your credentials are registered with ECW.';
+      } else {
+        description = errorMessage;
+      }
+
+      toast.error("Connection test failed", {
+        description,
+      });
       console.error("Token error:", error);
     }
   });
@@ -370,7 +385,7 @@ export default function ConnectionsManager() {
                               disabled={testECWToken.isPending}
                             >
                               <Key className="h-4 w-4 mr-1" />
-                              Test Token
+                              {testECWToken.isPending ? 'Testing...' : 'Test Connection'}
                             </Button>
                           )}
                           <Button
