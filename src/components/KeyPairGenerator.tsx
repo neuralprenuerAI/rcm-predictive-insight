@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 export const KeyPairGenerator = () => {
   const [publicKey, setPublicKey] = useState('');
   const [privateKey, setPrivateKey] = useState('');
+  const [jwk, setJwk] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
@@ -35,12 +36,37 @@ export const KeyPairGenerator = () => {
           name: 'RSASSA-PKCS1-v1_5',
           modulusLength: 2048,
           publicExponent: new Uint8Array([1, 0, 1]),
-          hash: 'SHA-256',
+          hash: 'SHA-384',
         },
         true,
         ['sign', 'verify']
       );
 
+      // Export public key as JWK for ECW
+      const exportedJwk = await window.crypto.subtle.exportKey('jwk', keyPair.publicKey);
+      
+      // Generate a random kid (key ID)
+      const kid = crypto.randomUUID();
+
+      // Format JWK according to ECW requirements
+      const jwkSet = {
+        keys: [
+          {
+            kty: exportedJwk.kty,
+            alg: "RS384",
+            n: exportedJwk.n,
+            e: exportedJwk.e,
+            use: "sig",
+            key_ops: ["verify"],
+            ext: true,
+            kid: kid
+          }
+        ]
+      };
+
+      setJwk(JSON.stringify(jwkSet, null, 2));
+
+      // Export keys as PEM
       const publicKeyData = await window.crypto.subtle.exportKey('spki', keyPair.publicKey);
       const privateKeyData = await window.crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
 
@@ -55,7 +81,7 @@ export const KeyPairGenerator = () => {
 
       toast({
         title: 'Keys Generated',
-        description: 'RSA key pair generated successfully. Copy and save them securely.',
+        description: 'RSA key pair and JWK generated successfully. Copy and save them securely.',
       });
     } catch (error) {
       console.error('Error generating keys:', error);
@@ -106,10 +132,35 @@ export const KeyPairGenerator = () => {
           {isGenerating ? 'Generating...' : 'Generate New Key Pair'}
         </Button>
 
+        {jwk && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>JWK (Provide to ECW)</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyToClipboard(jwk, 'JWK')}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy
+              </Button>
+            </div>
+            <Textarea
+              value={jwk}
+              readOnly
+              className="font-mono text-xs"
+              rows={14}
+            />
+            <p className="text-xs text-muted-foreground">
+              📋 Provide this JWK to ECW so they can verify your JWT signatures.
+            </p>
+          </div>
+        )}
+
         {publicKey && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Public Key (Register with ECW)</Label>
+              <Label>Public Key (PEM format)</Label>
               <Button
                 variant="outline"
                 size="sm"
@@ -147,8 +198,8 @@ export const KeyPairGenerator = () => {
               className="font-mono text-xs"
               rows={12}
             />
-            <p className="text-sm text-muted-foreground">
-              ⚠️ Keep this private key secure. Never share it or commit it to version control.
+            <p className="text-xs text-muted-foreground">
+              ⚠️ Warning: Never share your private key. Store it securely and use it in your ECW API connection settings.
             </p>
           </div>
         )}
