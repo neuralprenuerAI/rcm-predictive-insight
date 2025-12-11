@@ -68,40 +68,67 @@ serve(async (req) => {
 
     // Select token endpoint based on environment
     const tokenUrl = TOKEN_ENDPOINTS[environment as keyof typeof TOKEN_ENDPOINTS] || TOKEN_ENDPOINTS.sandbox;
-    console.log("Using token endpoint:", tokenUrl, "environment:", environment);
+    console.log("=== ECW Token Request Debug ===");
+    console.log("Environment:", environment);
+    console.log("Token Endpoint (aud):", tokenUrl);
+    console.log("Client ID (iss/sub):", credentials.client_id);
+    console.log("KID:", credentials.kid || "neuralprenuer-key-1");
 
-    // Generate JWT payload
+    // Generate JWT payload - CRITICAL: aud MUST be the token endpoint URL
     const now = Math.floor(Date.now() / 1000);
+    const jti = crypto.randomUUID();
     const jwtPayload = {
       iss: credentials.client_id,
       sub: credentials.client_id,
-      aud: tokenUrl,
-      jti: crypto.randomUUID(),
+      aud: tokenUrl, // MUST be token endpoint, NOT FHIR URL
+      jti: jti,
       iat: now,
       exp: now + 300, // 5 minutes expiration
     };
 
+    console.log("JWT Payload:", JSON.stringify(jwtPayload, null, 2));
+
+    // Validate private key format
+    const privateKeyStr = credentials.private_key.trim();
+    if (!privateKeyStr.includes("-----BEGIN PRIVATE KEY-----")) {
+      console.error("Private key does not appear to be in PKCS#8 PEM format");
+      throw new Error("Private key must be in PKCS#8 PEM format (-----BEGIN PRIVATE KEY-----)");
+    }
+
     // Import private key using jose library
-    const privateKey = await jose.importPKCS8(credentials.private_key, "RS384");
+    console.log("Importing private key...");
+    const privateKey = await jose.importPKCS8(privateKeyStr, "RS384");
+    console.log("Private key imported successfully");
+
+    // Create JWT header
+    const jwtHeader = {
+      alg: "RS384",
+      typ: "JWT",
+      kid: credentials.kid || "neuralprenuer-key-1",
+    };
+    console.log("JWT Header:", JSON.stringify(jwtHeader, null, 2));
 
     // Create and sign JWT
     const jwt = await new jose.SignJWT(jwtPayload)
-      .setProtectedHeader({
-        alg: "RS384",
-        typ: "JWT",
-        kid: credentials.kid || "neuralprenuer-key-1",
-      })
+      .setProtectedHeader(jwtHeader)
       .sign(privateKey);
 
-    console.log("JWT generated, requesting access token", { aud: jwtPayload.aud, kid: credentials.kid });
+    console.log("JWT generated successfully, length:", jwt.length);
+    console.log("JWT preview (first 100 chars):", jwt.substring(0, 100) + "...");
 
-    // Request access token
+    // Build token request
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: jwt,
       scope: credentials.scope || "system/Patient.read system/Encounter.read system/Coverage.read system/Observation.read system/Claim.read system/Procedure.read",
     });
+
+    console.log("Token Request Body Parameters:");
+    console.log("  grant_type:", "client_credentials");
+    console.log("  client_assertion_type:", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
+    console.log("  scope:", credentials.scope || "(default scopes)");
+    console.log("Making token request to:", tokenUrl);
 
     const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
@@ -111,17 +138,28 @@ serve(async (req) => {
       body: tokenRequestBody.toString(),
     });
 
+    console.log("Token Response Status:", tokenResponse.status);
+
     if (!tokenResponse.ok) {
       const rawText = await tokenResponse.text();
+      console.error("Token Response Raw:", rawText);
       let parsed: any = null;
       try { parsed = JSON.parse(rawText); } catch (_) {}
       const message = parsed?.error_description || parsed?.error || rawText;
-      console.error("Token request failed:", parsed ?? rawText);
+      console.error("Token request failed:", {
+        status: tokenResponse.status,
+        error: parsed?.error,
+        error_description: parsed?.error_description,
+        raw: rawText
+      });
       throw new Error(`Token request failed: ${message}`);
     }
 
     const tokenData = await tokenResponse.json();
-    console.log("Access token obtained successfully");
+    console.log("=== Access token obtained successfully ===");
+    console.log("Token type:", tokenData.token_type);
+    console.log("Expires in:", tokenData.expires_in, "seconds");
+    console.log("Scope:", tokenData.scope);
 
     // Store the token in the connection for reuse
     const { error: updateError } = await supabaseClient
