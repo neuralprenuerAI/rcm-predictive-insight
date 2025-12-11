@@ -17,3 +17,9 @@ verify_jwt = true
 
 [functions.ecw-get-token]
 verify_jwt = true
+
+[functions.jwks]
+verify_jwt = false
+
+[functions.ecw-sync-data]
+verify_jwt = true

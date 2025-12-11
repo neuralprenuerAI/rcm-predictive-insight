@@ -4,33 +4,29 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-
-interface Claim {
-  id: string;
-  claim_id: string;
-  patient_name: string;
-  billed_amount: number | null;
-  status: string;
-  payer: string;
-}
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RecentClaims() {
   const { data: claims = [], isLoading } = useQuery({
     queryKey: ['recent-claims'],
     queryFn: async () => {
-      const { data, error} = await (supabase as any)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
         .from('claims')
-        .select('*')
+        .select('id, claim_id, patient_name, billed_amount, status, payer, date_of_service')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(4);
+        .limit(5);
       
       if (error) throw error;
-      return (data || []) as Claim[];
+      return data || [];
     }
   });
 
-  const getStatusVariant = (status: string) => {
-    switch (status.toLowerCase()) {
+  const getStatusVariant = (status: string | null) => {
+    switch (status?.toLowerCase()) {
       case 'paid': return 'default';
       case 'denied': return 'destructive';
       case 'pending': return 'secondary';
@@ -45,7 +41,15 @@ export default function RecentClaims() {
           <CardTitle>Recent Claims</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-4">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     );
@@ -59,7 +63,7 @@ export default function RecentClaims() {
       </CardHeader>
       <CardContent>
         {claims.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">No claims found</p>
+          <p className="text-muted-foreground text-center py-8">No claims found. Sync with ECW to import claims.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -80,10 +84,10 @@ export default function RecentClaims() {
                   <TableCell>${Number(claim.billed_amount ?? 0).toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusVariant(claim.status)}>
-                      {claim.status}
+                      {claim.status || 'Unknown'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{claim.payer}</TableCell>
+                  <TableCell>{claim.payer || '-'}</TableCell>
                   <TableCell>
                     <Button size="sm" variant="outline">View</Button>
                   </TableCell>

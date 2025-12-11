@@ -180,9 +180,11 @@ export type Database = {
           date_of_service: string
           deniability_probability: number | null
           diagnosis_code: string | null
+          fhir_id: string | null
           id: string
           notes_file_url: string | null
           patient_name: string
+          payer: string | null
           procedure_code: string | null
           provider: string
           risk_category: string | null
@@ -199,9 +201,11 @@ export type Database = {
           date_of_service: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          fhir_id?: string | null
           id?: string
           notes_file_url?: string | null
           patient_name: string
+          payer?: string | null
           procedure_code?: string | null
           provider: string
           risk_category?: string | null
@@ -218,9 +222,11 @@ export type Database = {
           date_of_service?: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          fhir_id?: string | null
           id?: string
           notes_file_url?: string | null
           patient_name?: string
+          payer?: string | null
           procedure_code?: string | null
           provider?: string
           risk_category?: string | null
