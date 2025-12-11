@@ -6,12 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const FHIR_BASE = "https://fhir.eclinicalworks.com/ecwopendev";
-
 // Helper to fetch FHIR bundle with pagination
-async function fetchFHIRResource(resource: string, accessToken: string, maxPages = 5): Promise<any[]> {
+async function fetchFHIRResource(fhirBase: string, resource: string, accessToken: string, maxPages = 5): Promise<any[]> {
   const results: any[] = [];
-  let url: string | null = `${FHIR_BASE}/${resource}?_count=100`;
+  let url: string | null = `${fhirBase}/${resource}?_count=100`;
   let pageCount = 0;
 
   while (url && pageCount < maxPages) {
@@ -107,7 +105,22 @@ serve(async (req) => {
       throw new Error("No access token received");
     }
 
-    console.log("Access token obtained, fetching FHIR resources");
+    // Fetch connection to get dynamic FHIR URL from credentials
+    const { data: connection, error: connError } = await supabaseClient
+      .from("api_connections")
+      .select("*")
+      .eq("id", connectionId)
+      .single();
+
+    if (connError || !connection) {
+      throw new Error("Connection not found");
+    }
+
+    // Get FHIR base URL from credentials
+    const credentials = connection.credentials as any;
+    const FHIR_BASE = credentials?.issuer_url?.replace(/\/$/, "") || "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD";
+
+    console.log("Access token obtained, fetching FHIR resources from:", FHIR_BASE);
 
     const summary = {
       patients: 0,
@@ -122,7 +135,7 @@ serve(async (req) => {
     if (syncClaims) {
       try {
         console.log("Fetching Claims from FHIR...");
-        const fhirClaims = await fetchFHIRResource("Claim", accessToken);
+        const fhirClaims = await fetchFHIRResource(FHIR_BASE, "Claim", accessToken);
         console.log(`Retrieved ${fhirClaims.length} claims`);
 
         if (fhirClaims.length > 0) {
@@ -156,7 +169,7 @@ serve(async (req) => {
     if (syncPatients) {
       try {
         console.log("Fetching Patients from FHIR...");
-        const fhirPatients = await fetchFHIRResource("Patient", accessToken, 2);
+        const fhirPatients = await fetchFHIRResource(FHIR_BASE, "Patient", accessToken, 2);
         summary.patients = fhirPatients.length;
         console.log(`Retrieved ${fhirPatients.length} patients`);
       } catch (err) {
@@ -170,7 +183,7 @@ serve(async (req) => {
     if (syncEncounters) {
       try {
         console.log("Fetching Encounters from FHIR...");
-        const fhirEncounters = await fetchFHIRResource("Encounter", accessToken, 2);
+        const fhirEncounters = await fetchFHIRResource(FHIR_BASE, "Encounter", accessToken, 2);
         summary.encounters = fhirEncounters.length;
         console.log(`Retrieved ${fhirEncounters.length} encounters`);
       } catch (err) {
@@ -184,7 +197,7 @@ serve(async (req) => {
     if (syncCoverages) {
       try {
         console.log("Fetching Coverages from FHIR...");
-        const fhirCoverages = await fetchFHIRResource("Coverage", accessToken, 2);
+        const fhirCoverages = await fetchFHIRResource(FHIR_BASE, "Coverage", accessToken, 2);
         summary.coverages = fhirCoverages.length;
         console.log(`Retrieved ${fhirCoverages.length} coverages`);
       } catch (err) {

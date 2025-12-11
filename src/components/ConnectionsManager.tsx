@@ -18,7 +18,7 @@ import { KeyPairGenerator } from "./KeyPairGenerator";
 // ECW Sandbox defaults
 const ECW_SANDBOX_DEFAULTS = {
   client_id: "2NsNtk5kW9GOcS3XY8dUr_nW6Nm-m2y9Yyha_FIIZjs",
-  issuer_url: "https://fhir.eclinicalworks.com/ecwopendev/",
+  issuer_url: "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD",
   kid: "neuralprenuer-key-1",
   scope: "system/Patient.read system/Encounter.read system/Coverage.read system/Observation.read system/Claim.read system/Procedure.read",
 };
