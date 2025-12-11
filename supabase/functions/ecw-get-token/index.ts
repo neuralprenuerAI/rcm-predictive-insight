@@ -1,9 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// FIXED token endpoints - ECW does NOT use SMART discovery
+const TOKEN_ENDPOINTS = {
+  sandbox: "https://staging-oauthserver.ecwcloud.com/oauth/oauth2/token",
+  production: "https://oauthserver.eclinicalworks.com/oauth/oauth2/token",
 };
 
 serve(async (req) => {
@@ -12,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { connectionId } = await req.json();
+    const { connectionId, environment = "sandbox" } = await req.json();
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
 
@@ -33,11 +40,15 @@ serve(async (req) => {
       .select("*")
       .eq("id", connectionId)
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (connError) {
       console.error("Connection fetch error:", connError);
-      throw new Error("Connection not found");
+      throw new Error("Failed to fetch connection");
+    }
+
+    if (!connection) {
+      throw new Error("Connection not found or you don't have access");
     }
 
     console.log("Connection found, generating JWT token");
@@ -51,110 +62,45 @@ serve(async (req) => {
       scope?: string;
     };
 
-    // Get token URL from metadata
-    const metadataUrl = `${credentials.issuer_url}/metadata?_format=json`;
-    console.log("Fetching metadata from:", metadataUrl);
-    
-    const metadataResponse = await fetch(metadataUrl);
-    if (!metadataResponse.ok) {
-      throw new Error(`Failed to fetch metadata: ${metadataResponse.statusText}`);
-    }
-    
-    const metadata = await metadataResponse.json();
-    const tokenUrl = metadata.rest?.[0]?.security?.extension?.[0]?.extension?.find(
-      (ext: any) => ext.url === "token"
-    )?.valueUri;
-
-    if (!tokenUrl) {
-      throw new Error("Could not find token URL in metadata");
+    if (!credentials?.client_id || !credentials?.private_key) {
+      throw new Error("Missing client_id or private_key in credentials");
     }
 
-    console.log("Token URL found:", tokenUrl);
+    // Select token endpoint based on environment
+    const tokenUrl = TOKEN_ENDPOINTS[environment as keyof typeof TOKEN_ENDPOINTS] || TOKEN_ENDPOINTS.sandbox;
+    console.log("Using token endpoint:", tokenUrl, "environment:", environment);
 
-    // Generate JWT for client assertion
+    // Generate JWT payload
     const now = Math.floor(Date.now() / 1000);
-    const skew = 30; // allow small clock skew
     const jwtPayload = {
       iss: credentials.client_id,
       sub: credentials.client_id,
       aud: tokenUrl,
       jti: crypto.randomUUID(),
-      iat: now - skew,
-      nbf: now - skew,
+      iat: now,
       exp: now + 300, // 5 minutes expiration
     };
-    // Import private key for signing
-    const privateKeyPem = credentials.private_key;
-    
-    // Remove PEM headers and decode base64
-    const pemHeader = "-----BEGIN PRIVATE KEY-----";
-    const pemFooter = "-----END PRIVATE KEY-----";
-    const pemContents = privateKeyPem
-      .replace(pemHeader, "")
-      .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-    // Import the key
-    const cryptoKey = await crypto.subtle.importKey(
-      "pkcs8",
-      binaryDer,
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-384",
-      },
-      false,
-      ["sign"]
-    );
+    // Import private key using jose library
+    const privateKey = await jose.importPKCS8(credentials.private_key, "RS384");
 
-    // Helper function for base64url encoding
-    const base64urlEncode = (data: ArrayBuffer | string): string => {
-      let binary: string;
-      if (typeof data === 'string') {
-        binary = new TextEncoder().encode(data).reduce((acc, byte) => acc + String.fromCharCode(byte), '');
-      } else {
-        binary = new Uint8Array(data).reduce((acc, byte) => acc + String.fromCharCode(byte), '');
-      }
-      return btoa(binary)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-    };
+    // Create and sign JWT
+    const jwt = await new jose.SignJWT(jwtPayload)
+      .setProtectedHeader({
+        alg: "RS384",
+        typ: "JWT",
+        kid: credentials.kid || "neuralprenuer-key-1",
+      })
+      .sign(privateKey);
 
-    // Create JWT header
-    const header = {
-      alg: "RS384",
-      typ: "JWT",
-      ...(credentials.kid ? { kid: credentials.kid } : {}),
-    };
-
-    // Encode header and payload
-    const encodedHeader = base64urlEncode(JSON.stringify(header));
-    const encodedPayload = base64urlEncode(JSON.stringify(jwtPayload));
-    const dataToSign = `${encodedHeader}.${encodedPayload}`;
-
-    // Sign the JWT
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      cryptoKey,
-      new TextEncoder().encode(dataToSign)
-    );
-
-    // Encode signature
-    const encodedSignature = base64urlEncode(signature);
-
-    const clientAssertion = `${dataToSign}.${encodedSignature}`;
-
-    console.log("JWT generated, requesting access token", { alg: header.alg, aud: jwtPayload.aud });
+    console.log("JWT generated, requesting access token", { aud: jwtPayload.aud, kid: credentials.kid });
 
     // Request access token
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
-      scope: credentials.scope || "system/Patient.read system/Group.read",
-      client_id: credentials.client_id,
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion: clientAssertion,
+      client_assertion: jwt,
+      scope: credentials.scope || "system/Patient.read system/Encounter.read system/Coverage.read system/Observation.read system/Claim.read system/Procedure.read",
     });
 
     const tokenResponse = await fetch(tokenUrl, {
@@ -186,6 +132,7 @@ serve(async (req) => {
           access_token: tokenData.access_token,
           token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
         },
+        last_sync: new Date().toISOString(),
       })
       .eq("id", connectionId);
 

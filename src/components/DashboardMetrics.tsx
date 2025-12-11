@@ -2,30 +2,62 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardMetrics() {
-  const { data: metrics } = useQuery({
+  const { data: metrics, isLoading } = useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
-      const { data: claims } = await (supabase as any).from('claims').select('*');
-      const { data: denials } = await (supabase as any).from('denials').select('*');
-      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data: claims } = await supabase
+        .from('claims')
+        .select('id, billed_amount, status, date_of_service')
+        .eq('user_id', user.id);
+
+      const { data: denials } = await supabase
+        .from('denials')
+        .select('id, denied_amount, appeal_status')
+        .eq('user_id', user.id);
+
+      const { data: payments } = await supabase
+        .from('payments')
+        .select('id, amount')
+        .eq('user_id', user.id);
+
       const totalClaims = claims?.length || 0;
+      const totalBilled = claims?.reduce((sum, c) => sum + (Number(c.billed_amount) || 0), 0) || 0;
+      const totalCollected = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
       const totalDenials = denials?.length || 0;
-      const denialRate = totalClaims > 0 ? ((totalDenials / totalClaims) * 100).toFixed(1) : '8.2';
-      
+      const denialRate = totalClaims > 0 ? (totalDenials / totalClaims * 100).toFixed(1) : "0.0";
+      const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled * 100).toFixed(0) : "0";
+
       return [
-        { label: "Days in A/R", value: "42.5", trend: "↓ 2.1 days", positive: true },
-        { label: "Denial Rate", value: `${denialRate}%`, trend: "↓ 1.3%", positive: true },
-        { label: "Clean Claim Rate", value: "91.8%", trend: "↑ 2.5%", positive: true },
-        { label: "Net Collection Rate", value: "96.7%", trend: "↑ 0.8%", positive: true },
-        { label: "Cost to Collect", value: "$3.2", trend: "↓ $0.15", positive: true },
-        { label: "First Pass Resolution", value: "89.3%", trend: "↑ 1.7%", positive: true },
-        { label: "Avg Payment Time", value: "28.4 days", trend: "↓ 3.2 days", positive: true },
-        { label: "Auth Approval Rate", value: "87.6%", trend: "↑ 2.1%", positive: true }
+        { label: "Total Claims", value: totalClaims.toString(), trend: "From ECW", positive: true },
+        { label: "Total Billed", value: `$${totalBilled.toLocaleString()}`, trend: "All time", positive: true },
+        { label: "Collected", value: `$${totalCollected.toLocaleString()}`, trend: `${collectionRate}% rate`, positive: true },
+        { label: "Denial Rate", value: `${denialRate}%`, trend: `${totalDenials} denials`, positive: Number(denialRate) < 15 },
       ];
-    }
+    },
+    refetchInterval: 30000,
   });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="border-border shadow-[var(--shadow-card)]">
+            <CardContent className="pt-6">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-4 w-20" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
