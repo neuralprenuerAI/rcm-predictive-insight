@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
-  Users, FlaskConical, Calendar, Receipt, Shield, Activity, Scan, Syringe 
+  Users, FlaskConical, Calendar, Receipt, Shield, Activity, Scan, Syringe, Save, Loader2 
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -328,7 +328,8 @@ export default function ConnectionsManager() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      return data;
+      // Add connectionId to result for saving
+      return { ...data, connectionId };
     },
     onSuccess: (data) => {
       setSyncResult(data);
@@ -337,6 +338,67 @@ export default function ConnectionsManager() {
     },
     onError: (error: Error) => {
       toast.error("Sync Failed", {
+        description: error.message,
+      });
+    },
+  });
+
+  // Save synced patients to database
+  const savePatientsMutation = useMutation({
+    mutationFn: async ({ entries, connectionId }: { entries: any[]; connectionId: string }) => {
+      if (!entries || entries.length === 0) return 0;
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      
+      // Transform ECW FHIR patients to our schema
+      const patientsToUpsert = entries.map((entry: any) => {
+        const p = entry.resource;
+        const name = p.name?.[0];
+        const phone = p.telecom?.find((t: any) => t.system === 'phone')?.value;
+        const email = p.telecom?.find((t: any) => t.system === 'email')?.value;
+        const addr = p.address?.[0];
+        
+        return {
+          external_id: p.id,
+          source: 'ecw',
+          source_connection_id: connectionId,
+          first_name: name?.given?.join(' ') || '',
+          last_name: name?.family || '',
+          date_of_birth: p.birthDate || null,
+          gender: p.gender || null,
+          phone: phone || null,
+          email: email || null,
+          address_line1: addr?.line?.[0] || null,
+          address_line2: addr?.line?.[1] || null,
+          city: addr?.city || null,
+          state: addr?.state || null,
+          postal_code: addr?.postalCode || null,
+          user_id: user.id,
+          last_synced_at: new Date().toISOString(),
+          raw_fhir_data: p,
+        };
+      });
+      
+      // Upsert patients (update if external_id exists, insert if new)
+      const { error } = await supabase
+        .from('patients')
+        .upsert(patientsToUpsert, {
+          onConflict: 'external_id,source,user_id',
+          ignoreDuplicates: false,
+        });
+      
+      if (error) throw error;
+      
+      return patientsToUpsert.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`Saved ${count} patients to database`);
+      setSyncDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+    },
+    onError: (error: Error) => {
+      toast.error("Save Failed", {
         description: error.message,
       });
     },
@@ -997,10 +1059,28 @@ export default function ConnectionsManager() {
             </p>
           )}
           
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>
-              Close
+              Close Without Saving
             </Button>
+            {syncResult?.resource === 'Patient' && syncResult?.data?.entry?.length > 0 && (
+              <Button 
+                onClick={() => {
+                  savePatientsMutation.mutate({
+                    entries: syncResult.data.entry,
+                    connectionId: syncResult.connectionId,
+                  });
+                }}
+                disabled={savePatientsMutation.isPending}
+              >
+                {savePatientsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save {syncResult?.total || 0} Patients
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

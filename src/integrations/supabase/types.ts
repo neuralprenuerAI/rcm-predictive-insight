@@ -370,6 +370,86 @@ export type Database = {
         }
         Relationships: []
       }
+      patients: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          created_at: string
+          date_of_birth: string | null
+          email: string | null
+          external_id: string | null
+          first_name: string | null
+          gender: string | null
+          id: string
+          insurance_info: Json | null
+          last_name: string | null
+          last_synced_at: string | null
+          phone: string | null
+          postal_code: string | null
+          raw_fhir_data: Json | null
+          source: string
+          source_connection_id: string | null
+          state: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          external_id?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: string
+          insurance_info?: Json | null
+          last_name?: string | null
+          last_synced_at?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          raw_fhir_data?: Json | null
+          source?: string
+          source_connection_id?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          external_id?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: string
+          insurance_info?: Json | null
+          last_name?: string | null
+          last_synced_at?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          raw_fhir_data?: Json | null
+          source?: string
+          source_connection_id?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patients_source_connection_id_fkey"
+            columns: ["source_connection_id"]
+            isOneToOne: false
+            referencedRelation: "api_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payer_connections: {
         Row: {
           configuration: Json | null
