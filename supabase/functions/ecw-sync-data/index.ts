@@ -17,9 +17,12 @@ const SERVICE_CATEGORIES: Record<string, string> = {
 async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promise<any[]> {
   console.log("=== Fetching ALL patients ===");
   
-  // Include "test" since ECW sandbox has test patients
+  // Include common test data names FIRST, then alphabet
   const searchTerms = [
-    "test",  // ECW sandbox test data
+    "test",    // ECW sandbox test patients (found 203)
+    "patient", // Common test name
+    "demo",    // Demo patients
+    "sample",  // Sample patients
     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
   ];
