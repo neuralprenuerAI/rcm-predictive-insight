@@ -13,27 +13,26 @@ const SERVICE_CATEGORIES: Record<string, string> = {
   procedures: "387713003"
 };
 
-// Helper: Fetch all patients using search terms
+// Helper: Fetch all patients using search terms (fast mode)
 async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promise<any[]> {
-  console.log("=== Fetching ALL patients ===");
+  console.log("=== Fetching ALL patients (fast mode) ===");
   
-  // Include common test data names FIRST, then alphabet
-  const searchTerms = [
-    "test",    // ECW sandbox test patients (found 203)
-    "patient", // Common test name
-    "demo",    // Demo patients
-    "sample",  // Sample patients
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
-  ];
-  
+  const isStaging = fhirBaseUrl.toLowerCase().includes('staging');
   const allPatients: any[] = [];
   const seenIds = new Set<string>();
+  
+  // For staging: just search "test" - returns 203 patients instantly
+  // For production: search common starting letters only
+  const searchTerms = isStaging 
+    ? ["test"]  // Staging: 203 patients with one call
+    : ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "r", "s", "t", "w"];  // Production: most common name letters
+  
+  console.log(`Environment: ${isStaging ? 'STAGING' : 'PRODUCTION'}`);
+  console.log(`Search terms: ${searchTerms.join(', ')}`);
   
   for (const term of searchTerms) {
     try {
       const searchUrl = `${fhirBaseUrl}/Patient?name=${term}`;
-      console.log(`Searching: name=${term}`);
       
       const response = await fetch(searchUrl, {
         method: "GET",
@@ -45,29 +44,28 @@ async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promi
       
       if (response.ok) {
         const data = await response.json();
-        const count = data.entry?.length || 0;
         
         if (data.entry) {
           for (const entry of data.entry) {
-            if (!seenIds.has(entry.resource.id)) {
-              seenIds.add(entry.resource.id);
+            const patientId = entry.resource?.id;
+            if (patientId && !seenIds.has(patientId)) {
+              seenIds.add(patientId);
               allPatients.push(entry);
             }
           }
         }
         
-        console.log(`  "${term}": found ${count}, total unique: ${allPatients.length}`);
-      } else {
-        console.log(`  "${term}": ${response.status} error`);
+        console.log(`"${term}": +${data.entry?.length || 0} patients, total: ${allPatients.length}`);
       }
       
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Minimal delay
+      await new Promise(resolve => setTimeout(resolve, 50));
     } catch (err) {
       console.error(`Error searching "${term}":`, err);
     }
   }
   
-  console.log(`=== Total unique patients: ${allPatients.length} ===`);
+  console.log(`=== Done: ${allPatients.length} patients ===`);
   return allPatients;
 }
 
