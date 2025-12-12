@@ -242,16 +242,40 @@ serve(async (req) => {
       if (fetchAll) {
         console.log("=== Fetching ALL ServiceRequests ===");
         
-        // First get all patients
-        const allPatients = await fetchAllPatients(fhirBaseUrl, access_token);
+        // Get patients from our database (already synced) - MUCH faster than re-fetching from ECW
+        console.log("Getting patients from database...");
+        
+        const { data: savedPatients, error: patientsError } = await supabaseClient
+          .from('patients')
+          .select('external_id, first_name, last_name')
+          .eq('source', 'ecw')
+          .eq('user_id', user.id);
+        
+        if (patientsError) {
+          throw new Error(`Failed to get patients: ${patientsError.message}`);
+        }
+        
+        if (!savedPatients || savedPatients.length === 0) {
+          throw new Error("No patients found in database. Please sync Patients first before syncing ServiceRequests.");
+        }
+        
+        console.log(`Found ${savedPatients.length} patients in database`);
+        
+        // Convert to format expected by rest of code
+        const allPatients = savedPatients.map(p => ({
+          resource: {
+            id: p.external_id,
+            name: [{ given: [p.first_name || ''], family: p.last_name || '' }]
+          }
+        }));
         
         const allServiceRequests: any[] = [];
         const seenIds = new Set<string>();
         let processedCount = 0;
         
-        // Process patients (limit to avoid timeout)
-        const patientsToProcess = allPatients.slice(0, 200);
-        console.log(`Processing ${patientsToProcess.length} patients for ServiceRequests...`);
+        // Process max 50 patients to avoid timeout (each patient = 1 API call)
+        const patientsToProcess = allPatients.slice(0, 50);
+        console.log(`Processing ${patientsToProcess.length} of ${allPatients.length} patients for ServiceRequests...`);
         
         for (const patientEntry of patientsToProcess) {
           const patientId = patientEntry.resource.id;
