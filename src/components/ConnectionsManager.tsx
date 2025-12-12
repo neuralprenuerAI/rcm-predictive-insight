@@ -88,6 +88,14 @@ export default function ConnectionsManager() {
   const [tokenData, setTokenData] = useState<any>(null);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [dateRangeDialogOpen, setDateRangeDialogOpen] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState("last90days");
+  const [pendingSyncParams, setPendingSyncParams] = useState<{
+    connectionId: string;
+    resource: string;
+    category?: string | null;
+    fetchAll?: boolean;
+  } | null>(null);
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['patient']);
   const [apiFormData, setApiFormData] = useState({
     connection_name: "",
@@ -308,13 +316,15 @@ export default function ConnectionsManager() {
   });
 
   const syncECWData = useMutation({
-    mutationFn: async ({ connectionId, resource, category }: { 
+    mutationFn: async ({ connectionId, resource, category, fetchAll, dateRange }: { 
       connectionId: string; 
       resource: string;
       category?: string | null;
+      fetchAll?: boolean;
+      dateRange?: string | null;
     }) => {
       const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
-        body: { connectionId, resource, category }
+        body: { connectionId, resource, category, fetchAll, dateRange }
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -620,34 +630,46 @@ export default function ConnectionsManager() {
                                           Service Requests
                                         </DropdownMenuLabel>
                                         <DropdownMenuItem 
-                                          onClick={() => syncECWData.mutate({ 
-                                            connectionId: conn.id, 
-                                            resource: 'ServiceRequest', 
-                                            category: 'labs' 
-                                          })}
+                                          onClick={() => {
+                                            setPendingSyncParams({ 
+                                              connectionId: conn.id, 
+                                              resource: 'ServiceRequest', 
+                                              category: 'labs',
+                                              fetchAll: true 
+                                            });
+                                            setDateRangeDialogOpen(true);
+                                          }}
                                         >
                                           <FlaskConical className="h-4 w-4 mr-2" />
-                                          Lab Orders
+                                          All Lab Orders
                                         </DropdownMenuItem>
                                         <DropdownMenuItem 
-                                          onClick={() => syncECWData.mutate({ 
-                                            connectionId: conn.id, 
-                                            resource: 'ServiceRequest', 
-                                            category: 'imaging' 
-                                          })}
+                                          onClick={() => {
+                                            setPendingSyncParams({ 
+                                              connectionId: conn.id, 
+                                              resource: 'ServiceRequest', 
+                                              category: 'imaging',
+                                              fetchAll: true 
+                                            });
+                                            setDateRangeDialogOpen(true);
+                                          }}
                                         >
                                           <Scan className="h-4 w-4 mr-2" />
-                                          Imaging Orders
+                                          All Imaging Orders
                                         </DropdownMenuItem>
                                         <DropdownMenuItem 
-                                          onClick={() => syncECWData.mutate({ 
-                                            connectionId: conn.id, 
-                                            resource: 'ServiceRequest', 
-                                            category: 'procedures' 
-                                          })}
+                                          onClick={() => {
+                                            setPendingSyncParams({ 
+                                              connectionId: conn.id, 
+                                              resource: 'ServiceRequest', 
+                                              category: 'procedures',
+                                              fetchAll: true 
+                                            });
+                                            setDateRangeDialogOpen(true);
+                                          }}
                                         >
                                           <Syringe className="h-4 w-4 mr-2" />
-                                          Procedure Orders
+                                          All Procedure Orders
                                         </DropdownMenuItem>
                                       </>
                                     )}
@@ -978,6 +1000,53 @@ export default function ConnectionsManager() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Date Range Selection Dialog for ServiceRequest */}
+      <Dialog open={dateRangeDialogOpen} onOpenChange={setDateRangeDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Select Date Range</DialogTitle>
+            <DialogDescription>
+              Choose how far back to fetch service requests
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2">
+            <Label>Date Range</Label>
+            <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="last30days">Last 30 Days</SelectItem>
+                <SelectItem value="last90days">Last 90 Days</SelectItem>
+                <SelectItem value="lastyear">Last Year</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDateRangeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (pendingSyncParams) {
+                  syncECWData.mutate({ 
+                    ...pendingSyncParams, 
+                    dateRange: selectedDateRange 
+                  });
+                }
+                setDateRangeDialogOpen(false);
+              }}
+              disabled={syncECWData.isPending}
+            >
+              {syncECWData.isPending ? 'Syncing...' : 'Start Sync'}
             </Button>
           </DialogFooter>
         </DialogContent>

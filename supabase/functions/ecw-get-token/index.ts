@@ -123,13 +123,21 @@ serve(async (req) => {
     console.log("JWT generated successfully, length:", jwt.length);
     console.log("JWT preview (first 100 chars):", jwt.substring(0, 100) + "...");
 
-    // Build token request
+    // Validate scope is configured
+    if (!credentials.scope) {
+      throw new Error("No scope configured for this connection. Please edit the connection and select data types.");
+    }
+
+    // Build token request - use ONLY the scope from credentials, no defaults
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: jwt,
-      scope: credentials.scope || "system/*.read",
+      scope: credentials.scope,
     });
+
+    console.log("=== Token Request ===");
+    console.log("Scope being requested:", credentials.scope);
 
     console.log("Token Request Body Parameters:");
     console.log("  grant_type:", "client_credentials");
