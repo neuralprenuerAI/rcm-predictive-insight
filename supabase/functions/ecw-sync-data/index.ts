@@ -82,15 +82,59 @@ serve(async (req) => {
 
     // Step 2: Build search parameters based on resource type
     let finalSearchParams: Record<string, string> = { ...searchParams };
-    
-    // For ServiceRequest, add category filter (per ECW docs)
-    if (resource === "ServiceRequest" && category && SERVICE_CATEGORIES[category]) {
-      finalSearchParams.category = SERVICE_CATEGORIES[category];
+
+    // ECW requires search parameters for most resources
+    if (resource === "Patient") {
+      // If no search params provided, add _count to limit results
+      if (Object.keys(finalSearchParams).length === 0) {
+        finalSearchParams._count = "200";
+      }
     }
-    
-    // For ServiceRequest with patient filter
-    if (resource === "ServiceRequest" && patientId) {
-      finalSearchParams.patient = patientId;
+
+    // For ServiceRequest, add category filter (per ECW docs)
+    if (resource === "ServiceRequest") {
+      if (category && SERVICE_CATEGORIES[category]) {
+        finalSearchParams.category = SERVICE_CATEGORIES[category];
+      }
+      // ServiceRequest may require patient parameter for some setups
+      if (patientId) {
+        finalSearchParams.patient = patientId;
+      }
+      if (!finalSearchParams.patient && Object.keys(finalSearchParams).length <= 1) {
+        console.log("Note: ServiceRequest without patient ID - may return limited results");
+      }
+      // Add count limit
+      if (!finalSearchParams._count) {
+        finalSearchParams._count = "200";
+      }
+    }
+
+    // For Encounter
+    if (resource === "Encounter") {
+      if (Object.keys(finalSearchParams).length === 0) {
+        finalSearchParams._count = "200";
+      }
+    }
+
+    // For Claim
+    if (resource === "Claim") {
+      if (Object.keys(finalSearchParams).length === 0) {
+        finalSearchParams._count = "200";
+      }
+    }
+
+    // For Coverage
+    if (resource === "Coverage") {
+      if (Object.keys(finalSearchParams).length === 0) {
+        finalSearchParams._count = "200";
+      }
+    }
+
+    // For Observation
+    if (resource === "Observation") {
+      if (Object.keys(finalSearchParams).length === 0) {
+        finalSearchParams._count = "200";
+      }
     }
 
     // Step 3: Build FHIR URL (per ECW documentation format)
@@ -100,6 +144,7 @@ serve(async (req) => {
     console.log("=== ECW Sync: Fetching FHIR Data ===");
     console.log("Resource:", resource);
     console.log("Category:", category || "N/A");
+    console.log("Search Params:", JSON.stringify(finalSearchParams));
     console.log("Full URL:", fhirUrl);
 
     // Step 4: Fetch from ECW FHIR API (using headers from ECW docs)
@@ -107,7 +152,7 @@ serve(async (req) => {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${access_token}`,
-        "Accept": "application/json+fhir",  // Per ECW documentation
+        "Accept": "application/fhir+json",
       },
     });
 
@@ -115,26 +160,39 @@ serve(async (req) => {
 
     if (!fhirResponse.ok) {
       const errorText = await fhirResponse.text();
-      console.error("FHIR Error Response:", errorText);
+      console.error("=== ECW FHIR Error Details ===");
+      console.error("Status:", fhirResponse.status);
+      console.error("Response:", errorText);
+      console.error("Request URL was:", fhirUrl);
       
-      // Handle specific ECW error codes (from documentation)
+      // Try to parse error for better message
+      let errorMessage = `FHIR request failed with status ${fhirResponse.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.issue?.[0]?.diagnostics) {
+          errorMessage = errorJson.issue[0].diagnostics;
+        }
+      } catch (e) {
+        // Use raw text if not JSON
+        if (errorText.length < 200) {
+          errorMessage = errorText;
+        }
+      }
+      
+      // Add helpful context for common errors
       if (fhirResponse.status === 401) {
-        throw new Error("Unauthorized: Invalid or expired Access Token");
-      }
-      if (fhirResponse.status === 403) {
-        throw new Error(`Forbidden: The scope for '${resource}' is not authorized. Request this scope from ECW.`);
-      }
-      if (fhirResponse.status === 404) {
-        throw new Error("Not found: Unknown resource type or resource not found");
-      }
-      if (fhirResponse.status === 408) {
-        throw new Error("Request timeout: Too much data or communication issue");
-      }
-      if (fhirResponse.status === 429) {
-        throw new Error("Rate limited: Too many requests. Please wait and try again.");
+        errorMessage = "Unauthorized: Invalid or expired Access Token";
+      } else if (fhirResponse.status === 403) {
+        errorMessage = `Forbidden: The scope for '${resource}' is not authorized. Request this scope from ECW.`;
+      } else if (fhirResponse.status === 404) {
+        errorMessage = "Not found: Unknown resource type or resource not found";
+      } else if (fhirResponse.status === 408) {
+        errorMessage = "Request timeout: Too much data or communication issue";
+      } else if (fhirResponse.status === 429) {
+        errorMessage = "Rate limited: Too many requests. Please wait and try again.";
       }
       
-      throw new Error(`FHIR request failed with status ${fhirResponse.status}`);
+      throw new Error(errorMessage);
     }
 
     const fhirData = await fhirResponse.json();
@@ -143,6 +201,7 @@ serve(async (req) => {
     console.log("=== ECW Sync: Data Retrieved Successfully ===");
     console.log("Resource Type:", fhirData.resourceType);
     console.log("Total Records:", totalRecords);
+    console.log("Entries returned:", fhirData.entry?.length || 0);
 
     // Update last_sync timestamp on the connection
     await supabaseClient
