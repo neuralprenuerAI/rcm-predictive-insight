@@ -560,6 +560,78 @@ export type Database = {
         }
         Relationships: []
       }
+      service_requests: {
+        Row: {
+          authored_on: string | null
+          category: string | null
+          code: string | null
+          code_display: string | null
+          created_at: string | null
+          external_id: string
+          id: string
+          last_synced_at: string | null
+          patient_external_id: string | null
+          patient_id: string | null
+          priority: string | null
+          raw_fhir_data: Json | null
+          source: string | null
+          source_connection_id: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          authored_on?: string | null
+          category?: string | null
+          code?: string | null
+          code_display?: string | null
+          created_at?: string | null
+          external_id: string
+          id?: string
+          last_synced_at?: string | null
+          patient_external_id?: string | null
+          patient_id?: string | null
+          priority?: string | null
+          raw_fhir_data?: Json | null
+          source?: string | null
+          source_connection_id?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          authored_on?: string | null
+          category?: string | null
+          code?: string | null
+          code_display?: string | null
+          created_at?: string | null
+          external_id?: string
+          id?: string
+          last_synced_at?: string | null
+          patient_external_id?: string | null
+          patient_id?: string | null
+          priority?: string | null
+          raw_fhir_data?: Json | null
+          source?: string | null
+          source_connection_id?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_requests_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_source_connection_id_fkey"
+            columns: ["source_connection_id"]
+            isOneToOne: false
+            referencedRelation: "api_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           created_at: string
@@ -595,7 +667,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      link_service_requests_to_patients: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
