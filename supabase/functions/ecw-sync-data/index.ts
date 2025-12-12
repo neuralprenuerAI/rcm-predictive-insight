@@ -240,101 +240,85 @@ serve(async (req) => {
       console.log(`ServiceRequest date range: ${authoredFrom} to ${authoredTo}`);
       
       if (fetchAll) {
-        console.log("=== Fetching ALL ServiceRequests ===");
+        console.log("=== Fetching ALL ServiceRequests (FAST PARALLEL MODE) ===");
         
-        // Get patients from our database (already synced) - MUCH faster than re-fetching from ECW
-        console.log("Getting patients from database...");
-        
+        // Step 1: Get patients from DATABASE (already synced) - instant!
         const { data: savedPatients, error: patientsError } = await supabaseClient
           .from('patients')
           .select('external_id, first_name, last_name')
           .eq('source', 'ecw')
           .eq('user_id', user.id);
-        
-        if (patientsError) {
-          throw new Error(`Failed to get patients: ${patientsError.message}`);
+
+        if (patientsError || !savedPatients?.length) {
+          throw new Error("No patients found. Please sync Patients first.");
         }
-        
-        if (!savedPatients || savedPatients.length === 0) {
-          throw new Error("No patients found in database. Please sync Patients first before syncing ServiceRequests.");
-        }
-        
+
         console.log(`Found ${savedPatients.length} patients in database`);
-        
-        // Convert to format expected by rest of code
-        const allPatients = savedPatients.map(p => ({
-          resource: {
-            id: p.external_id,
-            name: [{ given: [p.first_name || ''], family: p.last_name || '' }]
-          }
+
+        // Step 2: Build all URLs
+        const categoryCode = category && SERVICE_CATEGORIES[category] 
+          ? SERVICE_CATEGORIES[category] 
+          : null;
+
+        const patientRequests = savedPatients.map(patient => ({
+          patientId: patient.external_id,
+          patientName: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
+          url: categoryCode
+            ? `${fhirBaseUrl}/ServiceRequest?patient=${patient.external_id}&category=${categoryCode}&authored=ge${authoredFrom}&authored=le${authoredTo}`
+            : `${fhirBaseUrl}/ServiceRequest?patient=${patient.external_id}&authored=ge${authoredFrom}&authored=le${authoredTo}`
         }));
-        
+
+        // Step 3: Fetch in PARALLEL batches (10 at a time)
+        const BATCH_SIZE = 10;
         const allServiceRequests: any[] = [];
         const seenIds = new Set<string>();
         let processedCount = 0;
-        
-        // Process max 20 patients to avoid timeout (edge functions have ~60s limit)
-        const patientsToProcess = allPatients.slice(0, 20);
-        console.log(`Processing ${patientsToProcess.length} of ${allPatients.length} patients for ServiceRequests...`);
-        
-        for (const patientEntry of patientsToProcess) {
-          const patientId = patientEntry.resource.id;
+
+        for (let i = 0; i < patientRequests.length; i += BATCH_SIZE) {
+          const batch = patientRequests.slice(i, i + BATCH_SIZE);
           
-          // Build URL per ECW docs: patient + category + authored
-          let url = `${fhirBaseUrl}/ServiceRequest?patient=${patientId}`;
-          
-          // Add category if specified
-          if (category && SERVICE_CATEGORIES[category]) {
-            url += `&category=${SERVICE_CATEGORIES[category]}`;
-          }
-          
-          // Add authored date range
-          url += `&authored=ge${authoredFrom}&authored=le${authoredTo}`;
-          
-          try {
-            const response = await fetch(url, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${access_token}`,
-                "Accept": "application/fhir+json",
-              },
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              if (data.entry) {
-                for (const entry of data.entry) {
-                  if (!seenIds.has(entry.resource.id)) {
-                    seenIds.add(entry.resource.id);
-                    // Add patient info to ServiceRequest for display
-                    const patientName = patientEntry.resource.name?.[0];
-                    entry.resource._patientName = patientName 
-                      ? `${patientName.given?.join(' ') || ''} ${patientName.family || ''}`.trim()
-                      : 'Unknown';
-                    entry.resource._patientExternalId = patientId;
-                    allServiceRequests.push(entry);
-                  }
-                }
+          // Parallel fetch for this batch
+          const batchPromises = batch.map(async ({ patientId, patientName, url }) => {
+            try {
+              const response = await fetch(url, {
+                method: "GET",
+                headers: {
+                  "Authorization": `Bearer ${access_token}`,
+                  "Accept": "application/fhir+json",
+                },
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                return { patientId, patientName, entries: data.entry || [] };
               }
-            } else {
-              const errorText = await response.text();
-              console.log(`Patient ${patientId}: ${response.status} - ${errorText.slice(0, 100)}`);
+              return { patientId, patientName, entries: [] };
+            } catch (err) {
+              return { patientId, patientName, entries: [] };
             }
-          } catch (err) {
-            console.error(`Error fetching SR for patient ${patientId}:`, err);
+          });
+
+          // Wait for batch to complete
+          const batchResults = await Promise.all(batchPromises);
+          
+          // Collect results
+          for (const { patientId, patientName, entries } of batchResults) {
+            for (const entry of entries) {
+              if (entry.resource?.id && !seenIds.has(entry.resource.id)) {
+                seenIds.add(entry.resource.id);
+                entry.resource._patientName = patientName;
+                entry.resource._patientExternalId = patientId;
+                allServiceRequests.push(entry);
+              }
+            }
           }
           
-          processedCount++;
-          if (processedCount % 10 === 0) {
-            console.log(`Progress: ${processedCount}/${patientsToProcess.length} patients, ${allServiceRequests.length} ServiceRequests found`);
-          }
-          
-          // Minimal delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 10));
+          processedCount += batch.length;
+          console.log(`Progress: ${processedCount}/${savedPatients.length} patients, ${allServiceRequests.length} orders found`);
         }
-        
-        console.log(`=== Total ServiceRequests found: ${allServiceRequests.length} ===`);
-        
+
+        console.log(`=== DONE: ${allServiceRequests.length} ServiceRequests from ${savedPatients.length} patients ===`);
+
         // Update last_sync timestamp
         await supabaseClient
           .from("api_connections")
@@ -348,7 +332,7 @@ serve(async (req) => {
             category,
             dateRange: { from: authoredFrom, to: authoredTo },
             total: allServiceRequests.length,
-            patientsProcessed: patientsToProcess.length,
+            patientsProcessed: savedPatients.length,
             data: {
               resourceType: "Bundle",
               type: "searchset",
