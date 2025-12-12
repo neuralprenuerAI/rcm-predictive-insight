@@ -31,6 +31,11 @@ export default function DashboardMetrics() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
+      const { count: authorizationCount } = await supabase
+        .from('authorizations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
       const totalClaims = claims?.length || 0;
       const totalBilled = claims?.reduce((sum, c) => sum + (Number(c.billed_amount) || 0), 0) || 0;
       const totalCollected = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -41,6 +46,7 @@ export default function DashboardMetrics() {
       return [
         { label: "Total Patients", value: (patientCount || 0).toString(), trend: "From ECW", positive: true },
         { label: "Total Claims", value: totalClaims.toString(), trend: "All time", positive: true },
+        { label: "Total Authorizations", value: (authorizationCount || 0).toString(), trend: "All time", positive: true },
         { label: "Total Billed", value: `$${totalBilled.toLocaleString()}`, trend: `${collectionRate}% collected`, positive: true },
         { label: "Denial Rate", value: `${denialRate}%`, trend: `${totalDenials} denials`, positive: Number(denialRate) < 15 },
       ];
@@ -50,8 +56,8 @@ export default function DashboardMetrics() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => (
           <Card key={i} className="border-border shadow-[var(--shadow-card)]">
             <CardContent className="pt-6">
               <Skeleton className="h-4 w-24 mb-2" />
@@ -65,7 +71,7 @@ export default function DashboardMetrics() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {metrics?.map((metric, index) => (
         <Card key={index} className="border-border shadow-[var(--shadow-card)]">
           <CardContent className="pt-6">
