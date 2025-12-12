@@ -26,6 +26,11 @@ export default function DashboardMetrics() {
         .select('id, amount')
         .eq('user_id', user.id);
 
+      const { count: patientCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
       const totalClaims = claims?.length || 0;
       const totalBilled = claims?.reduce((sum, c) => sum + (Number(c.billed_amount) || 0), 0) || 0;
       const totalCollected = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -34,9 +39,9 @@ export default function DashboardMetrics() {
       const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled * 100).toFixed(0) : "0";
 
       return [
-        { label: "Total Claims", value: totalClaims.toString(), trend: "From ECW", positive: true },
-        { label: "Total Billed", value: `$${totalBilled.toLocaleString()}`, trend: "All time", positive: true },
-        { label: "Collected", value: `$${totalCollected.toLocaleString()}`, trend: `${collectionRate}% rate`, positive: true },
+        { label: "Total Patients", value: (patientCount || 0).toString(), trend: "From ECW", positive: true },
+        { label: "Total Claims", value: totalClaims.toString(), trend: "All time", positive: true },
+        { label: "Total Billed", value: `$${totalBilled.toLocaleString()}`, trend: `${collectionRate}% collected`, positive: true },
         { label: "Denial Rate", value: `${denialRate}%`, trend: `${totalDenials} denials`, positive: Number(denialRate) < 15 },
       ];
     },

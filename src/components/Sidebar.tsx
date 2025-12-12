@@ -7,7 +7,8 @@ import {
   DollarSign, 
   BarChart3, 
   Settings,
-  FileText
+  FileText,
+  Users
 } from "lucide-react";
 
 interface SidebarProps {
@@ -18,6 +19,7 @@ interface SidebarProps {
 export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "patients", label: "Patients", icon: Users },
     { id: "claim-review", label: "Claim Review", icon: FileUp },
     { id: "denials", label: "Denials & Appeals", icon: AlertCircle },
     { id: "authorizations", label: "Authorizations", icon: FileText },
