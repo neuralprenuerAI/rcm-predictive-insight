@@ -10,6 +10,7 @@ import DenialsAppeals from "./DenialsAppeals";
 import Authorizations from "./Authorizations";
 import PaymentPosting from "./PaymentPosting";
 import Settings from "./Settings";
+import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -60,6 +61,8 @@ const Index = () => {
             <DenialsList />
           </div>
         );
+      case "patients":
+        return <Patients />;
       case "claim-review":
         return <ClaimUploadReview />;
       case "analytics":
