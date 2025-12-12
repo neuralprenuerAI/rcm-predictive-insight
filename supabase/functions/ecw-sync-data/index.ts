@@ -121,6 +121,16 @@ serve(async (req) => {
     const fhirBaseUrl = credentials?.issuer_url || credentials?.fhir_base_url;
     if (!fhirBaseUrl) throw new Error("FHIR Base URL not configured");
 
+    // Determine scope - for ServiceRequest, we need Patient scope too
+    let scopeOverride: string | undefined;
+    if (resource === "ServiceRequest") {
+      const currentScope = credentials.scope || "";
+      if (!currentScope.includes("system/Patient.read")) {
+        scopeOverride = `system/Patient.read ${currentScope}`.trim();
+        console.log("ServiceRequest needs Patient scope, using override:", scopeOverride);
+      }
+    }
+
     // Get fresh access token
     console.log("Getting fresh access token...");
     const tokenResponse = await fetch(
@@ -128,7 +138,7 @@ serve(async (req) => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ connectionId }),
+        body: JSON.stringify({ connectionId, scopeOverride }),
       }
     );
 
