@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { connectionId, environment = "sandbox" } = await req.json();
+    const { connectionId, environment = "sandbox", scopeOverride } = await req.json();
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
 
@@ -123,26 +123,32 @@ serve(async (req) => {
     console.log("JWT generated successfully, length:", jwt.length);
     console.log("JWT preview (first 100 chars):", jwt.substring(0, 100) + "...");
 
+    // Use scopeOverride if provided, otherwise use connection's scope
+    const effectiveScope = scopeOverride || credentials.scope;
+    
     // Validate scope is configured
-    if (!credentials.scope) {
+    if (!effectiveScope) {
       throw new Error("No scope configured for this connection. Please edit the connection and select data types.");
     }
 
-    // Build token request - use ONLY the scope from credentials, no defaults
+    // Build token request
     const tokenRequestBody = new URLSearchParams({
       grant_type: "client_credentials",
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: jwt,
-      scope: credentials.scope,
+      scope: effectiveScope,
     });
 
     console.log("=== Token Request ===");
-    console.log("Scope being requested:", credentials.scope);
+    console.log("Scope being requested:", effectiveScope);
+    if (scopeOverride) {
+      console.log("(Using scope override, original was:", credentials.scope, ")");
+    }
 
     console.log("Token Request Body Parameters:");
     console.log("  grant_type:", "client_credentials");
     console.log("  client_assertion_type:", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
-    console.log("  scope:", credentials.scope || "(default scopes)");
+    console.log("  scope:", effectiveScope);
     console.log("Making token request to:", tokenUrl);
 
     const tokenResponse = await fetch(tokenUrl, {
