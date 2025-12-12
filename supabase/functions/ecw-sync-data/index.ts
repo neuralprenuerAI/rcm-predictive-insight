@@ -81,64 +81,71 @@ serve(async (req) => {
     console.log("Access token obtained successfully");
 
     // Step 2: Build search parameters based on resource type
+    // ECW FHIR API requires specific search parameters - not just _count
     let finalSearchParams: Record<string, string> = { ...searchParams };
 
-    // ECW requires search parameters for most resources
+    // For Patient - ECW requires a search parameter like name
     if (resource === "Patient") {
-      // If no search params provided, add _count to limit results
       if (Object.keys(finalSearchParams).length === 0) {
-        finalSearchParams._count = "200";
+        // Use family name search with partial match to get patients
+        // ECW typically requires at least one search parameter
+        finalSearchParams.family = ""; // Empty string may work for "starts with"
       }
     }
 
-    // For ServiceRequest, add category filter (per ECW docs)
+    // For ServiceRequest
     if (resource === "ServiceRequest") {
-      if (category && SERVICE_CATEGORIES[category]) {
-        finalSearchParams.category = SERVICE_CATEGORIES[category];
-      }
-      // ServiceRequest may require patient parameter for some setups
       if (patientId) {
         finalSearchParams.patient = patientId;
       }
-      if (!finalSearchParams.patient && Object.keys(finalSearchParams).length <= 1) {
-        console.log("Note: ServiceRequest without patient ID - may return limited results");
-      }
-      // Add count limit
-      if (!finalSearchParams._count) {
-        finalSearchParams._count = "200";
-      }
+      // Don't add category parameter - ECW doesn't support it based on error logs
+      // The category filter would need to be done client-side
     }
 
-    // For Encounter
+    // For Encounter - try date-based search
     if (resource === "Encounter") {
       if (Object.keys(finalSearchParams).length === 0) {
-        finalSearchParams._count = "200";
+        // Try with date range for recent encounters
+        const today = new Date();
+        const yearAgo = new Date(today);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        finalSearchParams.date = `ge${yearAgo.toISOString().split('T')[0]}`;
       }
     }
 
     // For Claim
     if (resource === "Claim") {
       if (Object.keys(finalSearchParams).length === 0) {
-        finalSearchParams._count = "200";
+        // Try with created date
+        const today = new Date();
+        const yearAgo = new Date(today);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        finalSearchParams.created = `ge${yearAgo.toISOString().split('T')[0]}`;
       }
     }
 
     // For Coverage
     if (resource === "Coverage") {
-      if (Object.keys(finalSearchParams).length === 0) {
-        finalSearchParams._count = "200";
+      if (Object.keys(finalSearchParams).length === 0 && patientId) {
+        finalSearchParams.patient = patientId;
       }
     }
 
     // For Observation
     if (resource === "Observation") {
       if (Object.keys(finalSearchParams).length === 0) {
-        finalSearchParams._count = "200";
+        const today = new Date();
+        const yearAgo = new Date(today);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        finalSearchParams.date = `ge${yearAgo.toISOString().split('T')[0]}`;
       }
     }
 
-    // Step 3: Build FHIR URL (per ECW documentation format)
-    const queryString = new URLSearchParams(finalSearchParams).toString();
+    // Step 3: Build FHIR URL
+    // If no search params after our logic, try without any (some endpoints may support it)
+    const queryString = Object.keys(finalSearchParams).length > 0 
+      ? new URLSearchParams(finalSearchParams).toString() 
+      : "";
     const fhirUrl = `${fhirBaseUrl}/${resource}${queryString ? '?' + queryString : ''}`;
     
     console.log("=== ECW Sync: Fetching FHIR Data ===");
@@ -147,7 +154,7 @@ serve(async (req) => {
     console.log("Search Params:", JSON.stringify(finalSearchParams));
     console.log("Full URL:", fhirUrl);
 
-    // Step 4: Fetch from ECW FHIR API (using headers from ECW docs)
+    // Step 4: Fetch from ECW FHIR API
     const fhirResponse = await fetch(fhirUrl, {
       method: "GET",
       headers: {
