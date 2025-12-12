@@ -278,7 +278,7 @@ serve(async (req) => {
           const batch = patientRequests.slice(i, i + BATCH_SIZE);
           
           // Parallel fetch for this batch
-          const batchPromises = batch.map(async ({ patientId, patientName, url }) => {
+          const batchPromises = batch.map(async ({ patientId, patientName, url }, index) => {
             try {
               const response = await fetch(url, {
                 method: "GET",
@@ -288,13 +288,25 @@ serve(async (req) => {
                 },
               });
               
-              if (response.ok) {
-                const data = await response.json();
-                return { patientId, patientName, entries: data.entry || [] };
+              const responseText = await response.text();
+              
+              // Log first 3 patient responses in detail
+              if (processedCount + index < 3) {
+                console.log(`\n=== RAW ECW RESPONSE for patient ${patientId} ===`);
+                console.log(`URL: ${url}`);
+                console.log(`Status: ${response.status}`);
+                console.log(`Response: ${responseText.slice(0, 1000)}`);
+                console.log(`=== END RESPONSE ===\n`);
               }
-              return { patientId, patientName, entries: [] };
+              
+              if (response.ok) {
+                const data = JSON.parse(responseText);
+                return { patientId, patientName, entries: data.entry || [], total: data.total || 0 };
+              }
+              return { patientId, patientName, entries: [], total: 0, error: responseText.slice(0, 200) };
             } catch (err) {
-              return { patientId, patientName, entries: [] };
+              console.log(`Error for patient ${patientId}:`, err);
+              return { patientId, patientName, entries: [], total: 0 };
             }
           });
 
