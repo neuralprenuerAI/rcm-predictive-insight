@@ -82,7 +82,7 @@ export default function Settings() {
           notify_email: settings.notify_email,
           theme: settings.theme,
           default_date_range: settings.default_date_range
-        });
+        }, { onConflict: 'user_id' });
       if (error) throw error;
     },
     onSuccess: () => {
