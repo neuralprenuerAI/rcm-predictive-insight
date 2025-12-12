@@ -273,8 +273,8 @@ serve(async (req) => {
         const seenIds = new Set<string>();
         let processedCount = 0;
         
-        // Process max 50 patients to avoid timeout (each patient = 1 API call)
-        const patientsToProcess = allPatients.slice(0, 50);
+        // Process max 20 patients to avoid timeout (edge functions have ~60s limit)
+        const patientsToProcess = allPatients.slice(0, 20);
         console.log(`Processing ${patientsToProcess.length} of ${allPatients.length} patients for ServiceRequests...`);
         
         for (const patientEntry of patientsToProcess) {
@@ -325,11 +325,12 @@ serve(async (req) => {
           }
           
           processedCount++;
-          if (processedCount % 25 === 0) {
+          if (processedCount % 10 === 0) {
             console.log(`Progress: ${processedCount}/${patientsToProcess.length} patients, ${allServiceRequests.length} ServiceRequests found`);
           }
           
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // Minimal delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
         
         console.log(`=== Total ServiceRequests found: ${allServiceRequests.length} ===`);
