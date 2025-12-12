@@ -86,6 +86,13 @@ serve(async (req) => {
       exp: now + 300, // 5 minutes expiration
     };
 
+    console.log("=== FRESH JWT TOKEN GENERATED ===");
+    console.log("Unique Token ID (jti):", jti);
+    console.log("Issued At (iat):", new Date(now * 1000).toISOString());
+    console.log("Expires At (exp):", new Date((now + 300) * 1000).toISOString());
+    console.log("Client ID (iss/sub):", credentials.client_id);
+    console.log("Token Endpoint (aud):", tokenUrl);
+    console.log("=================================");
     console.log("JWT Payload:", JSON.stringify(jwtPayload, null, 2));
 
     // Validate private key format
