@@ -13,17 +13,24 @@ const SERVICE_CATEGORIES: Record<string, string> = {
   procedures: "387713003"
 };
 
-// Helper: Fetch all patients using alphabet search
+// Helper: Fetch all patients using search terms
 async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promise<any[]> {
-  console.log("=== Fetching ALL patients via alphabet search ===");
+  console.log("=== Fetching ALL patients ===");
   
-  const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
+  // Include "test" since ECW sandbox has test patients
+  const searchTerms = [
+    "test",  // ECW sandbox test data
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+  ];
+  
   const allPatients: any[] = [];
   const seenIds = new Set<string>();
   
-  for (const letter of alphabet) {
+  for (const term of searchTerms) {
     try {
-      const searchUrl = `${fhirBaseUrl}/Patient?name=${letter}`;
+      const searchUrl = `${fhirBaseUrl}/Patient?name=${term}`;
+      console.log(`Searching: name=${term}`);
       
       const response = await fetch(searchUrl, {
         method: "GET",
@@ -35,6 +42,8 @@ async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promi
       
       if (response.ok) {
         const data = await response.json();
+        const count = data.entry?.length || 0;
+        
         if (data.entry) {
           for (const entry of data.entry) {
             if (!seenIds.has(entry.resource.id)) {
@@ -43,15 +52,19 @@ async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promi
             }
           }
         }
+        
+        console.log(`  "${term}": found ${count}, total unique: ${allPatients.length}`);
+      } else {
+        console.log(`  "${term}": ${response.status} error`);
       }
       
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch (err) {
-      console.error(`Error searching letter ${letter}:`, err);
+      console.error(`Error searching "${term}":`, err);
     }
   }
   
-  console.log(`Total unique patients found: ${allPatients.length}`);
+  console.log(`=== Total unique patients: ${allPatients.length} ===`);
   return allPatients;
 }
 
