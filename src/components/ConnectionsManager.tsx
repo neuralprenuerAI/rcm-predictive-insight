@@ -404,6 +404,62 @@ export default function ConnectionsManager() {
     },
   });
 
+  // Save synced service requests to database
+  const saveServiceRequestsMutation = useMutation({
+    mutationFn: async ({ entries, connectionId, category }: { entries: any[]; connectionId: string; category: string }) => {
+      if (!entries || entries.length === 0) return 0;
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      
+      const serviceRequestsToUpsert = entries.map((entry: any) => {
+        const sr = entry.resource;
+        const patientRef = sr.subject?.reference || '';
+        const patientExternalId = sr._patientExternalId || patientRef.replace('Patient/', '');
+        
+        return {
+          external_id: sr.id,
+          source: 'ecw',
+          source_connection_id: connectionId,
+          patient_external_id: patientExternalId,
+          category: category,
+          code: sr.code?.coding?.[0]?.code || null,
+          code_display: sr.code?.text || sr.code?.coding?.[0]?.display || null,
+          status: sr.status || null,
+          priority: sr.priority || null,
+          authored_on: sr.authoredOn || null,
+          user_id: user.id,
+          last_synced_at: new Date().toISOString(),
+          raw_fhir_data: sr,
+        };
+      });
+      
+      const { error } = await supabase
+        .from('service_requests')
+        .upsert(serviceRequestsToUpsert, {
+          onConflict: 'external_id,source',
+        });
+      
+      if (error) throw error;
+      
+      // Link to patients
+      await supabase.rpc('link_service_requests_to_patients');
+      
+      return serviceRequestsToUpsert.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`Saved ${count} service requests to database`);
+      setSyncDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['service-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+    },
+    onError: (error: Error) => {
+      toast.error("Save Failed", {
+        description: error.message,
+      });
+    },
+  });
+
   const deletePayerConnection = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('payer_connections').delete().eq('id', id);
@@ -1079,6 +1135,25 @@ export default function ConnectionsManager() {
                   <Save className="h-4 w-4 mr-2" />
                 )}
                 Save {syncResult?.total || 0} Patients
+              </Button>
+            )}
+            {syncResult?.resource === 'ServiceRequest' && syncResult?.data?.entry?.length > 0 && (
+              <Button 
+                onClick={() => {
+                  saveServiceRequestsMutation.mutate({
+                    entries: syncResult.data.entry,
+                    connectionId: syncResult.connectionId,
+                    category: syncResult.category || 'unknown',
+                  });
+                }}
+                disabled={saveServiceRequestsMutation.isPending}
+              >
+                {saveServiceRequestsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save {syncResult?.total || 0} Orders
               </Button>
             )}
           </DialogFooter>

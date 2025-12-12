@@ -11,23 +11,79 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search } from "lucide-react";
+import { Users, Search, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface PatientWithOrders {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  phone: string | null;
+  email: string | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  source: string;
+  external_id: string | null;
+  lab_count: number;
+  imaging_count: number;
+  procedure_count: number;
+}
 
 export default function Patients() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<PatientWithOrders | null>(null);
 
   const { data: patients, isLoading } = useQuery({
-    queryKey: ['patients'],
+    queryKey: ['patients-with-orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
         .select('*')
         .order('last_name', { ascending: true });
       
+      if (patientsError) throw patientsError;
+      
+      const { data: orders, error: ordersError } = await supabase
+        .from('service_requests')
+        .select('patient_id, category');
+      
+      if (ordersError) throw ordersError;
+      
+      return patientsData?.map(patient => ({
+        ...patient,
+        lab_count: orders?.filter(o => o.patient_id === patient.id && o.category === 'labs').length || 0,
+        imaging_count: orders?.filter(o => o.patient_id === patient.id && o.category === 'imaging').length || 0,
+        procedure_count: orders?.filter(o => o.patient_id === patient.id && o.category === 'procedures').length || 0,
+      })) as PatientWithOrders[];
+    }
+  });
+
+  const { data: patientOrders } = useQuery({
+    queryKey: ['patient-orders', selectedPatient?.id],
+    queryFn: async () => {
+      if (!selectedPatient?.id) return [];
+      const { data, error } = await supabase
+        .from('service_requests')
+        .select('*')
+        .eq('patient_id', selectedPatient.id)
+        .order('authored_on', { ascending: false });
       if (error) throw error;
       return data || [];
-    }
+    },
+    enabled: !!selectedPatient?.id,
   });
 
   const filteredPatients = patients?.filter(patient => {
@@ -41,7 +97,7 @@ export default function Patients() {
     );
   });
 
-  const formatAddress = (patient: any) => {
+  const formatAddress = (patient: PatientWithOrders) => {
     const parts = [
       patient.address_line1,
       patient.city,
@@ -104,28 +160,36 @@ export default function Patients() {
                     <TableHead>DOB</TableHead>
                     <TableHead>Gender</TableHead>
                     <TableHead>Phone</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Source</TableHead>
+                    <TableHead>Labs</TableHead>
+                    <TableHead>Imaging</TableHead>
+                    <TableHead>Procedures</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPatients?.map((patient) => (
-                    <TableRow key={patient.id}>
+                    <TableRow 
+                      key={patient.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedPatient(patient)}
+                    >
                       <TableCell className="font-medium">
                         {patient.first_name} {patient.last_name}
                       </TableCell>
                       <TableCell>{patient.date_of_birth || '-'}</TableCell>
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
                       <TableCell>{patient.phone || '-'}</TableCell>
-                      <TableCell>{patient.email || '-'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {formatAddress(patient)}
+                      <TableCell>
+                        <Badge variant="outline">{patient.lab_count}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={patient.source === 'ecw' ? 'default' : 'secondary'}>
-                          {patient.source || 'manual'}
-                        </Badge>
+                        <Badge variant="outline">{patient.imaging_count}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{patient.procedure_count}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -135,6 +199,65 @@ export default function Patients() {
           )}
         </CardContent>
       </Card>
+
+      {/* Patient Detail Dialog */}
+      <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedPatient?.first_name} {selectedPatient?.last_name}
+            </DialogTitle>
+            <DialogDescription>
+              DOB: {selectedPatient?.date_of_birth || '-'} | 
+              Gender: {selectedPatient?.gender || '-'} | 
+              Phone: {selectedPatient?.phone || '-'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto">
+            <h3 className="font-semibold mb-2">Service Requests ({patientOrders?.length || 0})</h3>
+            
+            {patientOrders?.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">
+                No service requests found for this patient
+              </p>
+            ) : (
+              <div className="rounded-md border border-border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {patientOrders?.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-medium">{order.code_display || order.code || '-'}</TableCell>
+                        <TableCell className="capitalize">{order.category || '-'}</TableCell>
+                        <TableCell className="capitalize">{order.status || '-'}</TableCell>
+                        <TableCell className="capitalize">{order.priority || '-'}</TableCell>
+                        <TableCell>
+                          {order.authored_on ? new Date(order.authored_on).toLocaleDateString() : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedPatient(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

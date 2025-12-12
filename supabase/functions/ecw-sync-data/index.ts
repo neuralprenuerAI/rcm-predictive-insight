@@ -277,6 +277,7 @@ serve(async (req) => {
                     entry.resource._patientName = patientName 
                       ? `${patientName.given?.join(' ') || ''} ${patientName.family || ''}`.trim()
                       : 'Unknown';
+                    entry.resource._patientExternalId = patientId;
                     allServiceRequests.push(entry);
                   }
                 }
