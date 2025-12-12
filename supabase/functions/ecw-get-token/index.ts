@@ -128,7 +128,7 @@ serve(async (req) => {
       grant_type: "client_credentials",
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: jwt,
-      scope: credentials.scope || "system/Patient.read system/Encounter.read system/Coverage.read system/Observation.read system/Claim.read system/Procedure.read",
+      scope: credentials.scope || "system/*.read",
     });
 
     console.log("Token Request Body Parameters:");
