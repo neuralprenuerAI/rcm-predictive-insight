@@ -678,10 +678,10 @@ export default function ConnectionsManager() {
                                     
                                     {selectedScopesForConn.includes('patient') && (
                                       <DropdownMenuItem 
-                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Patient' })}
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Patient', fetchAll: true })}
                                       >
                                         <Users className="h-4 w-4 mr-2" />
-                                        Patients
+                                        All Patients
                                       </DropdownMenuItem>
                                     )}
                                     
