@@ -106,7 +106,6 @@ export default function Patients() {
                     <TableHead>Phone</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Address</TableHead>
-                    <TableHead>ECW ID</TableHead>
                     <TableHead>Source</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -122,11 +121,6 @@ export default function Patients() {
                       <TableCell>{patient.email || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {formatAddress(patient)}
-                      </TableCell>
-                      <TableCell>
-                        <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                          {patient.external_id || '-'}
-                        </code>
                       </TableCell>
                       <TableCell>
                         <Badge variant={patient.source === 'ecw' ? 'default' : 'secondary'}>
