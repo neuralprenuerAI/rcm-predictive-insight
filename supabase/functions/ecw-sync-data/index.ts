@@ -6,60 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Helper to fetch FHIR bundle with pagination
-async function fetchFHIRResource(fhirBase: string, resource: string, accessToken: string, maxPages = 5): Promise<any[]> {
-  const results: any[] = [];
-  let url: string | null = `${fhirBase}/${resource}?_count=100`;
-  let pageCount = 0;
-
-  while (url && pageCount < maxPages) {
-    console.log(`Fetching ${resource} page ${pageCount + 1}:`, url);
-    
-    const fetchResponse: Response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Accept": "application/fhir+json",
-      },
-    });
-
-    if (!fetchResponse.ok) {
-      const errorText = await fetchResponse.text();
-      console.error(`FHIR ${resource} fetch failed:`, fetchResponse.status, errorText);
-      throw new Error(`FHIR ${resource} fetch failed: ${fetchResponse.status}`);
-    }
-
-    const bundle: any = await fetchResponse.json();
-    console.log(`${resource} bundle total:`, bundle.total, "entries:", bundle.entry?.length || 0);
-
-    if (bundle.entry) {
-      results.push(...bundle.entry.map((e: any) => e.resource));
-    }
-
-    // Handle pagination
-    const nextLink: any = bundle.link?.find((l: any) => l.relation === "next");
-    url = nextLink?.url || null;
-    pageCount++;
-  }
-
-  return results;
-}
-
-// Transform FHIR Claim to our claims table format
-function transformClaim(fhirClaim: any, userId: string) {
-  return {
-    user_id: userId,
-    claim_id: fhirClaim.identifier?.[0]?.value || `ECW-${fhirClaim.id}`,
-    patient_name: fhirClaim.patient?.display || "Unknown Patient",
-    date_of_service: fhirClaim.billablePeriod?.start || fhirClaim.created?.split("T")[0] || new Date().toISOString().split("T")[0],
-    billed_amount: fhirClaim.total?.value || 0,
-    status: fhirClaim.status === "active" ? "pending" : (fhirClaim.status || "pending"),
-    payer: fhirClaim.insurer?.display || fhirClaim.insurance?.[0]?.coverage?.display || null,
-    provider: fhirClaim.provider?.display || "Unknown Provider",
-    diagnosis_code: fhirClaim.diagnosis?.map((d: any) => d.diagnosisCodeableConcept?.coding?.[0]?.code).filter(Boolean).join(", ") || null,
-    procedure_code: fhirClaim.item?.map((i: any) => i.productOrService?.coding?.[0]?.code).filter(Boolean).join(", ") || null,
-    fhir_id: fhirClaim.id,
-  };
-}
+// ECW ServiceRequest category codes (from ECW documentation)
+const SERVICE_CATEGORIES: Record<string, string> = {
+  labs: "108252007",      // Labs
+  imaging: "363679005",   // DI (Diagnostic Imaging)
+  procedures: "387713003" // Procedures
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -67,144 +19,130 @@ serve(async (req) => {
   }
 
   try {
-    const { connectionId, environment = "sandbox", options = {} } = await req.json();
+    const { 
+      connectionId, 
+      resource = "Patient",
+      searchParams = {},
+      category = null,
+      patientId = null
+    } = await req.json();
+    
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    console.log("Starting ECW sync for connection:", connectionId);
-
-    // Get access token by calling the ecw-get-token function
-    const tokenResponse = await fetch(`${supabaseUrl}/functions/v1/ecw-get-token`, {
-      method: "POST",
-      headers: {
-        "Authorization": authHeader,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ connectionId, environment }),
-    });
-
-    if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json();
-      throw new Error(errorData.error || "Failed to get access token");
-    }
-
-    const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
-
-    if (!accessToken) {
-      throw new Error("No access token received");
-    }
-
-    // Fetch connection to get dynamic FHIR URL from credentials
+    // Get connection details
     const { data: connection, error: connError } = await supabaseClient
       .from("api_connections")
       .select("*")
       .eq("id", connectionId)
+      .eq("user_id", user.id)
       .single();
 
     if (connError || !connection) {
       throw new Error("Connection not found");
     }
 
-    // Get FHIR base URL from credentials
     const credentials = connection.credentials as any;
-    const FHIR_BASE = credentials?.issuer_url?.replace(/\/$/, "") || "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD";
-
-    console.log("Access token obtained, fetching FHIR resources from:", FHIR_BASE);
-
-    const summary = {
-      patients: 0,
-      encounters: 0,
-      claims: 0,
-      coverages: 0,
-      errors: [] as string[],
-    };
-
-    // Sync Claims
-    const syncClaims = options.syncClaims !== false;
-    if (syncClaims) {
-      try {
-        console.log("Fetching Claims from FHIR...");
-        const fhirClaims = await fetchFHIRResource(FHIR_BASE, "Claim", accessToken);
-        console.log(`Retrieved ${fhirClaims.length} claims`);
-
-        if (fhirClaims.length > 0) {
-          const transformedClaims = fhirClaims.map(claim => transformClaim(claim, user.id));
-
-          // Upsert claims (use fhir_id + user_id as unique constraint)
-          for (const claim of transformedClaims) {
-            const { error } = await supabaseClient
-              .from("claims")
-              .upsert(claim, {
-                onConflict: "fhir_id,user_id",
-                ignoreDuplicates: false,
-              });
-
-            if (error) {
-              console.error("Error upserting claim:", error);
-              summary.errors.push(`Claim ${claim.claim_id}: ${error.message}`);
-            } else {
-              summary.claims++;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error syncing claims:", err);
-        summary.errors.push(`Claims sync failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-      }
+    const fhirBaseUrl = credentials?.issuer_url || credentials?.fhir_base_url;
+    
+    if (!fhirBaseUrl) {
+      throw new Error("FHIR Base URL not configured in connection");
     }
 
-    // Sync Patients (for reference)
-    const syncPatients = options.syncPatients !== false;
-    if (syncPatients) {
-      try {
-        console.log("Fetching Patients from FHIR...");
-        const fhirPatients = await fetchFHIRResource(FHIR_BASE, "Patient", accessToken, 2);
-        summary.patients = fhirPatients.length;
-        console.log(`Retrieved ${fhirPatients.length} patients`);
-      } catch (err) {
-        console.error("Error syncing patients:", err);
-        summary.errors.push(`Patients sync failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    // Step 1: Get fresh access token
+    console.log("=== ECW Sync: Getting fresh access token ===");
+    const tokenResponse = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/ecw-get-token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": authHeader,
+        },
+        body: JSON.stringify({ connectionId }),
       }
+    );
+
+    if (!tokenResponse.ok) {
+      const error = await tokenResponse.json();
+      throw new Error(`Failed to get token: ${error.error}`);
     }
 
-    // Sync Encounters
-    const syncEncounters = options.syncEncounters !== false;
-    if (syncEncounters) {
-      try {
-        console.log("Fetching Encounters from FHIR...");
-        const fhirEncounters = await fetchFHIRResource(FHIR_BASE, "Encounter", accessToken, 2);
-        summary.encounters = fhirEncounters.length;
-        console.log(`Retrieved ${fhirEncounters.length} encounters`);
-      } catch (err) {
-        console.error("Error syncing encounters:", err);
-        summary.errors.push(`Encounters sync failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-      }
+    const { access_token } = await tokenResponse.json();
+    console.log("Access token obtained successfully");
+
+    // Step 2: Build search parameters based on resource type
+    let finalSearchParams: Record<string, string> = { ...searchParams };
+    
+    // For ServiceRequest, add category filter (per ECW docs)
+    if (resource === "ServiceRequest" && category && SERVICE_CATEGORIES[category]) {
+      finalSearchParams.category = SERVICE_CATEGORIES[category];
+    }
+    
+    // For ServiceRequest with patient filter
+    if (resource === "ServiceRequest" && patientId) {
+      finalSearchParams.patient = patientId;
     }
 
-    // Sync Coverages
-    const syncCoverages = options.syncCoverages !== false;
-    if (syncCoverages) {
-      try {
-        console.log("Fetching Coverages from FHIR...");
-        const fhirCoverages = await fetchFHIRResource(FHIR_BASE, "Coverage", accessToken, 2);
-        summary.coverages = fhirCoverages.length;
-        console.log(`Retrieved ${fhirCoverages.length} coverages`);
-      } catch (err) {
-        console.error("Error syncing coverages:", err);
-        summary.errors.push(`Coverages sync failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    // Step 3: Build FHIR URL (per ECW documentation format)
+    const queryString = new URLSearchParams(finalSearchParams).toString();
+    const fhirUrl = `${fhirBaseUrl}/${resource}${queryString ? '?' + queryString : ''}`;
+    
+    console.log("=== ECW Sync: Fetching FHIR Data ===");
+    console.log("Resource:", resource);
+    console.log("Category:", category || "N/A");
+    console.log("Full URL:", fhirUrl);
+
+    // Step 4: Fetch from ECW FHIR API (using headers from ECW docs)
+    const fhirResponse = await fetch(fhirUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${access_token}`,
+        "Accept": "application/json+fhir",  // Per ECW documentation
+      },
+    });
+
+    console.log("FHIR Response Status:", fhirResponse.status);
+
+    if (!fhirResponse.ok) {
+      const errorText = await fhirResponse.text();
+      console.error("FHIR Error Response:", errorText);
+      
+      // Handle specific ECW error codes (from documentation)
+      if (fhirResponse.status === 401) {
+        throw new Error("Unauthorized: Invalid or expired Access Token");
       }
+      if (fhirResponse.status === 403) {
+        throw new Error(`Forbidden: The scope for '${resource}' is not authorized. Request this scope from ECW.`);
+      }
+      if (fhirResponse.status === 404) {
+        throw new Error("Not found: Unknown resource type or resource not found");
+      }
+      if (fhirResponse.status === 408) {
+        throw new Error("Request timeout: Too much data or communication issue");
+      }
+      if (fhirResponse.status === 429) {
+        throw new Error("Rate limited: Too many requests. Please wait and try again.");
+      }
+      
+      throw new Error(`FHIR request failed with status ${fhirResponse.status}`);
     }
+
+    const fhirData = await fhirResponse.json();
+    const totalRecords = fhirData.total || fhirData.entry?.length || 0;
+    
+    console.log("=== ECW Sync: Data Retrieved Successfully ===");
+    console.log("Resource Type:", fhirData.resourceType);
+    console.log("Total Records:", totalRecords);
 
     // Update last_sync timestamp on the connection
     await supabaseClient
@@ -212,17 +150,22 @@ serve(async (req) => {
       .update({ last_sync: new Date().toISOString() })
       .eq("id", connectionId);
 
-    console.log("ECW sync completed:", summary);
-
     return new Response(
-      JSON.stringify(summary),
+      JSON.stringify({
+        success: true,
+        resource,
+        category: category || null,
+        total: totalRecords,
+        data: fhirData,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("Error in ecw-sync-data:", error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Unknown error occurred" 
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

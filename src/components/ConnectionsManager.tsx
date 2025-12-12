@@ -4,31 +4,91 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Plug, Trash2, Key, RefreshCw } from "lucide-react";
+import { 
+  Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
+  Users, FlaskConical, Calendar, Receipt, Shield, Activity, Scan, Syringe 
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ECWTokenDisplay from "./ECWTokenDisplay";
 import { KeyPairGenerator } from "./KeyPairGenerator";
 
 // ECW Sandbox defaults
 const ECW_SANDBOX_DEFAULTS = {
-  client_id: "2NsNtk5kW9GOcS3XY8dUr_nW6Nm-m2y9Yyha_FIIZjs",
+  client_id: "2NsNtk5kW9GOcS3XY8dUr_nW6Nm-m2y9Yyha_FllZjs",
   issuer_url: "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD",
   kid: "neuralprenuer-key-1",
-  scope: "system/Patient.read system/Encounter.read system/Coverage.read system/Observation.read system/Claim.read system/Procedure.read",
 };
+
+// ECW Scope options with icons and descriptions
+const ECW_SCOPE_OPTIONS = [
+  { 
+    id: 'patient', 
+    label: 'Patients', 
+    scope: 'system/Patient.read',
+    icon: Users,
+    description: 'Patient demographics, contact info, insurance'
+  },
+  { 
+    id: 'serviceRequest', 
+    label: 'Service Requests', 
+    scope: 'system/ServiceRequest.read',
+    icon: FlaskConical,
+    description: 'Lab orders, imaging orders, procedure orders'
+  },
+  { 
+    id: 'encounter', 
+    label: 'Encounters', 
+    scope: 'system/Encounter.read',
+    icon: Calendar,
+    description: 'Patient visits and appointments'
+  },
+  { 
+    id: 'claim', 
+    label: 'Claims', 
+    scope: 'system/Claim.read',
+    icon: Receipt,
+    description: 'Billing and claims data'
+  },
+  { 
+    id: 'coverage', 
+    label: 'Coverage', 
+    scope: 'system/Coverage.read',
+    icon: Shield,
+    description: 'Insurance coverage information'
+  },
+  { 
+    id: 'observation', 
+    label: 'Observations', 
+    scope: 'system/Observation.read',
+    icon: Activity,
+    description: 'Lab results, vitals, measurements'
+  },
+];
 
 export default function ConnectionsManager() {
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [payerDialogOpen, setPayerDialogOpen] = useState(false);
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [tokenData, setTokenData] = useState<any>(null);
+  const [syncResult, setSyncResult] = useState<any>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(['patient']);
   const [apiFormData, setApiFormData] = useState({
     connection_name: "",
     connection_type: "ehr",
@@ -38,7 +98,6 @@ export default function ConnectionsManager() {
     private_key: "",
     issuer_url: "",
     kid: "",
-    scope: "",
   });
   const [payerFormData, setPayerFormData] = useState({
     payer_name: "",
@@ -48,6 +107,23 @@ export default function ConnectionsManager() {
   });
   const queryClient = useQueryClient();
 
+  // Generate scope string from selected scopes
+  const getScopeString = () => {
+    return selectedScopes
+      .map(id => ECW_SCOPE_OPTIONS.find(opt => opt.id === id)?.scope)
+      .filter(Boolean)
+      .join(' ');
+  };
+
+  // Toggle scope selection
+  const toggleScope = (scopeId: string) => {
+    setSelectedScopes(prev => 
+      prev.includes(scopeId) 
+        ? prev.filter(id => id !== scopeId)
+        : [...prev, scopeId]
+    );
+  };
+
   // Pre-fill ECW sandbox values when connection type changes to ecw
   useEffect(() => {
     if (apiFormData.connection_type === "ecw") {
@@ -56,7 +132,6 @@ export default function ConnectionsManager() {
         client_id: prev.client_id || ECW_SANDBOX_DEFAULTS.client_id,
         issuer_url: prev.issuer_url || ECW_SANDBOX_DEFAULTS.issuer_url,
         kid: prev.kid || ECW_SANDBOX_DEFAULTS.kid,
-        scope: prev.scope || ECW_SANDBOX_DEFAULTS.scope,
       }));
     }
   }, [apiFormData.connection_type]);
@@ -97,7 +172,8 @@ export default function ConnectionsManager() {
             private_key: apiFormData.private_key,
             issuer_url: apiFormData.issuer_url,
             kid: apiFormData.kid || ECW_SANDBOX_DEFAULTS.kid,
-            scope: apiFormData.scope || ECW_SANDBOX_DEFAULTS.scope,
+            scope: getScopeString(),
+            selected_scopes: selectedScopes,
           }
         : null;
 
@@ -125,8 +201,8 @@ export default function ConnectionsManager() {
         private_key: "",
         issuer_url: "",
         kid: "",
-        scope: "",
       });
+      setSelectedScopes(['patient']);
     },
     onError: (error: any) => toast.error(error?.message || "Failed to create connection")
   });
@@ -232,29 +308,28 @@ export default function ConnectionsManager() {
   });
 
   const syncECWData = useMutation({
-    mutationFn: async (connectionId: string) => {
+    mutationFn: async ({ connectionId, resource, category }: { 
+      connectionId: string; 
+      resource: string;
+      category?: string | null;
+    }) => {
       const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
-        body: { connectionId, environment }
+        body: { connectionId, resource, category }
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['claims'] });
-      queryClient.invalidateQueries({ queryKey: ['recent-claims'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+      setSyncResult(data);
+      setSyncDialogOpen(true);
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
-      
-      const errorCount = data.errors?.length || 0;
-      toast.success("ECW Sync Complete", {
-        description: `Synced ${data.claims || 0} claims, ${data.patients || 0} patients, ${data.encounters || 0} encounters${errorCount > 0 ? ` (${errorCount} errors)` : ''}`,
+    },
+    onError: (error: Error) => {
+      toast.error("Sync Failed", {
+        description: error.message,
       });
     },
-    onError: (error: any) => {
-      toast.error("Sync failed", { description: error.message });
-      console.error("Sync error:", error);
-    }
   });
 
   const deletePayerConnection = useMutation({
@@ -267,6 +342,11 @@ export default function ConnectionsManager() {
       toast.success("Connection deleted");
     }
   });
+
+  // Get credentials from connection with proper typing
+  const getConnectionCredentials = (conn: any) => {
+    return conn.credentials as { selected_scopes?: string[] } | null;
+  };
 
   return (
     <div className="space-y-6">
@@ -308,12 +388,12 @@ export default function ConnectionsManager() {
                     Add API Connection
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>New API Connection</DialogTitle>
                     <DialogDescription>Connect to EHR or other healthcare systems</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                  <div className="space-y-4">
                     <div>
                       <Label>Connection Name</Label>
                       <Input
@@ -372,14 +452,51 @@ export default function ConnectionsManager() {
                             placeholder="neuralprenuer-key-1"
                           />
                         </div>
-                        <div>
-                          <Label>Scopes</Label>
-                          <Input
-                            value={apiFormData.scope}
-                            onChange={(e) => setApiFormData({ ...apiFormData, scope: e.target.value })}
-                            placeholder="system/Patient.read system/Claim.read ..."
-                          />
+                        
+                        {/* Scope Selection Checkboxes */}
+                        <div className="space-y-3">
+                          <Label>Data Types to Sync</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Select data types approved in your ECW Developer Portal
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {ECW_SCOPE_OPTIONS.map((option) => {
+                              const IconComponent = option.icon;
+                              const isSelected = selectedScopes.includes(option.id);
+                              
+                              return (
+                                <div
+                                  key={option.id}
+                                  onClick={() => toggleScope(option.id)}
+                                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-primary/10 border-primary ring-1 ring-primary'
+                                      : 'bg-card hover:bg-accent border-border'
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleScope(option.id)}
+                                    className="mt-0.5"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <IconComponent className="h-4 w-4 shrink-0" />
+                                      <span className="font-medium text-sm">{option.label}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {option.description}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono bg-muted p-2 rounded break-all">
+                            {getScopeString() || 'No scopes selected'}
+                          </p>
                         </div>
+                        
                         <div>
                           <Label>Private Key (PEM format)</Label>
                           <textarea
@@ -438,55 +555,160 @@ export default function ConnectionsManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {apiConnections.map((conn) => (
-                    <TableRow key={conn.id}>
-                      <TableCell className="font-medium">{conn.connection_name}</TableCell>
-                      <TableCell>{conn.connection_type}</TableCell>
-                      <TableCell className="max-w-xs truncate">{conn.api_url}</TableCell>
-                      <TableCell>
-                        {conn.last_sync ? new Date(conn.last_sync).toLocaleString() : 'Never'}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={conn.is_active}
-                          onCheckedChange={(checked) => toggleAPIConnection.mutate({ id: conn.id, isActive: checked })}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {conn.connection_type === 'ecw' && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => testECWToken.mutate(conn.id)}
-                                disabled={testECWToken.isPending}
-                              >
-                                <Key className="h-4 w-4 mr-1" />
-                                {testECWToken.isPending ? 'Testing...' : 'Test'}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => syncECWData.mutate(conn.id)}
-                                disabled={syncECWData.isPending || !conn.is_active}
-                              >
-                                <RefreshCw className={`h-4 w-4 mr-1 ${syncECWData.isPending ? 'animate-spin' : ''}`} />
-                                {syncECWData.isPending ? 'Syncing...' : 'Sync Data'}
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => deleteAPIConnection.mutate(conn.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {apiConnections.map((conn) => {
+                    const credentials = getConnectionCredentials(conn);
+                    const selectedScopesForConn = credentials?.selected_scopes || [];
+                    
+                    return (
+                      <TableRow key={conn.id}>
+                        <TableCell className="font-medium">{conn.connection_name}</TableCell>
+                        <TableCell>{conn.connection_type}</TableCell>
+                        <TableCell className="max-w-xs truncate">{conn.api_url}</TableCell>
+                        <TableCell>
+                          {conn.last_sync ? new Date(conn.last_sync).toLocaleString() : 'Never'}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={conn.is_active}
+                            onCheckedChange={(checked) => toggleAPIConnection.mutate({ id: conn.id, isActive: checked })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {conn.connection_type === 'ecw' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => testECWToken.mutate(conn.id)}
+                                  disabled={testECWToken.isPending}
+                                >
+                                  <Key className="h-4 w-4 mr-1" />
+                                  {testECWToken.isPending ? 'Testing...' : 'Test'}
+                                </Button>
+                                
+                                {/* Sync Data Dropdown */}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button 
+                                      variant="default" 
+                                      size="sm" 
+                                      disabled={syncECWData.isPending || !conn.is_active}
+                                    >
+                                      <RefreshCw className={`h-4 w-4 mr-1 ${syncECWData.isPending ? 'animate-spin' : ''}`} />
+                                      {syncECWData.isPending ? 'Syncing...' : 'Sync Data'}
+                                      <ChevronDown className="h-4 w-4 ml-1" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Select Data Type</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    
+                                    {selectedScopesForConn.includes('patient') && (
+                                      <DropdownMenuItem 
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Patient' })}
+                                      >
+                                        <Users className="h-4 w-4 mr-2" />
+                                        Patients
+                                      </DropdownMenuItem>
+                                    )}
+                                    
+                                    {selectedScopesForConn.includes('serviceRequest') && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                          Service Requests
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuItem 
+                                          onClick={() => syncECWData.mutate({ 
+                                            connectionId: conn.id, 
+                                            resource: 'ServiceRequest', 
+                                            category: 'labs' 
+                                          })}
+                                        >
+                                          <FlaskConical className="h-4 w-4 mr-2" />
+                                          Lab Orders
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem 
+                                          onClick={() => syncECWData.mutate({ 
+                                            connectionId: conn.id, 
+                                            resource: 'ServiceRequest', 
+                                            category: 'imaging' 
+                                          })}
+                                        >
+                                          <Scan className="h-4 w-4 mr-2" />
+                                          Imaging Orders
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem 
+                                          onClick={() => syncECWData.mutate({ 
+                                            connectionId: conn.id, 
+                                            resource: 'ServiceRequest', 
+                                            category: 'procedures' 
+                                          })}
+                                        >
+                                          <Syringe className="h-4 w-4 mr-2" />
+                                          Procedure Orders
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    
+                                    {selectedScopesForConn.includes('encounter') && (
+                                      <DropdownMenuItem 
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Encounter' })}
+                                      >
+                                        <Calendar className="h-4 w-4 mr-2" />
+                                        Encounters
+                                      </DropdownMenuItem>
+                                    )}
+
+                                    {selectedScopesForConn.includes('claim') && (
+                                      <DropdownMenuItem 
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Claim' })}
+                                      >
+                                        <Receipt className="h-4 w-4 mr-2" />
+                                        Claims
+                                      </DropdownMenuItem>
+                                    )}
+
+                                    {selectedScopesForConn.includes('coverage') && (
+                                      <DropdownMenuItem 
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Coverage' })}
+                                      >
+                                        <Shield className="h-4 w-4 mr-2" />
+                                        Coverage
+                                      </DropdownMenuItem>
+                                    )}
+                                    
+                                    {selectedScopesForConn.includes('observation') && (
+                                      <DropdownMenuItem 
+                                        onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Observation' })}
+                                      >
+                                        <Activity className="h-4 w-4 mr-2" />
+                                        Observations
+                                      </DropdownMenuItem>
+                                    )}
+                                    
+                                    {selectedScopesForConn.length === 0 && (
+                                      <DropdownMenuItem disabled className="text-muted-foreground">
+                                        No data types configured
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteAPIConnection.mutate(conn.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -595,6 +817,171 @@ export default function ConnectionsManager() {
         onOpenChange={setTokenDialogOpen} 
         tokenData={tokenData} 
       />
+
+      {/* Sync Results Dialog */}
+      <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Sync Complete
+            </DialogTitle>
+            <DialogDescription>
+              Retrieved {syncResult?.total || 0} {syncResult?.resource} records
+              {syncResult?.category && ` (${syncResult.category})`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto border rounded-lg">
+            {/* Patient Results Table */}
+            {syncResult?.resource === 'Patient' && syncResult?.data?.entry && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>DOB</TableHead>
+                    <TableHead>Gender</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Address</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {syncResult.data.entry.slice(0, 100).map((entry: any, idx: number) => {
+                    const p = entry.resource;
+                    const name = p.name?.[0];
+                    const fullName = name 
+                      ? `${name.prefix?.join(' ') || ''} ${name.given?.join(' ') || ''} ${name.family || ''}`.trim()
+                      : 'Unknown';
+                    const phone = p.telecom?.find((t: any) => t.system === 'phone')?.value || '-';
+                    const addr = p.address?.[0];
+                    const address = addr ? `${addr.city || ''}, ${addr.state || ''}`.trim() : '-';
+                    
+                    return (
+                      <TableRow key={p.id || idx}>
+                        <TableCell className="font-medium">{fullName}</TableCell>
+                        <TableCell>{p.birthDate || '-'}</TableCell>
+                        <TableCell className="capitalize">{p.gender || '-'}</TableCell>
+                        <TableCell>{phone}</TableCell>
+                        <TableCell>{address}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            
+            {/* ServiceRequest Results Table */}
+            {syncResult?.resource === 'ServiceRequest' && syncResult?.data?.entry && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order/Code</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Ordered Date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {syncResult.data.entry.slice(0, 100).map((entry: any, idx: number) => {
+                    const sr = entry.resource;
+                    const code = sr.code?.text || sr.code?.coding?.[0]?.display || sr.code?.coding?.[0]?.code || '-';
+                    const category = sr.category?.[0]?.text || sr.category?.[0]?.coding?.[0]?.display || '-';
+                    
+                    return (
+                      <TableRow key={sr.id || idx}>
+                        <TableCell className="font-medium">{code}</TableCell>
+                        <TableCell>{category}</TableCell>
+                        <TableCell className="capitalize">{sr.priority || 'routine'}</TableCell>
+                        <TableCell>{sr.authoredOn?.split('T')[0] || '-'}</TableCell>
+                        <TableCell className="capitalize">{sr.status || '-'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+
+            {/* Encounter Results Table */}
+            {syncResult?.resource === 'Encounter' && syncResult?.data?.entry && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Class</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {syncResult.data.entry.slice(0, 100).map((entry: any, idx: number) => {
+                    const enc = entry.resource;
+                    const encClass = enc.class?.display || enc.class?.code || '-';
+                    const encType = enc.type?.[0]?.text || enc.type?.[0]?.coding?.[0]?.display || '-';
+                    const period = enc.period?.start?.split('T')[0] || '-';
+                    
+                    return (
+                      <TableRow key={enc.id || idx}>
+                        <TableCell className="font-medium font-mono text-xs">{enc.id || '-'}</TableCell>
+                        <TableCell className="capitalize">{encClass}</TableCell>
+                        <TableCell>{encType}</TableCell>
+                        <TableCell>{period}</TableCell>
+                        <TableCell className="capitalize">{enc.status || '-'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+
+            {/* Generic Results for other resource types */}
+            {syncResult?.data?.entry && 
+             !['Patient', 'ServiceRequest', 'Encounter'].includes(syncResult?.resource) && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Resource Type</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {syncResult.data.entry.slice(0, 100).map((entry: any, idx: number) => {
+                    const res = entry.resource;
+                    return (
+                      <TableRow key={res.id || idx}>
+                        <TableCell className="font-medium font-mono text-xs">{res.id || '-'}</TableCell>
+                        <TableCell>{res.resourceType || '-'}</TableCell>
+                        <TableCell className="capitalize">{res.status || '-'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            
+            {/* No data message */}
+            {(!syncResult?.data?.entry || syncResult.data.entry.length === 0) && (
+              <div className="p-8 text-center text-muted-foreground">
+                No records found
+              </div>
+            )}
+          </div>
+          
+          {syncResult?.total > 100 && (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Showing first 100 of {syncResult.total} records
+            </p>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
