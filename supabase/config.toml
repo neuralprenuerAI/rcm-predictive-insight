@@ -26,3 +26,6 @@ verify_jwt = true
 
 [functions.parse-spreadsheet]
 verify_jwt = true
+
+[functions.classify-document]
+verify_jwt = true
