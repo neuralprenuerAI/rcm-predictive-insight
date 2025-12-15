@@ -302,9 +302,59 @@ export type Database = {
           },
         ]
       }
+      claim_documents: {
+        Row: {
+          claim_id: string
+          created_at: string | null
+          document_id: string
+          document_role: string
+          id: string
+          is_primary: boolean | null
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          claim_id: string
+          created_at?: string | null
+          document_id: string
+          document_role?: string
+          id?: string
+          is_primary?: boolean | null
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          claim_id?: string
+          created_at?: string | null
+          document_id?: string
+          document_role?: string
+          id?: string
+          is_primary?: boolean | null
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claim_documents_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claim_documents_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       claims: {
         Row: {
           ai_analysis: Json | null
+          ai_recommendations: string[] | null
+          ai_reviewed_at: string | null
           billed_amount: number | null
           claim_file_url: string | null
           claim_id: string
@@ -326,6 +376,8 @@ export type Database = {
         }
         Insert: {
           ai_analysis?: Json | null
+          ai_recommendations?: string[] | null
+          ai_reviewed_at?: string | null
           billed_amount?: number | null
           claim_file_url?: string | null
           claim_id: string
@@ -347,6 +399,8 @@ export type Database = {
         }
         Update: {
           ai_analysis?: Json | null
+          ai_recommendations?: string[] | null
+          ai_reviewed_at?: string | null
           billed_amount?: number | null
           claim_file_url?: string | null
           claim_id?: string
