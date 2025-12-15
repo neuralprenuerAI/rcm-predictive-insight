@@ -6,84 +6,142 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Azure Document Intelligence configuration
-interface AzureConfig {
-  endpoint: string;
-  apiKey: string;
-}
-
-// OCR Result types
-interface OCRWord {
-  content: string;
-  confidence: number;
-  boundingBox?: number[];
-}
-
-interface OCRLine {
-  content: string;
-  confidence: number;
-  words: OCRWord[];
-  boundingBox?: number[];
-}
-
-interface OCRPage {
-  pageNumber: number;
-  width: number;
-  height: number;
-  unit: string;
-  lines: OCRLine[];
-  words: OCRWord[];
-}
-
+// OCR Result interface
 interface OCRResult {
   success: boolean;
   text: string;
-  pages: OCRPage[];
   confidence: number;
   pageCount: number;
   wordCount: number;
   processingTimeMs: number;
-  modelId: string;
+  provider: string;
+  pages?: any[];
 }
 
-// Get Azure configuration from environment
-function getAzureConfig(): AzureConfig {
-  const endpoint = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT");
-  const apiKey = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_KEY");
+// ============================================
+// OCR.SPACE PROVIDER (FREE - 25,000 requests/month)
+// ============================================
 
-  if (!endpoint || !apiKey) {
-    throw new Error(
-      "Azure Document Intelligence not configured. Please set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in Supabase Edge Function secrets."
-    );
+async function ocrWithOCRSpace(
+  content: string,
+  filename: string,
+  mimeType: string,
+  apiKey: string
+): Promise<OCRResult> {
+  console.log("Using OCR.space provider...");
+  
+  const startTime = Date.now();
+  
+  // Prepare form data
+  const formData = new FormData();
+  
+  // Determine if content is base64 or URL
+  if (content.startsWith("http://") || content.startsWith("https://")) {
+    formData.append("url", content);
+  } else {
+    // Handle base64 content
+    let base64Data = content;
+    
+    // Remove data URL prefix if present
+    if (content.startsWith("data:")) {
+      const match = content.match(/^data:[^;]+;base64,(.+)$/);
+      if (match) {
+        base64Data = match[1];
+      }
+    }
+    
+    // OCR.space expects base64 with prefix
+    const base64WithPrefix = `data:${mimeType || 'application/pdf'};base64,${base64Data}`;
+    formData.append("base64Image", base64WithPrefix);
   }
-
-  // Ensure endpoint doesn't have trailing slash
+  
+  // OCR.space settings
+  formData.append("apikey", apiKey);
+  formData.append("language", "eng");
+  formData.append("isOverlayRequired", "false");
+  formData.append("detectOrientation", "true");
+  formData.append("scale", "true");
+  formData.append("OCREngine", "2"); // Engine 2 is better for documents
+  formData.append("filetype", mimeType === "application/pdf" ? "PDF" : "AUTO");
+  
+  const response = await fetch("https://api.ocr.space/parse/image", {
+    method: "POST",
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("OCR.space error:", response.status, errorText);
+    throw new Error(`OCR.space API error: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (data.IsErroredOnProcessing) {
+    throw new Error(`OCR.space processing error: ${data.ErrorMessage?.[0] || "Unknown error"}`);
+  }
+  
+  // Extract text from all pages
+  const pages = data.ParsedResults || [];
+  let fullText = "";
+  let totalConfidence = 0;
+  
+  for (const page of pages) {
+    if (page.ParsedText) {
+      if (fullText) fullText += "\n\n";
+      fullText += page.ParsedText;
+    }
+    if (page.TextOverlay?.TextConfidence) {
+      totalConfidence += parseFloat(page.TextOverlay.TextConfidence);
+    }
+  }
+  
+  const avgConfidence = pages.length > 0 ? totalConfidence / pages.length : 0;
+  const wordCount = fullText.split(/\s+/).filter(w => w).length;
+  
   return {
-    endpoint: endpoint.replace(/\/$/, ""),
-    apiKey,
+    success: true,
+    text: fullText.trim(),
+    confidence: avgConfidence / 100, // Convert to 0-1 scale
+    pageCount: pages.length || 1,
+    wordCount,
+    processingTimeMs: Date.now() - startTime,
+    provider: "ocr_space",
+    pages: pages.map((p: any, i: number) => ({
+      pageNumber: i + 1,
+      text: p.ParsedText || "",
+      exitCode: p.FileParseExitCode,
+    })),
   };
 }
 
-// Submit document for analysis
-async function submitForAnalysis(
-  config: AzureConfig,
+// ============================================
+// AZURE DOCUMENT INTELLIGENCE PROVIDER (PRODUCTION)
+// ============================================
+
+async function ocrWithAzure(
   content: string,
-  contentType: string
-): Promise<string> {
-  // Use the prebuilt-read model for general OCR
-  const analyzeUrl = `${config.endpoint}/documentintelligence/documentModels/prebuilt-read:analyze?api-version=2024-02-29-preview`;
-
-  console.log(`Submitting document to Azure: ${analyzeUrl}`);
-
-  // Decode base64 if needed
+  filename: string,
+  mimeType: string,
+  endpoint: string,
+  apiKey: string,
+  maxWaitMs: number = 60000
+): Promise<OCRResult> {
+  console.log("Using Azure Document Intelligence provider...");
+  
+  const startTime = Date.now();
+  
+  // Submit for analysis
+  const analyzeUrl = `${endpoint.replace(/\/$/, "")}/documentintelligence/documentModels/prebuilt-read:analyze?api-version=2024-02-29-preview`;
+  
+  // Prepare content
   let bodyContent: ArrayBuffer | string;
   let requestContentType: string;
-
+  
   if (content.startsWith("data:")) {
-    // Data URL format - extract base64 part
     const base64Match = content.match(/^data:([^;]+);base64,(.+)$/);
     if (base64Match) {
-      contentType = base64Match[1];
+      mimeType = base64Match[1];
       const base64Data = base64Match[2];
       const binaryStr = atob(base64Data);
       const bytes = new Uint8Array(binaryStr.length);
@@ -91,213 +149,108 @@ async function submitForAnalysis(
         bytes[i] = binaryStr.charCodeAt(i);
       }
       bodyContent = bytes.buffer as ArrayBuffer;
-      requestContentType = contentType;
+      requestContentType = mimeType;
     } else {
       throw new Error("Invalid data URL format");
     }
   } else if (content.match(/^[A-Za-z0-9+/=]+$/)) {
-    // Pure base64
     const binaryStr = atob(content);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) {
       bytes[i] = binaryStr.charCodeAt(i);
     }
     bodyContent = bytes.buffer as ArrayBuffer;
-    requestContentType = contentType || "application/pdf";
+    requestContentType = mimeType || "application/pdf";
   } else if (content.startsWith("http://") || content.startsWith("https://")) {
-    // URL - send as JSON
     bodyContent = JSON.stringify({ urlSource: content });
     requestContentType = "application/json";
   } else {
     throw new Error("Content must be base64-encoded or a URL");
   }
-
-  const response = await fetch(analyzeUrl, {
+  
+  // Submit document
+  const submitResponse = await fetch(analyzeUrl, {
     method: "POST",
     headers: {
-      "Ocp-Apim-Subscription-Key": config.apiKey,
+      "Ocp-Apim-Subscription-Key": apiKey,
       "Content-Type": requestContentType,
     },
     body: bodyContent,
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Azure submit error:", response.status, errorText);
-    throw new Error(`Azure API error: ${response.status} - ${errorText}`);
+  
+  if (!submitResponse.ok) {
+    const errorText = await submitResponse.text();
+    throw new Error(`Azure API error: ${submitResponse.status} - ${errorText}`);
   }
-
-  // Get the operation location from headers
-  const operationLocation = response.headers.get("Operation-Location");
-  if (!operationLocation) {
+  
+  const operationUrl = submitResponse.headers.get("Operation-Location");
+  if (!operationUrl) {
     throw new Error("No Operation-Location header in Azure response");
   }
-
-  console.log(`Analysis submitted, operation: ${operationLocation}`);
-  return operationLocation;
-}
-
-// Poll for analysis results
-async function pollForResults(
-  config: AzureConfig,
-  operationUrl: string,
-  maxWaitMs: number = 60000
-): Promise<any> {
-  const startTime = Date.now();
-  const pollIntervalMs = 1000;
-
+  
+  // Poll for results
+  const pollInterval = 1000;
   while (Date.now() - startTime < maxWaitMs) {
-    console.log("Polling for results...");
-
-    const response = await fetch(operationUrl, {
-      method: "GET",
-      headers: {
-        "Ocp-Apim-Subscription-Key": config.apiKey,
-      },
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+    
+    const pollResponse = await fetch(operationUrl, {
+      headers: { "Ocp-Apim-Subscription-Key": apiKey },
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Azure poll error:", response.status, errorText);
-      throw new Error(`Azure poll error: ${response.status} - ${errorText}`);
+    
+    if (!pollResponse.ok) {
+      const errorText = await pollResponse.text();
+      throw new Error(`Azure poll error: ${pollResponse.status} - ${errorText}`);
     }
-
-    const result = await response.json();
-    const status = result.status;
-
-    console.log(`Analysis status: ${status}`);
-
-    if (status === "succeeded") {
-      return result.analyzeResult;
-    } else if (status === "failed") {
-      throw new Error(`Analysis failed: ${result.error?.message || "Unknown error"}`);
-    }
-
-    // Wait before next poll
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-  }
-
-  throw new Error(`Analysis timed out after ${maxWaitMs}ms`);
-}
-
-// Helper to check if word is within line bounds (simplified)
-function isWordInLine(wordBounds: number[], lineBounds: number[]): boolean {
-  if (!wordBounds || !lineBounds || wordBounds.length < 2 || lineBounds.length < 2) {
-    return false;
-  }
-  // Simple check: word Y is within line Y range
-  const wordY = wordBounds[1];
-  const lineYMin = Math.min(lineBounds[1], lineBounds[3], lineBounds[5], lineBounds[7]);
-  const lineYMax = Math.max(lineBounds[1], lineBounds[3], lineBounds[5], lineBounds[7]);
-  return wordY >= lineYMin && wordY <= lineYMax;
-}
-
-// Extract structured data from Azure response
-function extractResults(analyzeResult: any): OCRResult {
-  const pages: OCRPage[] = [];
-  let fullText = "";
-  let totalConfidence = 0;
-  let confidenceCount = 0;
-  let wordCount = 0;
-
-  // Process each page
-  for (const page of analyzeResult.pages || []) {
-    const pageLines: OCRLine[] = [];
-    const pageWords: OCRWord[] = [];
-
-    // Process lines
-    for (const line of page.lines || []) {
-      const lineWords: OCRWord[] = [];
-
-      // Process words in the line
-      for (const word of line.words || page.words?.filter((w: any) => 
-        w.boundingPolygon && line.boundingPolygon && 
-        isWordInLine(w.boundingPolygon, line.boundingPolygon)
-      ) || []) {
-        const wordObj: OCRWord = {
-          content: word.content || word.text || "",
-          confidence: word.confidence || 0,
-          boundingBox: word.boundingPolygon || word.boundingBox,
-        };
-        lineWords.push(wordObj);
-        pageWords.push(wordObj);
-        
-        if (word.confidence) {
-          totalConfidence += word.confidence;
-          confidenceCount++;
+    
+    const result = await pollResponse.json();
+    
+    if (result.status === "succeeded") {
+      const analyzeResult = result.analyzeResult;
+      
+      // Extract text
+      let fullText = analyzeResult.content || "";
+      let totalConfidence = 0;
+      let confidenceCount = 0;
+      
+      for (const page of analyzeResult.pages || []) {
+        for (const word of page.words || []) {
+          if (word.confidence) {
+            totalConfidence += word.confidence;
+            confidenceCount++;
+          }
         }
-        wordCount++;
       }
-
-      const lineObj: OCRLine = {
-        content: line.content || lineWords.map(w => w.content).join(" "),
-        confidence: lineWords.length > 0 
-          ? lineWords.reduce((sum, w) => sum + w.confidence, 0) / lineWords.length 
-          : 0,
-        words: lineWords,
-        boundingBox: line.boundingPolygon || line.boundingBox,
+      
+      const avgConfidence = confidenceCount > 0 ? totalConfidence / confidenceCount : 0;
+      const wordCount = fullText.split(/\s+/).filter((w: string) => w).length;
+      
+      return {
+        success: true,
+        text: fullText,
+        confidence: avgConfidence,
+        pageCount: analyzeResult.pages?.length || 1,
+        wordCount,
+        processingTimeMs: Date.now() - startTime,
+        provider: "azure_document_intelligence",
+        pages: analyzeResult.pages?.map((p: any) => ({
+          pageNumber: p.pageNumber,
+          width: p.width,
+          height: p.height,
+          lines: p.lines?.map((l: any) => l.content) || [],
+        })),
       };
-      pageLines.push(lineObj);
+    } else if (result.status === "failed") {
+      throw new Error(`Azure analysis failed: ${result.error?.message || "Unknown error"}`);
     }
-
-    // Build page text
-    const pageText = pageLines.map(l => l.content).join("\n");
-    if (fullText) fullText += "\n\n";
-    fullText += pageText;
-
-    pages.push({
-      pageNumber: page.pageNumber || pages.length + 1,
-      width: page.width || 0,
-      height: page.height || 0,
-      unit: page.unit || "pixel",
-      lines: pageLines,
-      words: pageWords,
-    });
+    // Continue polling if status is "running"
   }
-
-  // If no pages/lines, try to get content directly
-  if (!fullText && analyzeResult.content) {
-    fullText = analyzeResult.content;
-    wordCount = fullText.split(/\s+/).filter((w: string) => w).length;
-  }
-
-  const averageConfidence = confidenceCount > 0 
-    ? totalConfidence / confidenceCount 
-    : 0;
-
-  return {
-    success: true,
-    text: fullText,
-    pages,
-    confidence: averageConfidence,
-    pageCount: pages.length || 1,
-    wordCount,
-    processingTimeMs: 0, // Will be set by caller
-    modelId: analyzeResult.modelId || "prebuilt-read",
-  };
+  
+  throw new Error(`Azure analysis timed out after ${maxWaitMs}ms`);
 }
 
-// Detect if content is likely a scanned document needing OCR
-function needsOCR(mimeType: string, filename: string): boolean {
-  const ocrMimeTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/tiff",
-    "image/tif",
-    "image/bmp",
-    "image/gif",
-    "application/pdf",
-  ];
-
-  const ocrExtensions = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".gif", ".pdf"];
-
-  const lowerFilename = filename?.toLowerCase() || "";
-  const isImage = ocrMimeTypes.includes(mimeType?.toLowerCase() || "");
-  const hasOCRExtension = ocrExtensions.some(ext => lowerFilename.endsWith(ext));
-
-  return isImage || hasOCRExtension;
-}
+// ============================================
+// MAIN HANDLER
+// ============================================
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -305,20 +258,20 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const startTime = Date.now();
-
   try {
     const {
-      content,        // Base64 encoded file content or URL
-      filename,       // Original filename
-      mimeType,       // MIME type (application/pdf, image/jpeg, etc.)
-      documentId,     // Optional: existing document ID to update
-      url,            // Alternative: URL to document
-      maxWaitMs = 60000, // Max time to wait for OCR completion
+      content,          // Base64 encoded file content or URL
+      filename,         // Original filename
+      mimeType,         // MIME type (application/pdf, image/jpeg, etc.)
+      documentId,       // Optional: existing document ID to update
+      url,              // Alternative: URL to document
+      provider,         // Optional: force specific provider ('ocr_space' or 'azure')
+      maxWaitMs = 60000,
     } = await req.json();
 
     // Validate required fields
-    if (!content && !url) {
+    const documentContent = url || content;
+    if (!documentContent) {
       throw new Error("Missing required field: content or url");
     }
 
@@ -343,13 +296,28 @@ serve(async (req) => {
 
     console.log(`OCR processing: ${filename || url || "unknown"}`);
 
-    // Check if OCR is needed
-    if (!needsOCR(mimeType || "", filename || "")) {
+    // Validate file type
+    const validMimeTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg", 
+      "image/png",
+      "image/tiff",
+      "image/tif",
+      "image/bmp",
+      "image/gif",
+    ];
+    
+    const validExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".gif"];
+    const lowerFilename = (filename || "").toLowerCase();
+    const isValidType = validMimeTypes.includes(mimeType?.toLowerCase() || "") ||
+                        validExtensions.some(ext => lowerFilename.endsWith(ext));
+    
+    if (!isValidType && mimeType) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "File type does not require OCR. Use for PDFs and images only.",
-          needsOCR: false,
+          error: `File type '${mimeType}' is not supported. Use PDF or images (JPG, PNG, TIFF, BMP, GIF).`,
         }),
         {
           status: 400,
@@ -371,24 +339,36 @@ serve(async (req) => {
         .eq("user_id", user.id);
     }
 
-    // Get Azure configuration
-    const azureConfig = getAzureConfig();
+    // Determine which provider to use
+    const ocrSpaceKey = Deno.env.get("OCR_SPACE_API_KEY");
+    const azureEndpoint = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT");
+    const azureKey = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_KEY");
+    
+    let ocrResult: OCRResult;
+    
+    // Provider selection logic
+    if (provider === "azure" || (!provider && azureEndpoint && azureKey)) {
+      // Use Azure if explicitly requested or if Azure is configured
+      if (!azureEndpoint || !azureKey) {
+        throw new Error("Azure Document Intelligence not configured. Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY.");
+      }
+      ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
+    } else if (provider === "ocr_space" || ocrSpaceKey) {
+      // Use OCR.space if explicitly requested or as fallback
+      if (!ocrSpaceKey) {
+        throw new Error("OCR.space not configured. Set OCR_SPACE_API_KEY.");
+      }
+      ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
+    } else {
+      // No provider configured
+      throw new Error(
+        "No OCR provider configured. Please set either:\n" +
+        "- OCR_SPACE_API_KEY (free, 25k requests/month)\n" +
+        "- AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY (production)"
+      );
+    }
 
-    // Submit document for analysis
-    const operationUrl = await submitForAnalysis(
-      azureConfig,
-      url || content,
-      mimeType || "application/pdf"
-    );
-
-    // Poll for results
-    const analyzeResult = await pollForResults(azureConfig, operationUrl, maxWaitMs);
-
-    // Extract structured results
-    const ocrResult = extractResults(analyzeResult);
-    ocrResult.processingTimeMs = Date.now() - startTime;
-
-    console.log(`OCR completed: ${ocrResult.pageCount} pages, ${ocrResult.wordCount} words, ${ocrResult.confidence.toFixed(2)} confidence`);
+    console.log(`OCR completed with ${ocrResult.provider}: ${ocrResult.pageCount} pages, ${ocrResult.wordCount} words, ${(ocrResult.confidence * 100).toFixed(1)}% confidence`);
 
     // Prepare response
     const result = {
@@ -399,7 +379,7 @@ serve(async (req) => {
         pageCount: ocrResult.pageCount,
         wordCount: ocrResult.wordCount,
         processingTimeMs: ocrResult.processingTimeMs,
-        modelId: ocrResult.modelId,
+        provider: ocrResult.provider,
       },
       pages: ocrResult.pages,
       metadata: {
@@ -417,7 +397,7 @@ serve(async (req) => {
           status: "completed",
           extracted_text: ocrResult.text,
           ocr_confidence: ocrResult.confidence,
-          ocr_provider: "azure_document_intelligence",
+          ocr_provider: ocrResult.provider,
           processing_duration_ms: ocrResult.processingTimeMs,
           processed_at: new Date().toISOString(),
           extracted_data: {
@@ -425,7 +405,7 @@ serve(async (req) => {
               pageCount: ocrResult.pageCount,
               wordCount: ocrResult.wordCount,
               confidence: ocrResult.confidence,
-              modelId: ocrResult.modelId,
+              provider: ocrResult.provider,
             },
           },
         })
