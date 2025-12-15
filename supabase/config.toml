@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.execute-rules]
 verify_jwt = true
+
+[functions.process-document]
+verify_jwt = true
