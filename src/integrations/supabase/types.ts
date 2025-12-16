@@ -355,16 +355,22 @@ export type Database = {
           ai_analysis: Json | null
           ai_recommendations: string[] | null
           ai_reviewed_at: string | null
+          approval_probability: number | null
           billed_amount: number | null
           claim_file_url: string | null
+          claim_filename: string | null
           claim_id: string
+          clinical_findings: Json | null
           created_at: string | null
           date_of_service: string
           deniability_probability: number | null
           diagnosis_code: string | null
+          documentation_score: number | null
+          executive_summary: string | null
           fhir_id: string | null
           id: string
           notes_file_url: string | null
+          notes_filename: string | null
           patient_name: string
           payer: string | null
           procedure_code: string | null
@@ -378,16 +384,22 @@ export type Database = {
           ai_analysis?: Json | null
           ai_recommendations?: string[] | null
           ai_reviewed_at?: string | null
+          approval_probability?: number | null
           billed_amount?: number | null
           claim_file_url?: string | null
+          claim_filename?: string | null
           claim_id: string
+          clinical_findings?: Json | null
           created_at?: string | null
           date_of_service: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          documentation_score?: number | null
+          executive_summary?: string | null
           fhir_id?: string | null
           id?: string
           notes_file_url?: string | null
+          notes_filename?: string | null
           patient_name: string
           payer?: string | null
           procedure_code?: string | null
@@ -401,16 +413,22 @@ export type Database = {
           ai_analysis?: Json | null
           ai_recommendations?: string[] | null
           ai_reviewed_at?: string | null
+          approval_probability?: number | null
           billed_amount?: number | null
           claim_file_url?: string | null
+          claim_filename?: string | null
           claim_id?: string
+          clinical_findings?: Json | null
           created_at?: string | null
           date_of_service?: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          documentation_score?: number | null
+          executive_summary?: string | null
           fhir_id?: string | null
           id?: string
           notes_file_url?: string | null
+          notes_filename?: string | null
           patient_name?: string
           payer?: string | null
           procedure_code?: string | null
