@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   AlertOctagon,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Save
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -69,6 +70,8 @@ const ClaimUploadReview = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>("");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedClaimId, setSavedClaimId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -196,6 +199,67 @@ const ClaimUploadReview = () => {
     setNotesFile(null);
     setAnalysisResult(null);
     setProcessingStep("");
+    setSavedClaimId(null);
+  };
+
+  const handleSaveClaim = async () => {
+    if (!analysisResult) {
+      toast.error("No analysis to save");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error("Not authenticated");
+
+      const analysis = analysisResult;
+      
+      const claimData = {
+        user_id: currentUser.id,
+        claim_id: `CLM-${Date.now()}`,
+        patient_name: (analysis as any).patient_name || claimFile?.name?.split('_')[0] || 'Unknown Patient',
+        provider: (analysis as any).provider_name || 'Unknown Provider',
+        date_of_service: new Date().toISOString().split('T')[0],
+        procedure_code: (analysis as any).procedure_codes?.[0] || (analysis as any).cpt_code || null,
+        diagnosis_code: (analysis as any).diagnosis_codes?.[0] || (analysis as any).icd_code || null,
+        billed_amount: (analysis as any).total_charge || (analysis as any).billed_amount || 0,
+        payer: (analysis as any).payer_name || (analysis as any).insurance || null,
+        status: 'reviewed',
+        
+        // AI Analysis fields
+        ai_analysis: analysis as any,
+        approval_probability: analysis.approval_probability,
+        risk_category: analysis.risk_level,
+        documentation_score: analysis.clinical_support_analysis?.documentation_score || 0,
+        executive_summary: analysis.executive_summary,
+        clinical_findings: analysis.clinical_support_analysis?.findings as any || [],
+        ai_recommendations: analysis.recommendations?.map((r: any) => r.recommendation) || [],
+        
+        // File info
+        claim_filename: claimFile?.name || null,
+        notes_filename: notesFile?.name || null,
+        ai_reviewed_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('claims')
+        .insert(claimData)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      setSavedClaimId(data.id);
+      toast.success("Claim saved! View it in the Claims page");
+
+    } catch (error) {
+      console.error("Save error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to save claim");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!user) return null;
@@ -421,13 +485,40 @@ const ClaimUploadReview = () => {
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={clearAll}>
-                Upload Another Claim
-              </Button>
-              <Button onClick={() => toast.success("Claim exported")}>
-                Export Claim
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                {!savedClaimId ? (
+                  <Button 
+                    onClick={handleSaveClaim}
+                    disabled={isSaving}
+                    className="flex-1"
+                  >
+                    {isSaving ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                    ) : (
+                      <><Save className="h-4 w-4 mr-2" /> Save Claim</>
+                    )}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={() => navigate('/claims')}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <FileText className="h-4 w-4 mr-2" /> View Saved Claims
+                  </Button>
+                )}
+                
+                <Button variant="outline" onClick={clearAll}>
+                  New Analysis
+                </Button>
+              </div>
+
+              {savedClaimId && (
+                <div className="text-center text-sm text-green-600 bg-green-50 dark:bg-green-950 p-2 rounded">
+                  ✓ Claim saved successfully!
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
