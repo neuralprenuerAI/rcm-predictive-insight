@@ -135,52 +135,22 @@ const ClaimUploadReview = () => {
     setAnalysisResult(null);
 
     try {
-      // Step 1: OCR the claim file
-      setProcessingStep("Extracting text from claim form...");
+      // Convert files to base64
+      setProcessingStep("Preparing files for analysis...");
       const claimBase64 = await fileToBase64(claimFile);
       
-      const { data: claimOcrResult, error: claimOcrError } = await supabase.functions.invoke('ocr-document', {
-        body: {
-          content: claimBase64,
-          filename: claimFile.name,
-          mimeType: claimFile.type || 'application/pdf',
-        },
-      });
-
-      if (claimOcrError) throw new Error(`Claim OCR failed: ${claimOcrError.message}`);
-      
-      const claimText = claimOcrResult?.ocr?.text || '';
-      console.log("Claim text extracted:", claimText.substring(0, 200));
-
-      // Step 2: OCR the doctor's notes (if provided)
-      let notesText = '';
+      let notesBase64 = null;
       if (notesFile) {
-        setProcessingStep("Extracting text from doctor's notes...");
-        const notesBase64 = await fileToBase64(notesFile);
-        
-        const { data: notesOcrResult, error: notesOcrError } = await supabase.functions.invoke('ocr-document', {
-          body: {
-            content: notesBase64,
-            filename: notesFile.name,
-            mimeType: notesFile.type || 'application/pdf',
-          },
-        });
-
-        if (notesOcrError) {
-          console.warn("Notes OCR failed:", notesOcrError);
-        } else {
-          notesText = notesOcrResult?.ocr?.text || '';
-          console.log("Notes text extracted:", notesText.substring(0, 200));
-        }
+        notesBase64 = await fileToBase64(notesFile);
       }
 
-      // Step 3: Send BOTH texts to AI for analysis
-      setProcessingStep("AI analyzing claim with clinical documentation...");
+      // Send directly to Gemini Vision analysis
+      setProcessingStep("AI analyzing claim and clinical documentation...");
       
       const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-claim-combined', {
         body: {
-          claimText,
-          clinicalNotesText: notesText,
+          claimContent: claimBase64,
+          clinicalNotesContent: notesBase64,
           claimFilename: claimFile.name,
           notesFilename: notesFile?.name || null,
         },
