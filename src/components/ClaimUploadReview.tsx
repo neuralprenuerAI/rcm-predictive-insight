@@ -5,48 +5,70 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, FileText, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
+import { 
+  Upload, 
+  FileText, 
+  Brain, 
+  Loader2, 
+  CheckCircle2,
+  AlertTriangle,
+  AlertOctagon,
+  XCircle,
+  AlertCircle
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePDFParser } from "@/hooks/usePDFParser";
 import { toast } from "sonner";
 
-interface ClaimData {
-  claimId: string;
-  patientName: string;
-  dos: string;
-  provider: string;
-  diagnosisCode: string;
-  procedureCode: string;
-  billedAmount: number;
-}
-
-interface ReviewResult {
-  deniabilityProbability: number;
-  riskCategory: "low" | "medium" | "high";
-  riskFactors: {
-    category: string;
-    severity: "low" | "medium" | "high";
-    description: string;
+interface AnalysisResult {
+  approval_probability: number;
+  risk_level: string;
+  confidence_score: number;
+  executive_summary: string;
+  clinical_support_analysis?: {
+    has_sufficient_documentation: boolean;
+    documentation_score: number;
+    findings: string[];
+    gaps: string[];
+  };
+  coding_analysis?: {
+    cpt_icd_alignment: string;
+    issues_found: any[];
+    coding_score: number;
+  };
+  medical_necessity_analysis?: {
+    is_supported: boolean;
+    supporting_evidence: string[];
+    concerns: string[];
+    necessity_score: number;
+  };
+  critical_issues?: {
+    priority: number;
+    issue: string;
     impact: string;
+    resolution: string;
   }[];
-  recommendations: {
-    action: string;
-    priority: "low" | "medium" | "high";
-    rationale: string;
+  recommendations?: {
+    category: string;
+    recommendation: string;
+    expected_impact: string;
+    effort: string;
   }[];
-  complianceIssues: string[];
-  strengths: string[];
+  missing_documentation?: {
+    document_type: string;
+    why_needed: string;
+    impact_without: string;
+  }[];
+  next_steps?: string[];
 }
 
 const ClaimUploadReview = () => {
   const navigate = useNavigate();
-  const { parsePDF, isParsing } = usePDFParser();
   const [user, setUser] = useState<any>(null);
-  const [uploadedClaim, setUploadedClaim] = useState<ClaimData | null>(null);
-  const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [claimFile, setClaimFile] = useState<File | null>(null);
   const [notesFile, setNotesFile] = useState<File | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [processingStep, setProcessingStep] = useState<string>("");
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -67,6 +89,20 @@ const ClaimUploadReview = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+    });
+  };
 
   const handleFileUpload = async (type: 'claim' | 'notes') => {
     const input = document.createElement('input');
@@ -89,134 +125,107 @@ const ClaimUploadReview = () => {
     input.click();
   };
 
-  const analyzeClaim = async () => {
-    if (!claimFile || !notesFile || !user) {
-      toast.error("Please upload both claim and notes files");
+  const handleAnalyze = async () => {
+    if (!claimFile) {
+      toast.error("Please upload a claim file");
       return;
     }
 
     setIsAnalyzing(true);
-    setReviewResult(null);
+    setAnalysisResult(null);
 
     try {
-      // Parse PDFs with timeouts to avoid hanging
-      const withTimeout = async <T,>(p: Promise<T>, ms: number, message: string): Promise<T> => {
-        return await new Promise<T>((resolve, reject) => {
-          const t = setTimeout(() => reject(new Error(message)), ms);
-          p.then((v) => { clearTimeout(t); resolve(v); })
-           .catch((e) => { clearTimeout(t); reject(e); });
-        });
-      };
-
-      console.log('Parsing claim PDF...');
-      const claimText = await withTimeout(parsePDF(claimFile), 45000, 'Parsing claim PDF timed out');
-      console.log('Parsing notes PDF...');
-      const notesText = await withTimeout(parsePDF(notesFile), 45000, 'Parsing notes PDF timed out');
-
-      // Upload files to storage
-      console.log('Uploading files to storage...');
-      const claimPath = `${user.id}/${Date.now()}_claim.pdf`;
-      const notesPath = `${user.id}/${Date.now()}_notes.pdf`;
-
-      const [claimUpload, notesUpload] = await Promise.all([
-        supabase.storage.from('claim-files').upload(claimPath, claimFile),
-        supabase.storage.from('claim-files').upload(notesPath, notesFile)
-      ]);
-
-      if (claimUpload.error) throw claimUpload.error;
-      if (notesUpload.error) throw notesUpload.error;
-
-      // Get public URLs
-      const { data: claimUrlData } = supabase.storage.from('claim-files').getPublicUrl(claimPath);
-      const { data: notesUrlData } = supabase.storage.from('claim-files').getPublicUrl(notesPath);
-
-      // Analyze with AI (with timeout)
-      console.log('Calling analyze-claim function...');
-      const analysisResp = await withTimeout(
-        supabase.functions.invoke('analyze-claim', { body: { claimText, notesText } }),
-        60000,
-        'AI analysis timed out'
-      );
-      const { data: analysisData, error: analysisError } = analysisResp as { data: any; error: any };
-
-      console.log('Analysis response:', { analysisData, analysisError });
-
-      if (analysisError) {
-        console.error('Analysis error:', analysisError);
-        throw analysisError;
-      }
-
-      if (!analysisData) {
-        throw new Error('No analysis data returned from function');
-      }
-
-      if (
-        typeof analysisData.deniabilityProbability !== 'number' ||
-        !analysisData.riskCategory
-      ) {
-        throw new Error('Invalid analysis format received');
-      }
-
-      // Save to database
-      const claimData = {
-        user_id: user.id,
-        claim_id: `CLM-${Date.now()}`,
-        patient_name: "Extracted from PDF",
-        date_of_service: new Date().toISOString().split('T')[0],
-        provider: "Extracted from PDF",
-        billed_amount: 0,
-        claim_file_url: claimUrlData.publicUrl,
-        notes_file_url: notesUrlData.publicUrl,
-        ai_analysis: analysisData,
-        deniability_probability: analysisData.deniabilityProbability,
-        risk_category: analysisData.riskCategory
-      };
-
-      const { data: insertedClaim, error: insertError } = await supabase
-        .from('claims')
-        .insert(claimData)
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      setUploadedClaim({
-        claimId: insertedClaim.claim_id,
-        patientName: insertedClaim.patient_name,
-        dos: insertedClaim.date_of_service,
-        provider: insertedClaim.provider,
-        diagnosisCode: insertedClaim.diagnosis_code || 'N/A',
-        procedureCode: insertedClaim.procedure_code || 'N/A',
-        billedAmount: insertedClaim.billed_amount
+      // Step 1: OCR the claim file
+      setProcessingStep("Extracting text from claim form...");
+      const claimBase64 = await fileToBase64(claimFile);
+      
+      const { data: claimOcrResult, error: claimOcrError } = await supabase.functions.invoke('ocr-document', {
+        body: {
+          content: claimBase64,
+          filename: claimFile.name,
+          mimeType: claimFile.type || 'application/pdf',
+        },
       });
 
-      setReviewResult(analysisData);
-      toast.success("Claim analyzed successfully!");
+      if (claimOcrError) throw new Error(`Claim OCR failed: ${claimOcrError.message}`);
+      
+      const claimText = claimOcrResult?.ocr?.text || '';
+      console.log("Claim text extracted:", claimText.substring(0, 200));
 
-    } catch (error: any) {
-      console.error('Error analyzing claim:', error);
-      toast.error(error.message || "Failed to analyze claim");
+      // Step 2: OCR the doctor's notes (if provided)
+      let notesText = '';
+      if (notesFile) {
+        setProcessingStep("Extracting text from doctor's notes...");
+        const notesBase64 = await fileToBase64(notesFile);
+        
+        const { data: notesOcrResult, error: notesOcrError } = await supabase.functions.invoke('ocr-document', {
+          body: {
+            content: notesBase64,
+            filename: notesFile.name,
+            mimeType: notesFile.type || 'application/pdf',
+          },
+        });
+
+        if (notesOcrError) {
+          console.warn("Notes OCR failed:", notesOcrError);
+        } else {
+          notesText = notesOcrResult?.ocr?.text || '';
+          console.log("Notes text extracted:", notesText.substring(0, 200));
+        }
+      }
+
+      // Step 3: Send BOTH texts to AI for analysis
+      setProcessingStep("AI analyzing claim with clinical documentation...");
+      
+      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-claim-combined', {
+        body: {
+          claimText,
+          clinicalNotesText: notesText,
+          claimFilename: claimFile.name,
+          notesFilename: notesFile?.name || null,
+        },
+      });
+
+      if (analysisError) throw new Error(`Analysis failed: ${analysisError.message}`);
+
+      if (!analysisData?.success || !analysisData?.analysis) {
+        throw new Error(analysisData?.error || "Invalid analysis response");
+      }
+
+      setAnalysisResult(analysisData.analysis);
+      
+      toast.success(`Analysis Complete! Approval probability: ${analysisData.analysis.approval_probability}%`);
+
+    } catch (error) {
+      console.error("Analysis error:", error);
+      toast.error(error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsAnalyzing(false);
+      setProcessingStep("");
     }
   };
 
-  const getRiskColor = (category: string) => {
-    switch (category.toLowerCase()) {
-      case "low": return "text-success";
-      case "medium": return "text-warning";
-      case "high": return "text-destructive";
-      default: return "text-muted-foreground";
+  // Get risk badge styling
+  const getRiskBadge = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case 'low':
+        return { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle2 };
+      case 'medium':
+        return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: AlertTriangle };
+      case 'high':
+        return { bg: 'bg-orange-100', text: 'text-orange-800', icon: AlertOctagon };
+      case 'critical':
+        return { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle };
+      default:
+        return { bg: 'bg-muted', text: 'text-muted-foreground', icon: AlertTriangle };
     }
   };
 
-  const getSeverityBadge = (severity: string): "outline" | "default" | "destructive" => {
-    const variants: Record<string, "outline" | "default" | "destructive"> = {
-      low: "outline",
-      medium: "default",
-      high: "destructive"
-    };
-    return variants[severity] || "default";
+  const clearAll = () => {
+    setClaimFile(null);
+    setNotesFile(null);
+    setAnalysisResult(null);
+    setProcessingStep("");
   };
 
   if (!user) return null;
@@ -228,175 +237,230 @@ const ClaimUploadReview = () => {
         <p className="text-muted-foreground">Upload claim and doctor notes for intelligent deniability analysis</p>
       </div>
 
-      {!uploadedClaim ? (
+      {/* Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Files
+          </CardTitle>
+          <CardDescription>Upload both claim file and doctor's notes (PDF format)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Claim File Upload */}
+            <div 
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+                ${claimFile ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-muted hover:border-primary'}`}
+              onClick={() => handleFileUpload('claim')}
+            >
+              <FileText className={`h-10 w-10 mx-auto mb-2 ${claimFile ? 'text-green-500' : 'text-muted-foreground'}`} />
+              <p className="font-medium">
+                {claimFile ? claimFile.name : 'Upload Claim File'}
+              </p>
+              <p className="text-xs text-muted-foreground">PDF format</p>
+              {claimFile && (
+                <p className="text-xs text-green-600 mt-1">✓ File selected</p>
+              )}
+            </div>
+
+            {/* Notes File Upload */}
+            <div 
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+                ${notesFile ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-muted hover:border-primary'}`}
+              onClick={() => handleFileUpload('notes')}
+            >
+              <FileText className={`h-10 w-10 mx-auto mb-2 ${notesFile ? 'text-green-500' : 'text-muted-foreground'}`} />
+              <p className="font-medium">
+                {notesFile ? notesFile.name : "Upload Doctor's Notes"}
+              </p>
+              <p className="text-xs text-muted-foreground">PDF format</p>
+              {notesFile && (
+                <p className="text-xs text-green-600 mt-1">✓ File selected</p>
+              )}
+            </div>
+          </div>
+
+          {/* Analyze Button */}
+          <Button 
+            onClick={handleAnalyze}
+            disabled={!claimFile || isAnalyzing}
+            className="w-full"
+            size="lg"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                {processingStep || "Analyzing..."}
+              </>
+            ) : (
+              <>
+                <Brain className="h-5 w-5 mr-2" />
+                Analyze Claim
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Analysis Results */}
+      {analysisResult && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Upload Files
+              <Brain className="h-5 w-5 text-purple-500" />
+              AI Analysis Results
             </CardTitle>
-            <CardDescription>Upload both claim file and doctor's notes (PDF format)</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div 
-                className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer"
-                onClick={() => handleFileUpload('claim')}
-              >
-                <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="font-medium mb-1">
-                  {claimFile ? claimFile.name : "Upload Claim File"}
+          <CardContent className="space-y-6">
+            {/* Main Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <p className="text-3xl font-bold text-green-600">
+                  {analysisResult.approval_probability}%
                 </p>
-                <p className="text-sm text-muted-foreground">PDF format</p>
+                <p className="text-sm text-muted-foreground">Approval Probability</p>
               </div>
-
-              <div 
-                className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer"
-                onClick={() => handleFileUpload('notes')}
-              >
-                <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="font-medium mb-1">
-                  {notesFile ? notesFile.name : "Upload Doctor's Notes"}
+              <div className="text-center p-4 bg-muted rounded-lg">
+                {(() => {
+                  const badge = getRiskBadge(analysisResult.risk_level);
+                  const Icon = badge.icon;
+                  return (
+                    <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${badge.bg} ${badge.text}`}>
+                      <Icon className="h-4 w-4" />
+                      <span className="font-medium capitalize">{analysisResult.risk_level}</span>
+                    </div>
+                  );
+                })()}
+                <p className="text-sm text-muted-foreground mt-2">Risk Level</p>
+              </div>
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <p className="text-3xl font-bold">
+                  {analysisResult.clinical_support_analysis?.documentation_score || 0}%
                 </p>
-                <p className="text-sm text-muted-foreground">PDF format</p>
+                <p className="text-sm text-muted-foreground">Documentation Score</p>
+              </div>
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <p className="text-3xl font-bold">
+                  {analysisResult.critical_issues?.length || 0}
+                </p>
+                <p className="text-sm text-muted-foreground">Issues Found</p>
               </div>
             </div>
 
-            <Button 
-              onClick={analyzeClaim} 
-              disabled={!claimFile || !notesFile || isAnalyzing || isParsing}
-              className="w-full"
-            >
-              {isAnalyzing || isParsing ? "Processing..." : "Analyze Claim"}
-            </Button>
+            {/* Executive Summary */}
+            {analysisResult.executive_summary && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                <h4 className="font-medium mb-2">Executive Summary</h4>
+                <p className="text-sm">{analysisResult.executive_summary}</p>
+              </div>
+            )}
+
+            {/* Clinical Support Analysis */}
+            {analysisResult.clinical_support_analysis && (
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  Clinical Documentation Analysis
+                  {analysisResult.clinical_support_analysis.has_sufficient_documentation ? (
+                    <span className="text-green-600 text-sm">✓ Sufficient</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">✗ Insufficient</span>
+                  )}
+                </h4>
+                
+                {analysisResult.clinical_support_analysis.findings?.length > 0 && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950 rounded">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Findings (What's documented):</p>
+                    <ul className="text-sm text-green-700 dark:text-green-300 list-disc list-inside">
+                      {analysisResult.clinical_support_analysis.findings.map((f: string, i: number) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {analysisResult.clinical_support_analysis.gaps?.length > 0 && (
+                  <div className="p-3 bg-red-50 dark:bg-red-950 rounded">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Gaps (What's missing):</p>
+                    <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                      {analysisResult.clinical_support_analysis.gaps.map((g: string, i: number) => (
+                        <li key={i}>{g}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Critical Issues */}
+            {analysisResult.critical_issues && analysisResult.critical_issues.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-red-700 dark:text-red-400">Critical Issues</h4>
+                {analysisResult.critical_issues.map((issue, i) => (
+                  <div key={i} className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded">
+                    <div className="flex items-start gap-2">
+                      <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded">P{issue.priority}</span>
+                      <div>
+                        <p className="font-medium text-sm">{issue.issue}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">Impact: {issue.impact}</p>
+                        <p className="text-xs text-green-700 dark:text-green-400 mt-1">Fix: {issue.resolution}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium">Recommendations</h4>
+                {analysisResult.recommendations.map((rec, i) => (
+                  <div key={i} className="p-3 bg-muted rounded flex justify-between items-start">
+                    <div>
+                      <p className="text-sm">{rec.recommendation}</p>
+                      <p className="text-xs text-green-600 dark:text-green-400">Expected: {rec.expected_impact}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      rec.effort === 'low' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                      rec.effort === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                    }`}>
+                      {rec.effort} effort
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Next Steps */}
+            {analysisResult.next_steps && analysisResult.next_steps.length > 0 && (
+              <div className="p-4 bg-primary/10 rounded-lg">
+                <h4 className="font-medium mb-2">Recommended Next Steps</h4>
+                <ol className="space-y-2">
+                  {analysisResult.next_steps.map((step: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={clearAll}>
+                Upload Another Claim
+              </Button>
+              <Button onClick={() => toast.success("Claim exported")}>
+                Export Claim
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Claim Details</CardTitle>
-              <CardDescription>Claim ID: {uploadedClaim.claimId}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Patient</p>
-                  <p className="font-medium">{uploadedClaim.patientName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Date of Service</p>
-                  <p className="font-medium">{uploadedClaim.dos}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Provider</p>
-                  <p className="font-medium">{uploadedClaim.provider}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Billed Amount</p>
-                  <p className="font-medium">${uploadedClaim.billedAmount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {isAnalyzing && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Analyzing with AI...</span>
-                    <TrendingUp className="h-5 w-5 animate-pulse" />
-                  </div>
-                  <Progress value={66} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {reviewResult && !isAnalyzing && (
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI Analysis Results</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Deniability Probability</p>
-                        <span className={`text-3xl font-bold ${getRiskColor(reviewResult.riskCategory)}`}>
-                          {reviewResult.deniabilityProbability}%
-                        </span>
-                        <Badge className="ml-2" variant={getSeverityBadge(reviewResult.riskCategory)}>
-                          {reviewResult.riskCategory.toUpperCase()} Risk
-                        </Badge>
-                      </div>
-                      <Progress value={reviewResult.deniabilityProbability} className="w-32" />
-                    </div>
-
-                    {reviewResult.riskFactors.length > 0 && (
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Risk Factors:</strong>
-                          <ul className="mt-2 space-y-1">
-                            {reviewResult.riskFactors.map((factor, idx) => (
-                              <li key={idx} className="text-sm">• {factor.description}</li>
-                            ))}
-                          </ul>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recommendations</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {reviewResult.recommendations.map((rec, idx) => (
-                      <div key={idx} className="p-4 border rounded-lg">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <CheckCircle className="h-4 w-4" />
-                              <h4 className="font-semibold">{rec.action}</h4>
-                              <Badge variant={getSeverityBadge(rec.priority)}>
-                                {rec.priority.toUpperCase()}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{rec.rationale}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex justify-end gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setUploadedClaim(null);
-                    setReviewResult(null);
-                    setClaimFile(null);
-                    setNotesFile(null);
-                  }}
-                >
-                  Upload Another Claim
-                </Button>
-                <Button onClick={() => toast.success("Claim exported")}>
-                  Export Claim
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
       )}
     </div>
   );
