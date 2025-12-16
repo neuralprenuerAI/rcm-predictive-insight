@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.parse-cms1500]
 verify_jwt = true
+
+[functions.smart-process]
+verify_jwt = true
