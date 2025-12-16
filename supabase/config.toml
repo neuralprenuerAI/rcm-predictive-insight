@@ -50,3 +50,6 @@ verify_jwt = true
 
 [functions.ai-claim-review]
 verify_jwt = true
+
+[functions.parse-cms1500]
+verify_jwt = true
