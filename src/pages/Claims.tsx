@@ -42,7 +42,9 @@ import {
   AlertTriangle,
   AlertOctagon,
   XCircle,
-  Plus
+  Plus,
+  Download,
+  Copy
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -75,6 +77,7 @@ export default function Claims() {
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
   const [deleteClaimId, setDeleteClaimId] = useState<string | null>(null);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState<string | null>(null);
+  const [letterPreview, setLetterPreview] = useState<{ letter: string; claimId: string; patientName: string } | null>(null);
 
   // Fetch claims
   const { data: claims, isLoading } = useQuery({
@@ -115,8 +118,21 @@ export default function Claims() {
     },
   });
 
+  // Download letter helper
+  const downloadLetter = (letter: string, patientName: string) => {
+    const blob = new Blob([letter], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Appeal_Letter_${patientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'Patient'}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  };
+
   // Generate letter function
-  const handleGenerateLetter = async (claim: Claim) => {
+  const handleGenerateLetter = async (claim: Claim, directDownload = false) => {
     setIsGeneratingLetter(claim.id);
     
     try {
@@ -127,26 +143,28 @@ export default function Claims() {
           procedureCode: claim.procedure_code,
           diagnosisCode: claim.diagnosis_code,
           payer: claim.payer,
+          billedAmount: claim.billed_amount,
           analysis: claim.ai_analysis,
           clinicalFindings: claim.clinical_findings,
           recommendations: claim.ai_recommendations,
+          executiveSummary: claim.executive_summary,
+          letterType: 'appeal',
         },
       });
 
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to generate letter');
 
-      if (data?.letter) {
-        const blob = new Blob([data.letter], { type: 'text/plain' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `appeal_letter_${claim.patient_name?.replace(/\s+/g, '_')}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
-
+      if (directDownload) {
+        downloadLetter(data.letter, claim.patient_name);
         toast.success("Appeal letter downloaded!");
+      } else {
+        setLetterPreview({ 
+          letter: data.letter, 
+          claimId: claim.id,
+          patientName: claim.patient_name 
+        });
+        toast.success("Letter generated! Review before downloading.");
       }
     } catch (error) {
       console.error("Generate letter error:", error);
@@ -436,6 +454,57 @@ export default function Claims() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Letter Preview Dialog */}
+      <Dialog open={!!letterPreview} onOpenChange={() => setLetterPreview(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="h-5 w-5" />
+              Appeal Letter Preview
+            </DialogTitle>
+            <DialogDescription>
+              Review the generated letter before downloading
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-card">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+              {letterPreview?.letter}
+            </pre>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t">
+            <Button
+              onClick={() => {
+                if (letterPreview) {
+                  downloadLetter(letterPreview.letter, letterPreview.patientName);
+                  toast.success("Letter downloaded!");
+                }
+              }}
+              className="flex-1"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download Letter
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (letterPreview) {
+                  navigator.clipboard.writeText(letterPreview.letter);
+                  toast.success("Letter copied to clipboard!");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy
+            </Button>
+            <Button variant="outline" onClick={() => setLetterPreview(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
