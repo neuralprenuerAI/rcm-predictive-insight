@@ -365,17 +365,32 @@ export type Database = {
           date_of_service: string
           deniability_probability: number | null
           diagnosis_code: string | null
+          diagnosis_codes: string[] | null
           documentation_score: number | null
           executive_summary: string | null
+          extracted_claim_data: Json | null
           fhir_id: string | null
           id: string
+          next_steps: string[] | null
           notes_file_url: string | null
           notes_filename: string | null
+          patient_address: string | null
+          patient_dob: string | null
           patient_name: string
+          patient_phone: string | null
           payer: string | null
+          payer_id: string | null
+          payer_type: string | null
           procedure_code: string | null
+          procedure_codes: string[] | null
           provider: string
+          provider_name: string | null
+          provider_npi: string | null
           risk_category: string | null
+          risk_level: string | null
+          service_facility_name: string | null
+          service_facility_npi: string | null
+          source: string | null
           status: string | null
           updated_at: string | null
           user_id: string
@@ -394,17 +409,32 @@ export type Database = {
           date_of_service: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          diagnosis_codes?: string[] | null
           documentation_score?: number | null
           executive_summary?: string | null
+          extracted_claim_data?: Json | null
           fhir_id?: string | null
           id?: string
+          next_steps?: string[] | null
           notes_file_url?: string | null
           notes_filename?: string | null
+          patient_address?: string | null
+          patient_dob?: string | null
           patient_name: string
+          patient_phone?: string | null
           payer?: string | null
+          payer_id?: string | null
+          payer_type?: string | null
           procedure_code?: string | null
+          procedure_codes?: string[] | null
           provider: string
+          provider_name?: string | null
+          provider_npi?: string | null
           risk_category?: string | null
+          risk_level?: string | null
+          service_facility_name?: string | null
+          service_facility_npi?: string | null
+          source?: string | null
           status?: string | null
           updated_at?: string | null
           user_id: string
@@ -423,17 +453,32 @@ export type Database = {
           date_of_service?: string
           deniability_probability?: number | null
           diagnosis_code?: string | null
+          diagnosis_codes?: string[] | null
           documentation_score?: number | null
           executive_summary?: string | null
+          extracted_claim_data?: Json | null
           fhir_id?: string | null
           id?: string
+          next_steps?: string[] | null
           notes_file_url?: string | null
           notes_filename?: string | null
+          patient_address?: string | null
+          patient_dob?: string | null
           patient_name?: string
+          patient_phone?: string | null
           payer?: string | null
+          payer_id?: string | null
+          payer_type?: string | null
           procedure_code?: string | null
+          procedure_codes?: string[] | null
           provider?: string
+          provider_name?: string | null
+          provider_npi?: string | null
           risk_category?: string | null
+          risk_level?: string | null
+          service_facility_name?: string | null
+          service_facility_npi?: string | null
+          source?: string | null
           status?: string | null
           updated_at?: string | null
           user_id?: string

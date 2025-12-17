@@ -20,6 +20,76 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface ExtractedData {
+  patient?: {
+    name?: string;
+    first_name?: string;
+    last_name?: string;
+    dob?: string;
+    sex?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+    };
+    phone?: string;
+    account_number?: string;
+  };
+  insured?: {
+    id?: string;
+    name?: string;
+    group_number?: string;
+    plan_name?: string;
+  };
+  payer?: {
+    name?: string;
+    address?: string;
+    type?: string;
+  };
+  claim?: {
+    claim_number?: string;
+    date_of_service?: string;
+    date_of_service_to?: string;
+    place_of_service?: string;
+    prior_auth_number?: string;
+  };
+  diagnoses?: {
+    icd_indicator?: string;
+    codes?: string[];
+    primary?: string;
+  };
+  procedures?: {
+    line?: number;
+    cpt_code?: string;
+    modifiers?: string[];
+    diagnosis_pointer?: string;
+    charge?: number;
+    units?: number;
+    description?: string;
+  }[];
+  charges?: {
+    total_charge?: number;
+    amount_paid?: number;
+    balance_due?: number;
+  };
+  provider?: {
+    billing_name?: string;
+    billing_npi?: string;
+    billing_address?: string;
+    billing_phone?: string;
+    rendering_name?: string;
+    rendering_npi?: string;
+    tax_id?: string;
+    tax_id_type?: string;
+  };
+  facility?: {
+    name?: string;
+    npi?: string;
+    address?: string;
+  };
+}
+
 interface AnalysisResult {
   approval_probability: number;
   risk_level: string;
@@ -62,6 +132,12 @@ interface AnalysisResult {
   next_steps?: string[];
 }
 
+interface FullAnalysisResult {
+  extracted_data?: ExtractedData;
+  analysis?: AnalysisResult;
+  clinical_data?: any;
+}
+
 const ClaimUploadReview = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
@@ -69,7 +145,7 @@ const ClaimUploadReview = () => {
   const [notesFile, setNotesFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>("");
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<FullAnalysisResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedClaimId, setSavedClaimId] = useState<string | null>(null);
 
@@ -161,13 +237,18 @@ const ClaimUploadReview = () => {
 
       if (analysisError) throw new Error(`Analysis failed: ${analysisError.message}`);
 
-      if (!analysisData?.success || !analysisData?.analysis) {
+      if (!analysisData?.success) {
         throw new Error(analysisData?.error || "Invalid analysis response");
       }
 
-      setAnalysisResult(analysisData.analysis);
+      // Store full result including extracted_data and analysis
+      setAnalysisResult({
+        extracted_data: analysisData.extracted_data,
+        analysis: analysisData.analysis,
+        clinical_data: analysisData.clinical_data,
+      });
       
-      toast.success(`Analysis Complete! Approval probability: ${analysisData.analysis.approval_probability}%`);
+      toast.success(`Analysis Complete! Approval probability: ${analysisData.analysis?.approval_probability || 0}%`);
 
     } catch (error) {
       console.error("Analysis error:", error);
@@ -214,33 +295,87 @@ const ClaimUploadReview = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("Not authenticated");
 
-      const analysis = analysisResult;
-      
+      // Use extracted data from the AI
+      const extracted = analysisResult.extracted_data || {};
+      const analysis = analysisResult.analysis;
+      const patient = extracted.patient || {};
+      const charges = extracted.charges || {};
+      const procedures = extracted.procedures || [];
+      const diagnoses = extracted.diagnoses || {};
+      const payer = extracted.payer || {};
+      const provider = extracted.provider || {};
+      const facility = extracted.facility || {};
+      const claim = extracted.claim || {};
+
+      // Build patient address
+      const patientAddress = patient.address ? 
+        `${patient.address.street || ''}, ${patient.address.city || ''}, ${patient.address.state || ''} ${patient.address.zip || ''}`.trim().replace(/^,\s*/, '') : null;
+
+      // Build patient name
+      const patientName = patient.name || 
+        (patient.last_name && patient.first_name ? `${patient.last_name}, ${patient.first_name}` : null) || 
+        'Unknown Patient';
+
       const claimData = {
         user_id: currentUser.id,
-        claim_id: `CLM-${Date.now()}`,
-        patient_name: (analysis as any).patient_name || claimFile?.name?.split('_')[0] || 'Unknown Patient',
-        provider: (analysis as any).provider_name || 'Unknown Provider',
-        date_of_service: new Date().toISOString().split('T')[0],
-        procedure_code: (analysis as any).procedure_codes?.[0] || (analysis as any).cpt_code || null,
-        diagnosis_code: (analysis as any).diagnosis_codes?.[0] || (analysis as any).icd_code || null,
-        billed_amount: (analysis as any).total_charge || (analysis as any).billed_amount || 0,
-        payer: (analysis as any).payer_name || (analysis as any).insurance || null,
-        status: 'reviewed',
+        claim_id: claim.claim_number || patient.account_number || `CLM-${Date.now()}`,
         
-        // AI Analysis fields
+        // Patient info - from extracted data
+        patient_name: patientName,
+        patient_dob: patient.dob || null,
+        patient_address: patientAddress,
+        patient_phone: patient.phone || null,
+        
+        // Provider info
+        provider: provider.rendering_name || provider.billing_name || 'Unknown Provider',
+        provider_name: provider.rendering_name || provider.billing_name || null,
+        provider_npi: provider.billing_npi || null,
+        
+        // Facility info
+        service_facility_name: facility.name || null,
+        service_facility_npi: facility.npi || null,
+        
+        // Claim info
+        date_of_service: claim.date_of_service || new Date().toISOString().split('T')[0],
+        
+        // Procedure/Diagnosis - from extracted data
+        procedure_code: procedures[0]?.cpt_code || null,
+        procedure_codes: procedures.map((p: any) => p.cpt_code).filter(Boolean),
+        diagnosis_code: diagnoses.primary || diagnoses.codes?.[0] || null,
+        diagnosis_codes: diagnoses.codes || [],
+        
+        // Charges - from extracted data (convert to number)
+        billed_amount: typeof charges.total_charge === 'string' 
+          ? parseFloat((charges.total_charge as string).replace(/[^0-9.]/g, '')) || 0 
+          : (charges.total_charge as number) || 0,
+        
+        // Payer - from extracted data
+        payer: payer.name || extracted.insured?.plan_name || null,
+        payer_id: extracted.insured?.id || null,
+        payer_type: payer.type || null,
+        
+        // Status
+        status: 'reviewed',
+        source: 'upload_analysis',
+        
+        // AI Analysis
         ai_analysis: analysis as any,
-        approval_probability: analysis.approval_probability,
-        risk_category: analysis.risk_level,
-        documentation_score: analysis.clinical_support_analysis?.documentation_score || 0,
-        executive_summary: analysis.executive_summary,
-        clinical_findings: analysis.clinical_support_analysis?.findings as any || [],
-        ai_recommendations: analysis.recommendations?.map((r: any) => r.recommendation) || [],
+        approval_probability: analysis?.approval_probability || 0,
+        risk_category: analysis?.risk_level || null,
+        risk_level: analysis?.risk_level || null,
+        documentation_score: analysis?.clinical_support_analysis?.documentation_score || 0,
+        executive_summary: analysis?.executive_summary || null,
+        clinical_findings: (analysis?.clinical_support_analysis?.findings || []) as any,
+        ai_recommendations: (analysis?.recommendations?.map((r: any) => r.recommendation) || []) as any,
+        next_steps: (analysis?.next_steps || []) as any,
         
         // File info
         claim_filename: claimFile?.name || null,
         notes_filename: notesFile?.name || null,
         ai_reviewed_at: new Date().toISOString(),
+        
+        // Store full extracted data for reference
+        extracted_claim_data: extracted as any,
       };
 
       const { data, error } = await supabase
@@ -252,7 +387,7 @@ const ClaimUploadReview = () => {
       if (error) throw error;
 
       setSavedClaimId(data.id);
-      toast.success("Claim saved! View it in the Claims page");
+      toast.success(`Claim saved! ${patientName}`);
 
     } catch (error) {
       console.error("Save error:", error);
@@ -351,18 +486,18 @@ const ClaimUploadReview = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-muted rounded-lg">
                 <p className="text-3xl font-bold text-green-600">
-                  {analysisResult.approval_probability}%
+                  {analysisResult.analysis?.approval_probability || 0}%
                 </p>
                 <p className="text-sm text-muted-foreground">Approval Probability</p>
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">
                 {(() => {
-                  const badge = getRiskBadge(analysisResult.risk_level);
+                  const badge = getRiskBadge(analysisResult.analysis?.risk_level || '');
                   const Icon = badge.icon;
                   return (
                     <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${badge.bg} ${badge.text}`}>
                       <Icon className="h-4 w-4" />
-                      <span className="font-medium capitalize">{analysisResult.risk_level}</span>
+                      <span className="font-medium capitalize">{analysisResult.analysis?.risk_level || 'N/A'}</span>
                     </div>
                   );
                 })()}
@@ -370,54 +505,54 @@ const ClaimUploadReview = () => {
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">
                 <p className="text-3xl font-bold">
-                  {analysisResult.clinical_support_analysis?.documentation_score || 0}%
+                  {analysisResult.analysis?.clinical_support_analysis?.documentation_score || 0}%
                 </p>
                 <p className="text-sm text-muted-foreground">Documentation Score</p>
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">
                 <p className="text-3xl font-bold">
-                  {analysisResult.critical_issues?.length || 0}
+                  {analysisResult.analysis?.critical_issues?.length || 0}
                 </p>
                 <p className="text-sm text-muted-foreground">Issues Found</p>
               </div>
             </div>
 
             {/* Executive Summary */}
-            {analysisResult.executive_summary && (
+            {analysisResult.analysis?.executive_summary && (
               <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
                 <h4 className="font-medium mb-2">Executive Summary</h4>
-                <p className="text-sm">{analysisResult.executive_summary}</p>
+                <p className="text-sm">{analysisResult.analysis.executive_summary}</p>
               </div>
             )}
 
             {/* Clinical Support Analysis */}
-            {analysisResult.clinical_support_analysis && (
+            {analysisResult.analysis?.clinical_support_analysis && (
               <div className="space-y-2">
                 <h4 className="font-medium flex items-center gap-2">
                   Clinical Documentation Analysis
-                  {analysisResult.clinical_support_analysis.has_sufficient_documentation ? (
+                  {analysisResult.analysis.clinical_support_analysis.has_sufficient_documentation ? (
                     <span className="text-green-600 text-sm">✓ Sufficient</span>
                   ) : (
                     <span className="text-red-600 text-sm">✗ Insufficient</span>
                   )}
                 </h4>
                 
-                {analysisResult.clinical_support_analysis.findings?.length > 0 && (
+                {analysisResult.analysis.clinical_support_analysis.findings?.length > 0 && (
                   <div className="p-3 bg-green-50 dark:bg-green-950 rounded">
                     <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Findings (What's documented):</p>
                     <ul className="text-sm text-green-700 dark:text-green-300 list-disc list-inside">
-                      {analysisResult.clinical_support_analysis.findings.map((f: string, i: number) => (
+                      {analysisResult.analysis.clinical_support_analysis.findings.map((f: string, i: number) => (
                         <li key={i}>{f}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {analysisResult.clinical_support_analysis.gaps?.length > 0 && (
+                {analysisResult.analysis.clinical_support_analysis.gaps?.length > 0 && (
                   <div className="p-3 bg-red-50 dark:bg-red-950 rounded">
                     <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Gaps (What's missing):</p>
                     <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
-                      {analysisResult.clinical_support_analysis.gaps.map((g: string, i: number) => (
+                      {analysisResult.analysis.clinical_support_analysis.gaps.map((g: string, i: number) => (
                         <li key={i}>{g}</li>
                       ))}
                     </ul>
@@ -427,10 +562,10 @@ const ClaimUploadReview = () => {
             )}
 
             {/* Critical Issues */}
-            {analysisResult.critical_issues && analysisResult.critical_issues.length > 0 && (
+            {analysisResult.analysis?.critical_issues && analysisResult.analysis.critical_issues.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-medium text-red-700 dark:text-red-400">Critical Issues</h4>
-                {analysisResult.critical_issues.map((issue, i) => (
+                {analysisResult.analysis.critical_issues.map((issue, i) => (
                   <div key={i} className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded">
                     <div className="flex items-start gap-2">
                       <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded">P{issue.priority}</span>
@@ -446,10 +581,10 @@ const ClaimUploadReview = () => {
             )}
 
             {/* Recommendations */}
-            {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
+            {analysisResult.analysis?.recommendations && analysisResult.analysis.recommendations.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-medium">Recommendations</h4>
-                {analysisResult.recommendations.map((rec, i) => (
+                {analysisResult.analysis.recommendations.map((rec, i) => (
                   <div key={i} className="p-3 bg-muted rounded flex justify-between items-start">
                     <div>
                       <p className="text-sm">{rec.recommendation}</p>
@@ -468,11 +603,11 @@ const ClaimUploadReview = () => {
             )}
 
             {/* Next Steps */}
-            {analysisResult.next_steps && analysisResult.next_steps.length > 0 && (
+            {analysisResult.analysis?.next_steps && analysisResult.analysis.next_steps.length > 0 && (
               <div className="p-4 bg-primary/10 rounded-lg">
                 <h4 className="font-medium mb-2">Recommended Next Steps</h4>
                 <ol className="space-y-2">
-                  {analysisResult.next_steps.map((step: string, i: number) => (
+                  {analysisResult.analysis.next_steps.map((step: string, i: number) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
                       <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0">
                         {i + 1}
