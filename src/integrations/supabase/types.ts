@@ -350,6 +350,95 @@ export type Database = {
           },
         ]
       }
+      claim_scrub_results: {
+        Row: {
+          all_issues: Json | null
+          claim_id: string | null
+          claim_info: Json | null
+          corrections: Json | null
+          created_at: string | null
+          critical_count: number | null
+          denial_risk_score: number | null
+          documentation_issues: Json | null
+          high_count: number | null
+          id: string
+          low_count: number | null
+          medium_count: number | null
+          modifier_issues: Json | null
+          mue_issues: Json | null
+          ncci_issues: Json | null
+          necessity_issues: Json | null
+          payer_issues: Json | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          risk_level: string | null
+          status: string | null
+          total_issues: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          all_issues?: Json | null
+          claim_id?: string | null
+          claim_info?: Json | null
+          corrections?: Json | null
+          created_at?: string | null
+          critical_count?: number | null
+          denial_risk_score?: number | null
+          documentation_issues?: Json | null
+          high_count?: number | null
+          id?: string
+          low_count?: number | null
+          medium_count?: number | null
+          modifier_issues?: Json | null
+          mue_issues?: Json | null
+          ncci_issues?: Json | null
+          necessity_issues?: Json | null
+          payer_issues?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level?: string | null
+          status?: string | null
+          total_issues?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          all_issues?: Json | null
+          claim_id?: string | null
+          claim_info?: Json | null
+          corrections?: Json | null
+          created_at?: string | null
+          critical_count?: number | null
+          denial_risk_score?: number | null
+          documentation_issues?: Json | null
+          high_count?: number | null
+          id?: string
+          low_count?: number | null
+          medium_count?: number | null
+          modifier_issues?: Json | null
+          mue_issues?: Json | null
+          ncci_issues?: Json | null
+          necessity_issues?: Json | null
+          payer_issues?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level?: string | null
+          status?: string | null
+          total_issues?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claim_scrub_results_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       claims: {
         Row: {
           ai_analysis: Json | null
@@ -511,6 +600,90 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      denial_history: {
+        Row: {
+          appeal_date: string | null
+          appeal_outcome: string | null
+          billed_amount: number | null
+          claim_id: string | null
+          cpt_codes: string[] | null
+          created_at: string | null
+          denial_category: string | null
+          denial_date: string | null
+          denial_reason_code: string | null
+          denial_reason_description: string | null
+          final_paid_amount: number | null
+          icd_codes: string[] | null
+          id: string
+          modifiers: string[] | null
+          payer: string | null
+          predicted_risk_score: number | null
+          remark_codes: string[] | null
+          scrub_result_id: string | null
+          user_id: string | null
+          was_appealed: boolean | null
+        }
+        Insert: {
+          appeal_date?: string | null
+          appeal_outcome?: string | null
+          billed_amount?: number | null
+          claim_id?: string | null
+          cpt_codes?: string[] | null
+          created_at?: string | null
+          denial_category?: string | null
+          denial_date?: string | null
+          denial_reason_code?: string | null
+          denial_reason_description?: string | null
+          final_paid_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          modifiers?: string[] | null
+          payer?: string | null
+          predicted_risk_score?: number | null
+          remark_codes?: string[] | null
+          scrub_result_id?: string | null
+          user_id?: string | null
+          was_appealed?: boolean | null
+        }
+        Update: {
+          appeal_date?: string | null
+          appeal_outcome?: string | null
+          billed_amount?: number | null
+          claim_id?: string | null
+          cpt_codes?: string[] | null
+          created_at?: string | null
+          denial_category?: string | null
+          denial_date?: string | null
+          denial_reason_code?: string | null
+          denial_reason_description?: string | null
+          final_paid_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          modifiers?: string[] | null
+          payer?: string | null
+          predicted_risk_score?: number | null
+          remark_codes?: string[] | null
+          scrub_result_id?: string | null
+          user_id?: string | null
+          was_appealed?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denial_history_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "denial_history_scrub_result_id_fkey"
+            columns: ["scrub_result_id"]
+            isOneToOne: false
+            referencedRelation: "claim_scrub_results"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       denials: {
         Row: {
@@ -1020,6 +1193,39 @@ export type Database = {
         }
         Relationships: []
       }
+      medical_necessity_matrix: {
+        Row: {
+          cpt_code: string
+          created_at: string | null
+          icd_code: string
+          id: string
+          necessity_score: number | null
+          notes: string | null
+          payer_type: string | null
+          source: string | null
+        }
+        Insert: {
+          cpt_code: string
+          created_at?: string | null
+          icd_code: string
+          id?: string
+          necessity_score?: number | null
+          notes?: string | null
+          payer_type?: string | null
+          source?: string | null
+        }
+        Update: {
+          cpt_code?: string
+          created_at?: string | null
+          icd_code?: string
+          id?: string
+          necessity_score?: number | null
+          notes?: string | null
+          payer_type?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       metrics: {
         Row: {
           created_at: string | null
@@ -1049,6 +1255,183 @@ export type Database = {
           value?: number
         }
         Relationships: []
+      }
+      modifier_rules: {
+        Row: {
+          created_at: string | null
+          documentation_requirements: string | null
+          global_rule: boolean | null
+          id: string
+          modifier: string
+          modifier_description: string | null
+          prohibited_with_modifiers: string[] | null
+          required_conditions: string[] | null
+          required_with_cpt_categories: string[] | null
+          requires_documentation: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          documentation_requirements?: string | null
+          global_rule?: boolean | null
+          id?: string
+          modifier: string
+          modifier_description?: string | null
+          prohibited_with_modifiers?: string[] | null
+          required_conditions?: string[] | null
+          required_with_cpt_categories?: string[] | null
+          requires_documentation?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          documentation_requirements?: string | null
+          global_rule?: boolean | null
+          id?: string
+          modifier?: string
+          modifier_description?: string | null
+          prohibited_with_modifiers?: string[] | null
+          required_conditions?: string[] | null
+          required_with_cpt_categories?: string[] | null
+          requires_documentation?: boolean | null
+        }
+        Relationships: []
+      }
+      mue_edits: {
+        Row: {
+          cpt_code: string
+          created_at: string | null
+          effective_date: string | null
+          end_date: string | null
+          facility_limit: number | null
+          id: string
+          practitioner_limit: number | null
+          rationale: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cpt_code: string
+          created_at?: string | null
+          effective_date?: string | null
+          end_date?: string | null
+          facility_limit?: number | null
+          id?: string
+          practitioner_limit?: number | null
+          rationale?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cpt_code?: string
+          created_at?: string | null
+          effective_date?: string | null
+          end_date?: string | null
+          facility_limit?: number | null
+          id?: string
+          practitioner_limit?: number | null
+          rationale?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ncci_ptp_edits: {
+        Row: {
+          column_1_cpt: string
+          column_2_cpt: string
+          created_at: string | null
+          deletion_date: string | null
+          effective_date: string | null
+          id: string
+          modifier_indicator: string | null
+          ptp_edit_rationale: number | null
+        }
+        Insert: {
+          column_1_cpt: string
+          column_2_cpt: string
+          created_at?: string | null
+          deletion_date?: string | null
+          effective_date?: string | null
+          id?: string
+          modifier_indicator?: string | null
+          ptp_edit_rationale?: number | null
+        }
+        Update: {
+          column_1_cpt?: string
+          column_2_cpt?: string
+          created_at?: string | null
+          deletion_date?: string | null
+          effective_date?: string | null
+          id?: string
+          modifier_indicator?: string | null
+          ptp_edit_rationale?: number | null
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          action_label: string | null
+          action_url: string | null
+          claim_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          message: string
+          notification_type: string
+          read_at: string | null
+          scrub_result_id: string | null
+          severity: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          action_label?: string | null
+          action_url?: string | null
+          claim_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          message: string
+          notification_type: string
+          read_at?: string | null
+          scrub_result_id?: string | null
+          severity: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          action_label?: string | null
+          action_url?: string | null
+          claim_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          message?: string
+          notification_type?: string
+          read_at?: string | null
+          scrub_result_id?: string | null
+          severity?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_scrub_result_id_fkey"
+            columns: ["scrub_result_id"]
+            isOneToOne: false
+            referencedRelation: "claim_scrub_results"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       patients: {
         Row: {
@@ -1163,6 +1546,54 @@ export type Database = {
           portal_url?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      payer_rules: {
+        Row: {
+          action_required: string | null
+          active: boolean | null
+          cpt_codes: string[] | null
+          created_at: string | null
+          denial_reason_codes: string[] | null
+          icd_codes: string[] | null
+          id: string
+          payer_id: string | null
+          payer_name: string
+          rule_description: string
+          rule_type: string
+          severity: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          action_required?: string | null
+          active?: boolean | null
+          cpt_codes?: string[] | null
+          created_at?: string | null
+          denial_reason_codes?: string[] | null
+          icd_codes?: string[] | null
+          id?: string
+          payer_id?: string | null
+          payer_name: string
+          rule_description: string
+          rule_type: string
+          severity?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          action_required?: string | null
+          active?: boolean | null
+          cpt_codes?: string[] | null
+          created_at?: string | null
+          denial_reason_codes?: string[] | null
+          icd_codes?: string[] | null
+          id?: string
+          payer_id?: string | null
+          payer_name?: string
+          rule_description?: string
+          rule_type?: string
+          severity?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
