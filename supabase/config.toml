@@ -62,3 +62,6 @@ verify_jwt = true
 
 [functions.validate-claim-rules]
 verify_jwt = true
+
+[functions.scrub-claim]
+verify_jwt = true
