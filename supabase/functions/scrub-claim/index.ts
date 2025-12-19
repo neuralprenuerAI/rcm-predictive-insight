@@ -39,6 +39,13 @@ serve(async (req) => {
     const request: ScrubRequest = await req.json();
     const { claim_id, claim_data, pdf_content, save_results = true } = request;
 
+    console.log("📥 Received scrub request:", {
+      has_claim_id: !!claim_id,
+      has_claim_data: !!claim_data,
+      has_pdf_content: !!pdf_content,
+      pdf_content_length: pdf_content?.length || 0
+    });
+
     // Get auth header for user context
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -69,9 +76,17 @@ serve(async (req) => {
     let linkedClaimId = claim_id || null;
 
     // ========================================
-    // OPTION 1: Load from existing claim
+    // OPTION 1: Use provided claim_data directly
     // ========================================
-    if (claim_id && !claim_data) {
+    if (claim_data && claim_data.procedures && claim_data.procedures.length > 0) {
+      console.log("📋 Using provided claim_data");
+      claimInfo = claim_data;
+    }
+
+    // ========================================
+    // OPTION 2: Load from existing claim
+    // ========================================
+    if (claim_id && !claimInfo) {
       console.log(`📂 Loading claim: ${claim_id}`);
       
       const { data: claim, error: claimError } = await supabaseAuth
@@ -84,7 +99,6 @@ serve(async (req) => {
         throw new Error(`Claim not found: ${claim_id}`);
       }
 
-      // Build claim data from database record
       const procedures: Procedure[] = [];
       
       if (claim.procedure_codes && Array.isArray(claim.procedure_codes)) {
@@ -101,73 +115,139 @@ serve(async (req) => {
         payer: claim.payer || undefined,
         patient_name: claim.patient_name || undefined,
         billed_amount: claim.billed_amount || undefined,
-        place_of_service: '11' // Default to office
+        place_of_service: '11'
       };
 
       linkedClaimId = claim_id;
     }
 
     // ========================================
-    // OPTION 2: Extract from PDF
+    // OPTION 3: Extract from PDF
     // ========================================
     if (pdf_content && !claimInfo) {
       console.log("📄 Extracting claim data from PDF...");
+      console.log(`📄 PDF content length: ${pdf_content.length} characters`);
       
       const geminiKey = Deno.env.get("GEMINI_API_KEY");
       if (!geminiKey) {
-        throw new Error("GEMINI_API_KEY not configured for PDF extraction");
+        throw new Error("GEMINI_API_KEY not configured. Please add it to your Supabase Edge Function secrets.");
       }
 
-      const extractionPrompt = `Extract claim data from this CMS-1500 form. Return ONLY valid JSON, no other text:
+      const extractionPrompt = `You are a medical billing expert. Extract claim data from this CMS-1500 form image/PDF.
+
+Return ONLY a valid JSON object with this exact structure (no markdown, no backticks, just JSON):
 {
   "procedures": [
-    {"cpt_code": "XXXXX", "units": 1, "modifiers": []}
+    {"cpt_code": "99214", "units": 1, "modifiers": ["25"]}
   ],
-  "icd_codes": ["XXX.XX"],
-  "payer": "Payer Name",
-  "patient_name": "Patient Name",
-  "billed_amount": 0,
+  "icd_codes": ["R55", "R00.2"],
+  "payer": "Medicare",
+  "patient_name": "John Smith",
+  "billed_amount": 150.00,
   "place_of_service": "11"
 }
 
 Rules:
-- CPT codes are 5 digits
-- ICD-10 codes format: A00.0 or A00
-- Units default to 1 if not specified
-- Extract ALL procedures listed
-- Extract ALL diagnosis codes`;
+- CPT codes are exactly 5 digits (e.g., 99214, 93229)
+- ICD-10 codes have format like A00.0, R55, I10
+- Units default to 1 if not clearly specified
+- Extract ALL procedures from Box 24
+- Extract ALL diagnosis codes from Box 21
+- Get payer name from Box 9 or top of form
+- Get patient name from Box 2
+- place_of_service is usually 11 (office) or 22 (hospital)
 
-      try {
-        const geminiResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: extractionPrompt },
-                  { inline_data: { mime_type: "application/pdf", data: pdf_content } }
-                ]
-              }],
-              generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
-            })
-          }
-        );
+IMPORTANT: Return ONLY the JSON object, no other text.`;
 
-        if (geminiResponse.ok) {
-          const geminiData = await geminiResponse.json();
-          const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          
-          if (jsonMatch) {
-            claimInfo = JSON.parse(jsonMatch[0]);
-            console.log(`✅ Extracted ${claimInfo?.procedures?.length || 0} procedures from PDF`);
+      // Try multiple Gemini models
+      const models = [
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-pro-vision"
+      ];
+
+      let extractionSuccess = false;
+      let lastError = "";
+
+      for (const model of models) {
+        if (extractionSuccess) break;
+        
+        console.log(`🤖 Trying model: ${model}`);
+        
+        try {
+          const geminiResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    { text: extractionPrompt },
+                    { 
+                      inline_data: { 
+                        mime_type: "application/pdf", 
+                        data: pdf_content 
+                      } 
+                    }
+                  ]
+                }],
+                generationConfig: { 
+                  temperature: 0.1, 
+                  maxOutputTokens: 2048 
+                }
+              })
+            }
+          );
+
+          console.log(`📡 Gemini response status: ${geminiResponse.status}`);
+
+          if (geminiResponse.ok) {
+            const geminiData = await geminiResponse.json();
+            console.log("📡 Gemini response received");
+            
+            const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            console.log("📝 Extracted text length:", text.length);
+            console.log("📝 Extracted text preview:", text.substring(0, 200));
+            
+            // Try to find JSON in the response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+              try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                
+                // Validate we got procedures
+                if (parsed.procedures && Array.isArray(parsed.procedures) && parsed.procedures.length > 0) {
+                  claimInfo = parsed;
+                  extractionSuccess = true;
+                  console.log(`✅ Extracted ${parsed.procedures.length} procedures from PDF`);
+                } else {
+                  lastError = "No procedures found in extracted data";
+                  console.log("⚠️ No procedures in parsed JSON");
+                }
+              } catch (parseError) {
+                lastError = `JSON parse error: ${parseError}`;
+                console.error("❌ JSON parse error:", parseError);
+              }
+            } else {
+              lastError = "No JSON found in Gemini response";
+              console.log("⚠️ No JSON found in response");
+            }
+          } else {
+            const errorText = await geminiResponse.text();
+            lastError = `Model ${model} returned ${geminiResponse.status}`;
+            console.log(`❌ Model ${model} failed:`, errorText.substring(0, 200));
           }
+        } catch (modelError) {
+          lastError = `Model ${model} error: ${modelError}`;
+          console.error(`❌ Error with model ${model}:`, modelError);
         }
-      } catch (extractError) {
-        console.error("PDF extraction error:", extractError);
-        throw new Error("Failed to extract claim data from PDF");
+      }
+
+      if (!extractionSuccess) {
+        throw new Error(`PDF extraction failed: ${lastError}. Please try manual entry.`);
       }
     }
 
@@ -175,14 +255,17 @@ Rules:
     // VALIDATE WE HAVE DATA
     // ========================================
     if (!claimInfo || !claimInfo.procedures || claimInfo.procedures.length === 0) {
-      throw new Error("No claim data available. Provide claim_id, claim_data, or pdf_content.");
+      throw new Error("No valid claim data available. Please ensure your PDF contains readable claim information or use manual entry.");
     }
 
-    console.log(`📋 Validating ${claimInfo.procedures.length} procedures...`);
+    console.log(`📋 Processing ${claimInfo.procedures.length} procedures:`, 
+      claimInfo.procedures.map(p => p.cpt_code).join(', '));
 
     // ========================================
     // CALL RULES ENGINE
     // ========================================
+    console.log("🔍 Calling validation rules engine...");
+    
     const validationResponse = await fetch(
       `${Deno.env.get("SUPABASE_URL")}/functions/v1/validate-claim-rules`,
       {
@@ -199,6 +282,12 @@ Rules:
         })
       }
     );
+
+    if (!validationResponse.ok) {
+      const errorText = await validationResponse.text();
+      console.error("❌ Validation failed:", errorText);
+      throw new Error(`Validation service error: ${validationResponse.status}`);
+    }
 
     const validationResult = await validationResponse.json();
 
@@ -229,17 +318,19 @@ CLAIM INFORMATION:
 ISSUES FOUND:
 ${validationResult.issues.map((i: any, idx: number) => `${idx + 1}. [${i.severity.toUpperCase()}] ${i.type}: ${i.message}`).join('\n')}
 
-Provide corrections as a JSON array. Each correction should have:
-- issue_type: The type of issue being fixed
-- action: What to do (add_modifier, remove_code, reduce_units, change_diagnosis, etc.)
-- target_code: The CPT or ICD code being modified
-- new_value: The new value or modifier to add
-- explanation: Brief explanation of why this fixes the issue
-- compliance_note: Any compliance considerations
+Provide corrections as a JSON array:
+[
+  {
+    "issue_type": "MISSING_MODIFIER_25",
+    "action": "add_modifier",
+    "target_code": "99214",
+    "new_value": "25",
+    "explanation": "Add modifier 25 for separately identifiable E/M",
+    "compliance_note": "Ensure documentation supports separate E/M"
+  }
+]
 
-IMPORTANT: Only suggest compliant corrections. Never suggest upcoding or codes not supported by documentation.
-
-Return ONLY the JSON array, no other text:`;
+Return ONLY the JSON array, no other text.`;
 
         try {
           const aiResponse = await fetch(
@@ -265,8 +356,7 @@ Return ONLY the JSON array, no other text:`;
             }
           }
         } catch (aiError) {
-          console.error("AI correction error:", aiError);
-          // Continue without AI corrections
+          console.error("⚠️ AI correction error (non-fatal):", aiError);
         }
       }
     }
@@ -277,32 +367,18 @@ Return ONLY the JSON array, no other text:`;
     const scrubResult = {
       denial_risk_score: validationResult.denial_risk_score,
       risk_level: validationResult.risk_level,
-      
-      // Categorized issues
       mue_issues: validationResult.issues?.filter((i: any) => i.type === 'MUE_EXCEEDED') || [],
       ncci_issues: validationResult.issues?.filter((i: any) => i.type === 'NCCI_BUNDLE') || [],
-      modifier_issues: validationResult.issues?.filter((i: any) => 
-        i.type.includes('MODIFIER')
-      ) || [],
-      necessity_issues: validationResult.issues?.filter((i: any) => 
-        i.type.includes('NECESSITY')
-      ) || [],
-      payer_issues: validationResult.issues?.filter((i: any) => 
-        i.type.includes('PAYER')
-      ) || [],
-      
-      // All issues and corrections
+      modifier_issues: validationResult.issues?.filter((i: any) => i.type.includes('MODIFIER')) || [],
+      necessity_issues: validationResult.issues?.filter((i: any) => i.type.includes('NECESSITY')) || [],
+      payer_issues: validationResult.issues?.filter((i: any) => i.type.includes('PAYER')) || [],
       all_issues: validationResult.issues || [],
       corrections: [...(validationResult.corrections || []), ...aiCorrections],
-      
-      // Counts
       critical_count: validationResult.summary?.critical || 0,
       high_count: validationResult.summary?.high || 0,
       medium_count: validationResult.summary?.medium || 0,
       low_count: validationResult.summary?.low || 0,
       total_issues: validationResult.issues?.length || 0,
-      
-      // Claim info snapshot
       claim_info: claimInfo
     };
 
@@ -340,38 +416,33 @@ Return ONLY the JSON array, no other text:`;
         .single();
 
       if (saveError) {
-        console.error("Save error:", saveError);
+        console.error("⚠️ Save error (non-fatal):", saveError);
       } else if (savedResult) {
         scrubResultId = savedResult.id;
         console.log(`✅ Saved scrub result: ${scrubResultId}`);
       }
 
-      // ========================================
-      // CREATE NOTIFICATION FOR HIGH RISK
-      // ========================================
+      // Create notification for high risk
       if (scrubResult.critical_count > 0 || scrubResult.high_count > 0) {
-        const notifSeverity = scrubResult.critical_count > 0 ? 'critical' : 'high';
-        const issueCount = scrubResult.critical_count + scrubResult.high_count;
-        
         await supabaseService
           .from('notifications')
           .insert({
             user_id: user.id,
             notification_type: 'high_risk_claim',
-            severity: notifSeverity,
+            severity: scrubResult.critical_count > 0 ? 'critical' : 'high',
             title: `⚠️ High Risk Claim Detected`,
-            message: `Claim for ${claimInfo.patient_name || 'patient'} has ${issueCount} critical/high priority issue(s) with ${scrubResult.denial_risk_score}% denial risk`,
+            message: `Claim for ${claimInfo.patient_name || 'patient'} has ${scrubResult.critical_count + scrubResult.high_count} critical/high issue(s)`,
             claim_id: linkedClaimId,
             scrub_result_id: scrubResultId
           });
-
-        console.log("🔔 Created high-risk notification");
       }
     }
 
     // ========================================
     // RETURN FINAL RESPONSE
     // ========================================
+    console.log("✅ Scrub complete, returning results");
+    
     return new Response(
       JSON.stringify({
         success: true,
@@ -381,12 +452,7 @@ Return ONLY the JSON array, no other text:`;
           ? "✅ Claim passed all checks - ready to submit!"
           : `⚠️ Found ${scrubResult.total_issues} issue(s) - review recommended`
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "application/json" 
-        } 
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -400,15 +466,14 @@ Return ONLY the JSON array, no other text:`;
         denial_risk_score: 0,
         risk_level: 'unknown',
         all_issues: [],
-        corrections: []
+        corrections: [],
+        total_issues: 0,
+        critical_count: 0,
+        high_count: 0,
+        medium_count: 0,
+        low_count: 0
       }),
-      { 
-        status: 500, 
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "application/json" 
-        } 
-      }
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
