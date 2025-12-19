@@ -13,6 +13,7 @@ import Settings from "./Settings";
 import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { NotificationFeed, ScrubberStatsCard } from "@/components/dashboard";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -57,6 +58,10 @@ const Index = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <RecentClaims />
               <AnalyticsCharts />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ScrubberStatsCard />
+              <NotificationFeed />
             </div>
             <DenialsList />
           </div>
