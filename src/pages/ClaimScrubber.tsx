@@ -380,36 +380,40 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
               </TabsList>
 
               {/* Upload Tab */}
-              <TabsContent value="upload">
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+              <TabsContent value="upload" className="space-y-4">
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                    file ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
+                  }`}
+                  onClick={() => document.getElementById('claim-file-input')?.click()}
+                >
                   <input
                     type="file"
                     accept=".pdf"
                     onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    style={{ position: 'relative' }}
+                    className="hidden"
+                    id="claim-file-input"
                   />
                   {file ? (
-                    <>
-                      <FileText className="h-12 w-12 text-primary mx-auto mb-3" />
-                      <p className="font-medium text-foreground">{file.name}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
+                    <div className="flex flex-col items-center">
+                      <FileText className="h-10 w-10 text-primary mb-2" />
+                      <span className="font-medium text-primary">{file.name}</span>
+                      <span className="text-xs text-muted-foreground mt-1">
                         Click to change file
-                      </p>
-                    </>
+                      </span>
+                    </div>
                   ) : (
-                    <>
-                      <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                      <p className="font-medium text-foreground">
+                    <div className="flex flex-col items-center">
+                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                      <span className="text-sm text-muted-foreground">
                         Click to upload CMS-1500 PDF
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
+                      </span>
+                      <span className="text-xs text-muted-foreground mt-1">
                         PDF files only
-                      </p>
-                    </>
+                      </span>
+                    </div>
                   )}
                 </div>
-
               </TabsContent>
 
               {/* Manual Entry Tab */}
