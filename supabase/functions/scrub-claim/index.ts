@@ -122,18 +122,18 @@ serve(async (req) => {
     }
 
     // ========================================
-    // OPTION 3: Extract from PDF
+    // OPTION 3: Extract from PDF using Lovable AI
     // ========================================
     if (pdf_content && !claimInfo) {
       console.log("📄 Extracting claim data from PDF...");
       console.log(`📄 PDF content length: ${pdf_content.length} characters`);
       
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (!geminiKey) {
-        throw new Error("GEMINI_API_KEY not configured. Please add it to your Supabase Edge Function secrets.");
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableApiKey) {
+        throw new Error("LOVABLE_API_KEY not configured");
       }
 
-      const extractionPrompt = `You are a medical billing expert. Extract claim data from this CMS-1500 form image/PDF.
+      const extractionPrompt = `You are a medical billing expert. Extract claim data from this CMS-1500 form.
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no backticks, just JSON):
 {
@@ -159,95 +159,80 @@ Rules:
 
 IMPORTANT: Return ONLY the JSON object, no other text.`;
 
-      // Try multiple Gemini models
-      const models = [
-        "gemini-2.0-flash-exp",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-pro-vision"
-      ];
-
-      let extractionSuccess = false;
-      let lastError = "";
-
-      for (const model of models) {
-        if (extractionSuccess) break;
-        
-        console.log(`🤖 Trying model: ${model}`);
-        
-        try {
-          const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    { text: extractionPrompt },
-                    { 
-                      inline_data: { 
-                        mime_type: "application/pdf", 
-                        data: pdf_content 
-                      } 
-                    }
-                  ]
-                }],
-                generationConfig: { 
-                  temperature: 0.1, 
-                  maxOutputTokens: 2048 
-                }
-              })
-            }
-          );
-
-          console.log(`📡 Gemini response status: ${geminiResponse.status}`);
-
-          if (geminiResponse.ok) {
-            const geminiData = await geminiResponse.json();
-            console.log("📡 Gemini response received");
-            
-            const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            console.log("📝 Extracted text length:", text.length);
-            console.log("📝 Extracted text preview:", text.substring(0, 200));
-            
-            // Try to find JSON in the response
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            
-            if (jsonMatch) {
-              try {
-                const parsed = JSON.parse(jsonMatch[0]);
-                
-                // Validate we got procedures
-                if (parsed.procedures && Array.isArray(parsed.procedures) && parsed.procedures.length > 0) {
-                  claimInfo = parsed;
-                  extractionSuccess = true;
-                  console.log(`✅ Extracted ${parsed.procedures.length} procedures from PDF`);
-                } else {
-                  lastError = "No procedures found in extracted data";
-                  console.log("⚠️ No procedures in parsed JSON");
-                }
-              } catch (parseError) {
-                lastError = `JSON parse error: ${parseError}`;
-                console.error("❌ JSON parse error:", parseError);
+      console.log("🤖 Calling Lovable AI Gateway for PDF extraction...");
+      
+      try {
+        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${lovableApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: extractionPrompt },
+                  { 
+                    type: "image_url", 
+                    image_url: { 
+                      url: `data:application/pdf;base64,${pdf_content}` 
+                    } 
+                  }
+                ]
               }
-            } else {
-              lastError = "No JSON found in Gemini response";
-              console.log("⚠️ No JSON found in response");
-            }
-          } else {
-            const errorText = await geminiResponse.text();
-            lastError = `Model ${model} returned ${geminiResponse.status}`;
-            console.log(`❌ Model ${model} failed:`, errorText.substring(0, 200));
-          }
-        } catch (modelError) {
-          lastError = `Model ${model} error: ${modelError}`;
-          console.error(`❌ Error with model ${model}:`, modelError);
-        }
-      }
+            ]
+          })
+        });
 
-      if (!extractionSuccess) {
-        throw new Error(`PDF extraction failed: ${lastError}. Please try manual entry.`);
+        console.log(`📡 AI Gateway response status: ${aiResponse.status}`);
+
+        if (aiResponse.status === 429) {
+          throw new Error("Rate limit exceeded. Please try again in a moment.");
+        }
+        
+        if (aiResponse.status === 402) {
+          throw new Error("AI credits exhausted. Please add funds to your Lovable workspace.");
+        }
+
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          console.error("❌ AI Gateway error:", errorText);
+          throw new Error(`AI extraction failed: ${aiResponse.status}`);
+        }
+
+        const aiData = await aiResponse.json();
+        const text = aiData.choices?.[0]?.message?.content || "";
+        console.log("📝 Extracted text length:", text.length);
+        console.log("📝 Extracted text preview:", text.substring(0, 300));
+        
+        // Try to find JSON in the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            
+            // Validate we got procedures
+            if (parsed.procedures && Array.isArray(parsed.procedures) && parsed.procedures.length > 0) {
+              claimInfo = parsed;
+              console.log(`✅ Extracted ${parsed.procedures.length} procedures from PDF`);
+            } else {
+              throw new Error("No procedures found in the extracted data. The PDF may not be a valid CMS-1500 form.");
+            }
+          } catch (parseError) {
+            console.error("❌ JSON parse error:", parseError);
+            throw new Error("Failed to parse claim data from PDF. Please try manual entry.");
+          }
+        } else {
+          console.log("⚠️ No JSON found in response. Raw text:", text.substring(0, 500));
+          throw new Error("Could not extract structured claim data from PDF. Please try manual entry.");
+        }
+      } catch (extractError) {
+        console.error("❌ PDF extraction error:", extractError);
+        throw extractError;
       }
     }
 
@@ -303,9 +288,9 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
     let aiCorrections: any[] = [];
     
     if (validationResult.issues?.length > 0) {
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
       
-      if (geminiKey) {
+      if (lovableApiKey) {
         console.log("🤖 Generating AI corrections...");
         
         const correctionPrompt = `You are a certified medical coder. Review these claim issues and provide specific, compliant corrections.
@@ -333,27 +318,31 @@ Provide corrections as a JSON array:
 Return ONLY the JSON array, no other text.`;
 
         try {
-          const aiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: correctionPrompt }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
-              })
-            }
-          );
+          const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${lovableApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "user", content: correctionPrompt }
+              ]
+            })
+          });
 
           if (aiResponse.ok) {
             const aiData = await aiResponse.json();
-            const aiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const aiText = aiData.choices?.[0]?.message?.content || "";
             const jsonMatch = aiText.match(/\[[\s\S]*\]/);
             
             if (jsonMatch) {
               aiCorrections = JSON.parse(jsonMatch[0]);
               console.log(`✅ Generated ${aiCorrections.length} AI corrections`);
             }
+          } else {
+            console.log("⚠️ AI corrections request failed:", aiResponse.status);
           }
         } catch (aiError) {
           console.error("⚠️ AI correction error (non-fatal):", aiError);
