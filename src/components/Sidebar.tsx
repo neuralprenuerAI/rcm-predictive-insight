@@ -8,8 +8,10 @@ import {
   BarChart3, 
   Settings,
   FileText,
-  Users
+  Users,
+  Shield
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface SidebarProps {
   activeView: string;
@@ -17,10 +19,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
+  const navigate = useNavigate();
+  
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "patients", label: "Patients", icon: Users },
     { id: "claim-review", label: "Claim Review", icon: FileUp },
+    { id: "scrubber", label: "Claim Scrubber", icon: Shield, isRoute: true, route: "/scrubber" },
     { id: "denials", label: "Denials & Appeals", icon: AlertCircle },
     { id: "authorizations", label: "Authorizations", icon: FileText },
     { id: "payment-posting", label: "Payment Posting", icon: DollarSign },
@@ -50,7 +55,13 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-[var(--transition-smooth)]",
                 isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
               )}
-              onClick={() => onViewChange(item.id)}
+              onClick={() => {
+                if (item.isRoute && item.route) {
+                  navigate(item.route);
+                } else {
+                  onViewChange(item.id);
+                }
+              }}
             >
               <Icon className="h-4 w-4" />
               <span className="text-sm font-medium">{item.label}</span>

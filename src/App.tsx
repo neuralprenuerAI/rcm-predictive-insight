@@ -8,6 +8,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import DocumentUpload from "./pages/DocumentUpload";
 import Claims from "./pages/Claims";
+import ClaimScrubber from "./pages/ClaimScrubber";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/upload" element={<DocumentUpload />} />
           <Route path="/claims" element={<Claims />} />
+          <Route path="/scrubber" element={<ClaimScrubber />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
