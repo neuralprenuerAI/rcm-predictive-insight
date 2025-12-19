@@ -44,7 +44,8 @@ import {
   XCircle,
   Plus,
   Download,
-  Copy
+  Copy,
+  Shield
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -210,10 +211,16 @@ export default function Claims() {
             </p>
           </div>
         </div>
-        <Button onClick={() => navigate('/upload')}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Claim Analysis
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/scrubber')}>
+            <Shield className="h-4 w-4 mr-2" />
+            Scrub New Claim
+          </Button>
+          <Button onClick={() => navigate('/upload')}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Claim Analysis
+          </Button>
+        </div>
       </div>
 
       {/* Claims Table */}

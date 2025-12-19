@@ -13,7 +13,9 @@ import Settings from "./Settings";
 import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { NotificationFeed, ScrubberStatsCard, RecentScrubsCard } from "@/components/dashboard";
+import { Shield, Zap, ArrowRight } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -40,6 +42,32 @@ const Index = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Quick Action Card for Scrubber
+  const QuickActionCard = () => (
+    <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary/20 rounded-xl">
+              <Shield className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">AI Claim Scrubber</h3>
+              <p className="text-sm text-muted-foreground">
+                Prevent denials before submission
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => navigate('/scrubber')} className="gap-2">
+            <Zap className="h-4 w-4" />
+            Scrub Claim
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
@@ -54,6 +82,7 @@ const Index = () => {
               <h1 className="text-3xl font-bold text-foreground mb-2">Healthcare RCM Dashboard</h1>
               <p className="text-muted-foreground">Real-time revenue cycle performance metrics</p>
             </div>
+            <QuickActionCard />
             <DashboardMetrics />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <RecentClaims />
