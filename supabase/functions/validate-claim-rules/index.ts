@@ -19,6 +19,8 @@ interface ValidationInput {
   icd_codes: string[];
   payer?: string;
   place_of_service?: string;
+  patient_name?: string;
+  patient_id?: string;
 }
 
 interface Issue {
@@ -406,6 +408,108 @@ serve(async (req) => {
     }
 
     // ========================================
+    // CHECK 6: FREQUENCY LIMITS
+    // ========================================
+    if (input.patient_name) {
+      console.log("🔍 Checking frequency limits...");
+      
+      for (const proc of input.procedures) {
+        // Get frequency limits for this CPT
+        const { data: freqLimits, error: freqError } = await supabaseClient
+          .from('frequency_limits')
+          .select('*')
+          .eq('cpt_code', proc.cpt_code)
+          .or(`payer.eq.all,payer.ilike.%${input.payer || ''}%`);
+
+        if (freqError || !freqLimits || freqLimits.length === 0) continue;
+
+        const limit = freqLimits[0];
+
+        // Check patient's claim history for this CPT
+        const { data: priorClaims, error: historyError } = await supabaseClient
+          .from('claims')
+          .select('id, created_at, procedure_codes')
+          .eq('patient_name', input.patient_name)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (historyError || !priorClaims) continue;
+
+        // Count occurrences within time periods
+        const now = new Date();
+        let countThisYear = 0;
+        let lastServiceDate: Date | null = null;
+
+        for (const claim of priorClaims) {
+          const claimDate = new Date(claim.created_at);
+          const procedureCodes = claim.procedure_codes || [];
+          
+          // Check if this CPT was in the claim
+          const hasCpt = Array.isArray(procedureCodes) 
+            ? procedureCodes.includes(proc.cpt_code)
+            : procedureCodes === proc.cpt_code;
+
+          if (hasCpt) {
+            // Count for yearly limit
+            const daysSince = Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysSince <= 365) {
+              countThisYear++;
+              if (!lastServiceDate || claimDate > lastServiceDate) {
+                lastServiceDate = claimDate;
+              }
+            }
+          }
+        }
+
+        // Check yearly limit
+        if (limit.max_per_year && countThisYear >= limit.max_per_year) {
+          issues.push({
+            type: 'FREQUENCY_LIMIT_EXCEEDED',
+            severity: 'high',
+            code: proc.cpt_code,
+            message: `CPT ${proc.cpt_code}: Patient has had this service ${countThisYear} time(s) in the past year. Limit is ${limit.max_per_year} per year.`,
+            correction: `Document medical necessity for exceeding frequency limit, or consider if service is truly needed. ${limit.exception_note || ''}`,
+            details: {
+              cpt_code: proc.cpt_code,
+              count_this_year: countThisYear,
+              max_per_year: limit.max_per_year,
+              last_service_date: lastServiceDate?.toISOString()
+            }
+          });
+
+          corrections.push({
+            type: 'frequency_warning',
+            target_code: proc.cpt_code,
+            action: 'document_necessity',
+            reason: `Service frequency limit may be exceeded (${countThisYear}/${limit.max_per_year} per year)`
+          });
+        }
+
+        // Check interval requirement
+        if (limit.requires_interval_days && lastServiceDate) {
+          const daysSinceLast = Math.floor((now.getTime() - lastServiceDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysSinceLast < limit.requires_interval_days) {
+            issues.push({
+              type: 'FREQUENCY_INTERVAL_VIOLATION',
+              severity: 'medium',
+              code: proc.cpt_code,
+              message: `CPT ${proc.cpt_code}: Last performed ${daysSinceLast} days ago. Recommended interval is ${limit.requires_interval_days} days.`,
+              correction: `Document clinical change or new symptoms justifying repeat service. ${limit.exception_note || ''}`,
+              details: {
+                cpt_code: proc.cpt_code,
+                days_since_last: daysSinceLast,
+                required_interval: limit.requires_interval_days,
+                last_service_date: lastServiceDate.toISOString()
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // ========================================
     // CALCULATE RISK SCORE
     // ========================================
     const criticalCount = issues.filter(i => i.severity === 'critical').length;
@@ -445,12 +549,13 @@ serve(async (req) => {
           high: highCount,
           medium: mediumCount,
           low: lowCount,
-          checks_performed: [
+        checks_performed: [
             'MUE Edits (Unit Limits)',
             'NCCI PTP Edits (Bundling)',
             'Modifier Validation',
             'Medical Necessity',
-            'Payer-Specific Rules'
+            'Payer-Specific Rules',
+            'Frequency Limits'
           ]
         },
         input_summary: {

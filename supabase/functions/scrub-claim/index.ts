@@ -263,7 +263,9 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
           procedures: claimInfo.procedures,
           icd_codes: claimInfo.icd_codes || [],
           payer: claimInfo.payer,
-          place_of_service: claimInfo.place_of_service
+          place_of_service: claimInfo.place_of_service,
+          patient_name: claimInfo.patient_name,
+          patient_id: linkedClaimId
         })
       }
     );
