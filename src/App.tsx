@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import DocumentUpload from "./pages/DocumentUpload";
 import Claims from "./pages/Claims";
 import ClaimScrubber from "./pages/ClaimScrubber";
+import ScrubHistory from "./pages/ScrubHistory";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/upload" element={<DocumentUpload />} />
           <Route path="/claims" element={<Claims />} />
           <Route path="/scrubber" element={<ClaimScrubber />} />
+          <Route path="/scrub-history" element={<ScrubHistory />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
