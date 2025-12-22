@@ -1163,6 +1163,57 @@ export type Database = {
           },
         ]
       }
+      frequency_limits: {
+        Row: {
+          cpt_code: string
+          created_at: string | null
+          description: string | null
+          exception_diagnoses: string[] | null
+          exception_modifiers: string[] | null
+          exception_note: string | null
+          id: string
+          max_per_day: number | null
+          max_per_month: number | null
+          max_per_week: number | null
+          max_per_year: number | null
+          payer: string | null
+          requires_interval_days: number | null
+          reset_on_diagnosis_change: boolean | null
+        }
+        Insert: {
+          cpt_code: string
+          created_at?: string | null
+          description?: string | null
+          exception_diagnoses?: string[] | null
+          exception_modifiers?: string[] | null
+          exception_note?: string | null
+          id?: string
+          max_per_day?: number | null
+          max_per_month?: number | null
+          max_per_week?: number | null
+          max_per_year?: number | null
+          payer?: string | null
+          requires_interval_days?: number | null
+          reset_on_diagnosis_change?: boolean | null
+        }
+        Update: {
+          cpt_code?: string
+          created_at?: string | null
+          description?: string | null
+          exception_diagnoses?: string[] | null
+          exception_modifiers?: string[] | null
+          exception_note?: string | null
+          id?: string
+          max_per_day?: number | null
+          max_per_month?: number | null
+          max_per_week?: number | null
+          max_per_year?: number | null
+          payer?: string | null
+          requires_interval_days?: number | null
+          reset_on_diagnosis_change?: boolean | null
+        }
+        Relationships: []
+      }
       generated_letters: {
         Row: {
           content: string
