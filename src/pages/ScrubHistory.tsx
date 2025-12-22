@@ -44,8 +44,10 @@ import {
   TrendingDown,
   Download,
   RefreshCw,
+  DollarSign,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { DenialOutcomeTracker } from "@/components/DenialOutcomeTracker";
 
 interface ClaimInfo {
   patient_name?: string;
@@ -76,6 +78,24 @@ export default function ScrubHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [selectedScrub, setSelectedScrub] = useState<ScrubResult | null>(null);
+  const [outcomeModalOpen, setOutcomeModalOpen] = useState(false);
+  const [selectedForOutcome, setSelectedForOutcome] = useState<any>(null);
+
+  const handleRecordOutcome = (result: ScrubResult) => {
+    setSelectedForOutcome({
+      id: result.id,
+      patient_name: result.claim_info?.patient_name || 'Unknown',
+      payer: result.claim_info?.payer || 'Unknown',
+      procedure_codes: result.claim_info?.procedures?.map((p) => p.cpt_code) || [],
+      icd_codes: result.claim_info?.icd_codes || [],
+      risk_score: result.denial_risk_score,
+      risk_level: result.risk_level,
+      issues_count: (result.critical_count || 0) + (result.high_count || 0) + 
+                    (result.medium_count || 0) + (result.low_count || 0),
+      claim_id: undefined
+    });
+    setOutcomeModalOpen(true);
+  };
 
   const { data: scrubs, isLoading, refetch } = useQuery({
     queryKey: ['scrub-history'],
@@ -342,16 +362,31 @@ export default function ScrubHistory() {
                         {formatDistanceToNow(new Date(scrub.created_at), { addSuffix: true })}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedScrub(scrub);
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedScrub(scrub);
+                            }}
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRecordOutcome(scrub);
+                            }}
+                            title="Record Outcome"
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -527,6 +562,14 @@ export default function ScrubHistory() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Denial Outcome Tracker Modal */}
+      <DenialOutcomeTracker
+        isOpen={outcomeModalOpen}
+        onClose={() => setOutcomeModalOpen(false)}
+        scrubResult={selectedForOutcome}
+        onSaved={() => refetch()}
+      />
     </div>
   );
 }
