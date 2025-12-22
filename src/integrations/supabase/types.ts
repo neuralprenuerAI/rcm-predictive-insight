@@ -1553,11 +1553,16 @@ export type Database = {
         Row: {
           action_required: string | null
           active: boolean | null
+          coverage_type: string | null
+          covered_diagnoses: string[] | null
           cpt_codes: string[] | null
           created_at: string | null
           denial_reason_codes: string[] | null
+          documentation_required: string | null
+          frequency_limit: string | null
           icd_codes: string[] | null
           id: string
+          mac_contractor: string | null
           payer_id: string | null
           payer_name: string
           rule_description: string
@@ -1568,11 +1573,16 @@ export type Database = {
         Insert: {
           action_required?: string | null
           active?: boolean | null
+          coverage_type?: string | null
+          covered_diagnoses?: string[] | null
           cpt_codes?: string[] | null
           created_at?: string | null
           denial_reason_codes?: string[] | null
+          documentation_required?: string | null
+          frequency_limit?: string | null
           icd_codes?: string[] | null
           id?: string
+          mac_contractor?: string | null
           payer_id?: string | null
           payer_name: string
           rule_description: string
@@ -1583,11 +1593,16 @@ export type Database = {
         Update: {
           action_required?: string | null
           active?: boolean | null
+          coverage_type?: string | null
+          covered_diagnoses?: string[] | null
           cpt_codes?: string[] | null
           created_at?: string | null
           denial_reason_codes?: string[] | null
+          documentation_required?: string | null
+          frequency_limit?: string | null
           icd_codes?: string[] | null
           id?: string
+          mac_contractor?: string | null
           payer_id?: string | null
           payer_name?: string
           rule_description?: string
