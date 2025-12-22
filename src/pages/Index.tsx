@@ -14,7 +14,7 @@ import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NotificationFeed, ScrubberStatsCard, RecentScrubsCard } from "@/components/dashboard";
+import { NotificationFeed, ScrubberStatsCard, RecentScrubsCard, DailyDigest } from "@/components/dashboard";
 import { Shield, Zap, ArrowRight } from "lucide-react";
 
 const Index = () => {
@@ -82,6 +82,7 @@ const Index = () => {
               <h1 className="text-3xl font-bold text-foreground mb-2">Healthcare RCM Dashboard</h1>
               <p className="text-muted-foreground">Real-time revenue cycle performance metrics</p>
             </div>
+            <DailyDigest />
             <QuickActionCard />
             <DashboardMetrics />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
