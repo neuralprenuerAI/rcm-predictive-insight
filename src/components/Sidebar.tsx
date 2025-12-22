@@ -9,7 +9,8 @@ import {
   Settings,
   FileText,
   Users,
-  Shield
+  Shield,
+  TrendingDown
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -26,6 +27,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
     { id: "patients", label: "Patients", icon: Users },
     { id: "claim-review", label: "Claim Review", icon: FileUp },
     { id: "scrubber", label: "Claim Scrubber", icon: Shield, isRoute: true, route: "/scrubber" },
+    { id: "scrub-history", label: "Scrub History", icon: TrendingDown, isRoute: true, route: "/scrub-history" },
     { id: "denials", label: "Denials & Appeals", icon: AlertCircle },
     { id: "authorizations", label: "Authorizations", icon: FileText },
     { id: "payment-posting", label: "Payment Posting", icon: DollarSign },
