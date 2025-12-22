@@ -14,7 +14,7 @@ import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NotificationFeed, ScrubberStatsCard, RecentScrubsCard, DailyDigest } from "@/components/dashboard";
+import { NotificationFeed, ScrubberStatsCard, RecentScrubsCard, DailyDigest, ActionAlerts } from "@/components/dashboard";
 import { Shield, Zap, ArrowRight } from "lucide-react";
 
 const Index = () => {
@@ -93,7 +93,10 @@ const Index = () => {
               <div className="lg:col-span-2">
                 <RecentScrubsCard />
               </div>
-              <NotificationFeed />
+              <div className="space-y-6">
+                <ActionAlerts />
+                <NotificationFeed />
+              </div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ScrubberStatsCard />
