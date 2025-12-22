@@ -685,6 +685,105 @@ export type Database = {
           },
         ]
       }
+      denial_outcomes: {
+        Row: {
+          billed_amount: number | null
+          claim_id: string | null
+          created_at: string | null
+          date_adjudicated: string | null
+          date_of_service: string | null
+          date_submitted: string | null
+          denial_category: string | null
+          denial_reason_code: string | null
+          denial_reason_description: string | null
+          denied_amount: number | null
+          icd_codes: string[] | null
+          id: string
+          issues_flagged: number | null
+          notes: string | null
+          outcome: string
+          paid_amount: number | null
+          patient_name: string | null
+          payer: string | null
+          predicted_risk_level: string | null
+          predicted_risk_score: number | null
+          procedure_codes: string[] | null
+          scrub_result_id: string | null
+          updated_at: string | null
+          user_id: string
+          was_prediction_correct: boolean | null
+        }
+        Insert: {
+          billed_amount?: number | null
+          claim_id?: string | null
+          created_at?: string | null
+          date_adjudicated?: string | null
+          date_of_service?: string | null
+          date_submitted?: string | null
+          denial_category?: string | null
+          denial_reason_code?: string | null
+          denial_reason_description?: string | null
+          denied_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          issues_flagged?: number | null
+          notes?: string | null
+          outcome: string
+          paid_amount?: number | null
+          patient_name?: string | null
+          payer?: string | null
+          predicted_risk_level?: string | null
+          predicted_risk_score?: number | null
+          procedure_codes?: string[] | null
+          scrub_result_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          was_prediction_correct?: boolean | null
+        }
+        Update: {
+          billed_amount?: number | null
+          claim_id?: string | null
+          created_at?: string | null
+          date_adjudicated?: string | null
+          date_of_service?: string | null
+          date_submitted?: string | null
+          denial_category?: string | null
+          denial_reason_code?: string | null
+          denial_reason_description?: string | null
+          denied_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          issues_flagged?: number | null
+          notes?: string | null
+          outcome?: string
+          paid_amount?: number | null
+          patient_name?: string | null
+          payer?: string | null
+          predicted_risk_level?: string | null
+          predicted_risk_score?: number | null
+          procedure_codes?: string[] | null
+          scrub_result_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          was_prediction_correct?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denial_outcomes_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "denial_outcomes_scrub_result_id_fkey"
+            columns: ["scrub_result_id"]
+            isOneToOne: false
+            referencedRelation: "claim_scrub_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       denials: {
         Row: {
           appeal_status: string | null
@@ -2374,7 +2473,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cpt_denial_patterns: {
+        Row: {
+          cpt_code: string | null
+          denial_rate: number | null
+          denied_count: number | null
+          highest_denial_payer: string | null
+          most_common_denial_reason: string | null
+          total_claims: number | null
+        }
+        Relationships: []
+      }
+      payer_denial_patterns: {
+        Row: {
+          avg_predicted_risk: number | null
+          denial_rate: number | null
+          denied_count: number | null
+          most_common_denial_reason: string | null
+          paid_count: number | null
+          partial_count: number | null
+          payer: string | null
+          prediction_accuracy: number | null
+          total_claims: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       link_service_requests_to_patients: { Args: never; Returns: undefined }
