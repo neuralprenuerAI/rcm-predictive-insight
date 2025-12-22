@@ -71,7 +71,7 @@ interface ScrubResult {
   created_at: string;
 }
 
-export default function ScrubAnalytics() {
+export default function Analytics() {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState("30");
 
@@ -217,7 +217,7 @@ export default function ScrubAnalytics() {
           <div>
             <div className="flex items-center gap-2">
               <BarChart3 className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold text-foreground">Scrub Analytics</h1>
+              <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
             </div>
             <p className="text-sm text-muted-foreground">
               Insights and trends from your claim scrubbing

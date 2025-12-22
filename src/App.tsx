@@ -10,7 +10,7 @@ import DocumentUpload from "./pages/DocumentUpload";
 import Claims from "./pages/Claims";
 import ClaimScrubber from "./pages/ClaimScrubber";
 import ScrubHistory from "./pages/ScrubHistory";
-import ScrubAnalytics from "./pages/ScrubAnalytics";
+import Analytics from "./pages/Analytics";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +27,7 @@ const App = () => (
           <Route path="/claims" element={<Claims />} />
           <Route path="/scrubber" element={<ClaimScrubber />} />
           <Route path="/scrub-history" element={<ScrubHistory />} />
-          <Route path="/scrub-analytics" element={<ScrubAnalytics />} />
+          <Route path="/analytics" element={<Analytics />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
