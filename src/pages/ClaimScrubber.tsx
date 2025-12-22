@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertCircle,
   AlertTriangle,
@@ -30,6 +32,7 @@ import {
   Trash2,
   ClipboardCheck,
   TrendingDown,
+  Layers,
 } from "lucide-react";
 import {
   Collapsible,
@@ -117,6 +120,31 @@ export default function ClaimScrubber() {
   const [icdCodes, setIcdCodes] = useState('');
   const [payer, setPayer] = useState('');
   const [patientName, setPatientName] = useState('');
+
+  // Batch scrub state
+  const [selectedClaims, setSelectedClaims] = useState<string[]>([]);
+  const [batchResults, setBatchResults] = useState<any[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+
+  // Fetch user's claims for batch selection
+  const { data: userClaims, isLoading: claimsLoading } = useQuery({
+    queryKey: ['user-claims-for-scrub'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('claims')
+        .select('id, patient_name, payer, procedure_codes, diagnosis_codes, billed_amount, created_at, status')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (error) return [];
+      return data || [];
+    },
+  });
 
   // File upload handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,6 +356,90 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
     setPatientName('');
   };
 
+  // Batch scrub handler
+  const handleBatchScrub = async () => {
+    if (selectedClaims.length === 0) {
+      toast({
+        title: "No claims selected",
+        description: "Please select at least one claim to scrub",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsBatchProcessing(true);
+    setBatchResults([]);
+    setBatchProgress(0);
+
+    const results: any[] = [];
+    
+    for (let i = 0; i < selectedClaims.length; i++) {
+      const claimId = selectedClaims[i];
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('scrub-claim', {
+          body: { claim_id: claimId }
+        });
+
+        if (error) {
+          results.push({
+            claim_id: claimId,
+            success: false,
+            error: error.message,
+            claim: userClaims?.find(c => c.id === claimId)
+          });
+        } else {
+          results.push({
+            claim_id: claimId,
+            success: true,
+            ...data,
+            claim: userClaims?.find(c => c.id === claimId)
+          });
+        }
+      } catch (err) {
+        results.push({
+          claim_id: claimId,
+          success: false,
+          error: 'Unknown error',
+          claim: userClaims?.find(c => c.id === claimId)
+        });
+      }
+
+      setBatchProgress(Math.round(((i + 1) / selectedClaims.length) * 100));
+    }
+
+    setBatchResults(results);
+    setIsBatchProcessing(false);
+    setSelectedClaims([]);
+
+    const successCount = results.filter(r => r.success).length;
+    const highRiskCount = results.filter(r => r.success && (r.risk_level === 'high' || r.risk_level === 'critical')).length;
+
+    toast({
+      title: "Batch Scrub Complete",
+      description: `Scrubbed ${successCount}/${selectedClaims.length} claims. ${highRiskCount} high-risk claims found.`,
+      variant: highRiskCount > 0 ? "destructive" : "default"
+    });
+  };
+
+  // Toggle claim selection
+  const toggleClaimSelection = (claimId: string) => {
+    setSelectedClaims(prev => 
+      prev.includes(claimId) 
+        ? prev.filter(id => id !== claimId)
+        : [...prev, claimId]
+    );
+  };
+
+  // Select all claims
+  const toggleSelectAll = () => {
+    if (selectedClaims.length === userClaims?.length) {
+      setSelectedClaims([]);
+    } else {
+      setSelectedClaims(userClaims?.map(c => c.id) || []);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
 
@@ -368,7 +480,7 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="upload" className="flex items-center gap-2">
                   <Upload className="h-4 w-4" />
                   Upload PDF
@@ -376,6 +488,10 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
                 <TabsTrigger value="manual" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Manual Entry
+                </TabsTrigger>
+                <TabsTrigger value="batch" className="flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  Batch Scrub
                 </TabsTrigger>
               </TabsList>
 
@@ -504,27 +620,195 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
                   </Select>
                 </div>
               </TabsContent>
+
+              {/* Batch Scrub Tab */}
+              <TabsContent value="batch" className="space-y-4">
+                {batchResults.length > 0 ? (
+                  // Show batch results
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">Batch Results</p>
+                      <Button variant="outline" size="sm" onClick={() => setBatchResults([])}>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        New Batch
+                      </Button>
+                    </div>
+                    <ScrollArea className="h-[280px]">
+                      <div className="space-y-2">
+                        {batchResults.map((result, idx) => (
+                          <div key={idx} className="border rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                {!result.success ? <XCircle className="h-5 w-5 text-destructive" /> :
+                                 result.risk_level === 'critical' ? <XCircle className="h-5 w-5 text-red-600" /> :
+                                 result.risk_level === 'high' ? <AlertCircle className="h-5 w-5 text-orange-500" /> :
+                                 result.risk_level === 'medium' ? <AlertTriangle className="h-5 w-5 text-yellow-600" /> :
+                                 <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {result.claim?.patient_name || 'Unknown Patient'}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {result.claim?.payer || 'Unknown Payer'}
+                                  </p>
+                                </div>
+                              </div>
+                              {result.success ? (
+                                <div className="text-right">
+                                  <Badge className={`${
+                                    result.risk_level === 'critical' ? 'bg-red-100 text-red-800' :
+                                    result.risk_level === 'high' ? 'bg-orange-100 text-orange-800' :
+                                    result.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-green-100 text-green-800'
+                                  }`}>
+                                    {result.denial_risk_score}%
+                                  </Badge>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {result.total_issues} issues
+                                  </p>
+                                </div>
+                              ) : (
+                                <Badge variant="destructive">Failed</Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    
+                    {/* Batch Summary */}
+                    <div className="grid grid-cols-4 gap-2 text-center bg-muted/50 rounded-lg p-3">
+                      <div>
+                        <p className="text-lg font-bold">{batchResults.length}</p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-green-600">
+                          {batchResults.filter(r => r.success && r.risk_level === 'low').length}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Clean</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-orange-600">
+                          {batchResults.filter(r => r.success && (r.risk_level === 'high' || r.risk_level === 'critical')).length}
+                        </p>
+                        <p className="text-xs text-muted-foreground">High Risk</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-red-600">
+                          {batchResults.filter(r => !r.success).length}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Failed</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : isBatchProcessing ? (
+                  // Show progress
+                  <div className="text-center py-12 space-y-4">
+                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+                    <p className="font-medium">Scrubbing {selectedClaims.length} claims...</p>
+                    <div className="max-w-xs mx-auto space-y-2">
+                      <Progress value={batchProgress} />
+                      <p className="text-sm text-muted-foreground">{batchProgress}% complete</p>
+                    </div>
+                  </div>
+                ) : claimsLoading ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-muted-foreground" />
+                  </div>
+                ) : userClaims && userClaims.length > 0 ? (
+                  // Show claim selection
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Checkbox 
+                          checked={selectedClaims.length === userClaims.length}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {selectedClaims.length} of {userClaims.length} selected
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <ScrollArea className="h-[240px]">
+                      <div className="space-y-2">
+                        {userClaims.map((claim) => (
+                          <div 
+                            key={claim.id}
+                            className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                              selectedClaims.includes(claim.id) ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                            }`}
+                            onClick={() => toggleClaimSelection(claim.id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox 
+                                checked={selectedClaims.includes(claim.id)}
+                                onCheckedChange={() => toggleClaimSelection(claim.id)}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">
+                                  {claim.patient_name || 'Unknown Patient'}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {claim.payer || 'Unknown Payer'} • {
+                                    Array.isArray(claim.procedure_codes) 
+                                      ? claim.procedure_codes.join(', ')
+                                      : claim.procedure_codes || 'No CPT'
+                                  }
+                                </p>
+                              </div>
+                              <div>
+                                <Badge variant="outline" className="text-xs">
+                                  {claim.status || 'pending'}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+
+                    <Button 
+                      className="w-full" 
+                      onClick={handleBatchScrub}
+                      disabled={selectedClaims.length === 0}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Scrub {selectedClaims.length} Claim{selectedClaims.length !== 1 ? 's' : ''}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">No claims found</p>
+                    <p className="text-sm">Add claims first, then come back to batch scrub</p>
+                  </div>
+                )}
+              </TabsContent>
             </Tabs>
 
-            {/* Scrub Button */}
-            <Button
-              className="w-full mt-6"
-              size="lg"
-              onClick={handleScrub}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Scrubbing Claim...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-5 w-5 mr-2" />
-                  Scrub Claim
-                </>
-              )}
-            </Button>
+            {/* Scrub Button - only show for upload/manual tabs */}
+            {activeTab !== 'batch' && (
+              <Button
+                className="w-full mt-6"
+                size="lg"
+                onClick={handleScrub}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Scrubbing Claim...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-2" />
+                    Scrub Claim
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
         </Card>
 
