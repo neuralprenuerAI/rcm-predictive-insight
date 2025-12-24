@@ -131,10 +131,10 @@ serve(async (req) => {
 });
 
 async function extractClinicalData(noteContent: string, specialty?: string): Promise<ExtractedData> {
-  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
   
-  if (!geminiApiKey) {
-    console.log("No Gemini API key, using basic extraction");
+  if (!lovableApiKey) {
+    console.log("No Lovable API key, using basic extraction");
     return basicExtraction(noteContent);
   }
 
@@ -142,9 +142,9 @@ async function extractClinicalData(noteContent: string, specialty?: string): Pro
     ? `This is a ${specialty} clinical note.` 
     : "This is a clinical note.";
 
-  const prompt = `You are a medical coding expert. Analyze this clinical note and extract structured information for billing purposes.
+  const systemPrompt = `You are a medical coding expert. Analyze clinical notes and extract structured information for billing purposes. Return ONLY valid JSON, no other text.`;
 
-${specialtyContext}
+  const userPrompt = `${specialtyContext}
 
 CLINICAL NOTE:
 ${noteContent}
@@ -187,32 +187,42 @@ Focus on:
 Return ONLY valid JSON, no other text.`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 2000,
-          },
-        }),
-      }
-    );
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000,
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+      console.error("Lovable AI API error:", response.status, errorText);
+      
+      if (response.status === 429) {
+        console.error("Rate limit exceeded");
+      }
+      if (response.status === 402) {
+        console.error("Payment required - add credits to workspace");
+      }
+      
       return basicExtraction(noteContent);
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = data.choices?.[0]?.message?.content;
 
     if (!text) {
-      console.error("No text in Gemini response");
+      console.error("No text in AI response");
       return basicExtraction(noteContent);
     }
 
@@ -245,7 +255,7 @@ Return ONLY valid JSON, no other text.`;
     };
 
   } catch (error) {
-    console.error("Error calling Gemini:", error);
+    console.error("Error calling Lovable AI:", error);
     return basicExtraction(noteContent);
   }
 }
