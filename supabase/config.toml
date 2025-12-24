@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.analyze-clinical-note]
 verify_jwt = true
+
+[functions.predict-cpt-codes]
+verify_jwt = true
