@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      actual_charges: {
+        Row: {
+          audit_id: string
+          charge_amount: number | null
+          cpt_code: string
+          cpt_description: string | null
+          created_at: string | null
+          external_charge_id: string | null
+          icd_codes: string[] | null
+          id: string
+          matched_predicted_id: string | null
+          modifiers: string[] | null
+          source: string | null
+          units: number | null
+        }
+        Insert: {
+          audit_id: string
+          charge_amount?: number | null
+          cpt_code: string
+          cpt_description?: string | null
+          created_at?: string | null
+          external_charge_id?: string | null
+          icd_codes?: string[] | null
+          id?: string
+          matched_predicted_id?: string | null
+          modifiers?: string[] | null
+          source?: string | null
+          units?: number | null
+        }
+        Update: {
+          audit_id?: string
+          charge_amount?: number | null
+          cpt_code?: string
+          cpt_description?: string | null
+          created_at?: string | null
+          external_charge_id?: string | null
+          icd_codes?: string[] | null
+          id?: string
+          matched_predicted_id?: string | null
+          modifiers?: string[] | null
+          source?: string | null
+          units?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_charges_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "charge_audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adjustment_reason_codes: {
         Row: {
           category: string | null
@@ -152,6 +205,100 @@ export type Database = {
           },
         ]
       }
+      audit_discrepancies: {
+        Row: {
+          actual_charge_id: string | null
+          actual_cpt: string | null
+          actual_modifiers: string[] | null
+          actual_units: number | null
+          ai_explanation: string | null
+          audit_id: string
+          created_at: string | null
+          description: string | null
+          discrepancy_type: string
+          id: string
+          predicted_charge_id: string | null
+          predicted_cpt: string | null
+          predicted_modifiers: string[] | null
+          predicted_units: number | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          revenue_impact: number | null
+          severity: string | null
+          status: string | null
+          supporting_text: string | null
+        }
+        Insert: {
+          actual_charge_id?: string | null
+          actual_cpt?: string | null
+          actual_modifiers?: string[] | null
+          actual_units?: number | null
+          ai_explanation?: string | null
+          audit_id: string
+          created_at?: string | null
+          description?: string | null
+          discrepancy_type: string
+          id?: string
+          predicted_charge_id?: string | null
+          predicted_cpt?: string | null
+          predicted_modifiers?: string[] | null
+          predicted_units?: number | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          revenue_impact?: number | null
+          severity?: string | null
+          status?: string | null
+          supporting_text?: string | null
+        }
+        Update: {
+          actual_charge_id?: string | null
+          actual_cpt?: string | null
+          actual_modifiers?: string[] | null
+          actual_units?: number | null
+          ai_explanation?: string | null
+          audit_id?: string
+          created_at?: string | null
+          description?: string | null
+          discrepancy_type?: string
+          id?: string
+          predicted_charge_id?: string | null
+          predicted_cpt?: string | null
+          predicted_modifiers?: string[] | null
+          predicted_units?: number | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          revenue_impact?: number | null
+          severity?: string | null
+          status?: string | null
+          supporting_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_discrepancies_actual_charge_id_fkey"
+            columns: ["actual_charge_id"]
+            isOneToOne: false
+            referencedRelation: "actual_charges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_discrepancies_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "charge_audits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_discrepancies_predicted_charge_id_fkey"
+            columns: ["predicted_charge_id"]
+            isOneToOne: false
+            referencedRelation: "predicted_charges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       authorizations: {
         Row: {
           auth_number: string | null
@@ -205,6 +352,83 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      charge_audits: {
+        Row: {
+          actual_count: number | null
+          audit_date: string | null
+          clinical_note_id: string | null
+          confirmed_revenue: number | null
+          created_at: string | null
+          id: string
+          matched_count: number | null
+          missing_count: number | null
+          overall_confidence: number | null
+          overcoded_count: number | null
+          potential_revenue: number | null
+          predicted_count: number | null
+          processing_time_ms: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          status: string | null
+          undercoded_count: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actual_count?: number | null
+          audit_date?: string | null
+          clinical_note_id?: string | null
+          confirmed_revenue?: number | null
+          created_at?: string | null
+          id?: string
+          matched_count?: number | null
+          missing_count?: number | null
+          overall_confidence?: number | null
+          overcoded_count?: number | null
+          potential_revenue?: number | null
+          predicted_count?: number | null
+          processing_time_ms?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string | null
+          undercoded_count?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actual_count?: number | null
+          audit_date?: string | null
+          clinical_note_id?: string | null
+          confirmed_revenue?: number | null
+          created_at?: string | null
+          id?: string
+          matched_count?: number | null
+          missing_count?: number | null
+          overall_confidence?: number | null
+          overcoded_count?: number | null
+          potential_revenue?: number | null
+          predicted_count?: number | null
+          processing_time_ms?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string | null
+          undercoded_count?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_audits_clinical_note_id_fkey"
+            columns: ["clinical_note_id"]
+            isOneToOne: false
+            referencedRelation: "clinical_notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       claim_adjustments: {
         Row: {
@@ -571,6 +795,152 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      clinical_notes: {
+        Row: {
+          created_at: string | null
+          encounter_date: string | null
+          encounter_id: string | null
+          error_message: string | null
+          facility_name: string | null
+          id: string
+          note_type: string | null
+          parsed_content: Json | null
+          patient_id: string | null
+          patient_name: string | null
+          processed_at: string | null
+          provider_name: string | null
+          provider_npi: string | null
+          raw_content: string | null
+          source: string | null
+          source_document_id: string | null
+          specialty: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          encounter_date?: string | null
+          encounter_id?: string | null
+          error_message?: string | null
+          facility_name?: string | null
+          id?: string
+          note_type?: string | null
+          parsed_content?: Json | null
+          patient_id?: string | null
+          patient_name?: string | null
+          processed_at?: string | null
+          provider_name?: string | null
+          provider_npi?: string | null
+          raw_content?: string | null
+          source?: string | null
+          source_document_id?: string | null
+          specialty?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          encounter_date?: string | null
+          encounter_id?: string | null
+          error_message?: string | null
+          facility_name?: string | null
+          id?: string
+          note_type?: string | null
+          parsed_content?: Json | null
+          patient_id?: string | null
+          patient_name?: string | null
+          processed_at?: string | null
+          provider_name?: string | null
+          provider_npi?: string | null
+          raw_content?: string | null
+          source?: string | null
+          source_document_id?: string | null
+          specialty?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinical_notes_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cpt_documentation_rules: {
+        Row: {
+          active: boolean | null
+          commercial_rate: number | null
+          common_modifiers: string[] | null
+          cpt_category: string | null
+          cpt_code: string
+          cpt_description: string | null
+          created_at: string | null
+          em_level: number | null
+          exclusion_keywords: string[] | null
+          id: string
+          mdm_level: string | null
+          medicare_rate: number | null
+          modifier_triggers: Json | null
+          required_elements: Json | null
+          required_keywords: string[] | null
+          source: string | null
+          specialty: string | null
+          supporting_keywords: string[] | null
+          time_threshold_minutes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          commercial_rate?: number | null
+          common_modifiers?: string[] | null
+          cpt_category?: string | null
+          cpt_code: string
+          cpt_description?: string | null
+          created_at?: string | null
+          em_level?: number | null
+          exclusion_keywords?: string[] | null
+          id?: string
+          mdm_level?: string | null
+          medicare_rate?: number | null
+          modifier_triggers?: Json | null
+          required_elements?: Json | null
+          required_keywords?: string[] | null
+          source?: string | null
+          specialty?: string | null
+          supporting_keywords?: string[] | null
+          time_threshold_minutes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          commercial_rate?: number | null
+          common_modifiers?: string[] | null
+          cpt_category?: string | null
+          cpt_code?: string
+          cpt_description?: string | null
+          created_at?: string | null
+          em_level?: number | null
+          exclusion_keywords?: string[] | null
+          id?: string
+          mdm_level?: string | null
+          medicare_rate?: number | null
+          modifier_triggers?: Json | null
+          required_elements?: Json | null
+          required_keywords?: string[] | null
+          source?: string | null
+          specialty?: string | null
+          supporting_keywords?: string[] | null
+          time_threshold_minutes?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1808,6 +2178,71 @@ export type Database = {
             columns: ["claim_id"]
             isOneToOne: false
             referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predicted_charges: {
+        Row: {
+          audit_id: string
+          confidence_level: string | null
+          confidence_score: number | null
+          cpt_code: string
+          cpt_description: string | null
+          created_at: string | null
+          documentation_elements: Json | null
+          estimated_value: number | null
+          icd_codes: string[] | null
+          id: string
+          match_status: string | null
+          matched_actual_id: string | null
+          modifiers: string[] | null
+          reasoning: string | null
+          supporting_text: string | null
+          units: number | null
+        }
+        Insert: {
+          audit_id: string
+          confidence_level?: string | null
+          confidence_score?: number | null
+          cpt_code: string
+          cpt_description?: string | null
+          created_at?: string | null
+          documentation_elements?: Json | null
+          estimated_value?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          match_status?: string | null
+          matched_actual_id?: string | null
+          modifiers?: string[] | null
+          reasoning?: string | null
+          supporting_text?: string | null
+          units?: number | null
+        }
+        Update: {
+          audit_id?: string
+          confidence_level?: string | null
+          confidence_score?: number | null
+          cpt_code?: string
+          cpt_description?: string | null
+          created_at?: string | null
+          documentation_elements?: Json | null
+          estimated_value?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          match_status?: string | null
+          matched_actual_id?: string | null
+          modifiers?: string[] | null
+          reasoning?: string | null
+          supporting_text?: string | null
+          units?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predicted_charges_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "charge_audits"
             referencedColumns: ["id"]
           },
         ]
