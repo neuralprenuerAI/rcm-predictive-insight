@@ -71,3 +71,6 @@ verify_jwt = true
 
 [functions.predict-cpt-codes]
 verify_jwt = true
+
+[functions.compare-charges]
+verify_jwt = true
