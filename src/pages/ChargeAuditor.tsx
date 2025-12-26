@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  TrendingUp
+  TrendingUp,
+  ArrowLeft
 } from "lucide-react";
 
 interface ActualCharge {
@@ -339,12 +340,17 @@ export default function ChargeAuditor() {
 
       <div className="flex justify-between items-center">
 
-        <div>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
 
-          <h1 className="text-3xl font-bold tracking-tight">AI Charge Capture Auditor</h1>
+            <h1 className="text-3xl font-bold tracking-tight">AI Charge Capture Auditor</h1>
 
-          <p className="text-muted-foreground">Analyze clinical notes to find missed revenue opportunities</p>
+            <p className="text-muted-foreground">Analyze clinical notes to find missed revenue opportunities</p>
 
+          </div>
         </div>
 
         <Button variant="outline" onClick={() => navigate("/audit-history")}>
