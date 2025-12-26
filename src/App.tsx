@@ -11,6 +11,7 @@ import Claims from "./pages/Claims";
 import ClaimScrubber from "./pages/ClaimScrubber";
 import ScrubHistory from "./pages/ScrubHistory";
 import Analytics from "./pages/Analytics";
+import ChargeAuditor from "./pages/ChargeAuditor";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/scrubber" element={<ClaimScrubber />} />
           <Route path="/scrub-history" element={<ScrubHistory />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/charge-auditor" element={<ChargeAuditor />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
