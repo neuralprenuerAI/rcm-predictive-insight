@@ -517,14 +517,14 @@ export default function ChargeAuditor() {
                     <div>
                       <Label className="text-xs">Modifiers</Label>
                       <Select
-                        value={charge.modifiers[0] || ""}
-                        onValueChange={(v) => updateCharge(charge.id, "modifiers", v ? [v] : [])}
+                        value={charge.modifiers[0] || "none"}
+                        onValueChange={(v) => updateCharge(charge.id, "modifiers", v === "none" ? [] : [v])}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {COMMON_MODIFIERS.map(m => (
                             <SelectItem key={m} value={m}>{m}</SelectItem>
                           ))}
