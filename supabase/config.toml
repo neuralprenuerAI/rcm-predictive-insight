@@ -74,3 +74,6 @@ verify_jwt = true
 
 [functions.compare-charges]
 verify_jwt = true
+
+[functions.classify-denial]
+verify_jwt = true

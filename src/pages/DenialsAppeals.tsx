@@ -26,13 +26,15 @@ interface Denial {
 
 interface Appeal {
   id: string;
-  denial_id: string;
-  claim_id: string;
-  status: string;
+  denial_queue_id: string | null;
+  claim_id: string | null;
+  status: string | null;
   submitted_at: string | null;
-  content: string | null;
-  outcome: string | null;
+  appeal_date: string | null;
+  outcome_amount: number | null;
 }
+
+// This page uses the old denials table. The new system uses denial_queue + appeals tables.
 
 export default function DenialsAppeals() {
   const [appealDialog, setAppealDialog] = useState(false);
@@ -57,7 +59,7 @@ export default function DenialsAppeals() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('appeals')
-        .select('*')
+        .select('id, denial_queue_id, claim_id, status, submitted_at, appeal_date, outcome_amount')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as Appeal[];
@@ -263,7 +265,7 @@ export default function DenialsAppeals() {
                     <TableCell>
                       {appeal.submitted_at ? new Date(appeal.submitted_at).toLocaleDateString() : '-'}
                     </TableCell>
-                    <TableCell>{appeal.outcome || '-'}</TableCell>
+                    <TableCell>{appeal.outcome_amount ? `$${appeal.outcome_amount}` : '-'}</TableCell>
                     <TableCell>
                       {appeal.status === 'draft' && (
                         <Button 
