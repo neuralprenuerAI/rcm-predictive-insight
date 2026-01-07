@@ -148,45 +148,168 @@ export type Database = {
         }
         Relationships: []
       }
-      appeals: {
+      appeal_templates: {
         Row: {
-          claim_id: string | null
-          content: string | null
-          created_at: string
-          denial_id: string | null
+          active: boolean | null
+          body_template: string
+          created_at: string | null
+          denial_category: string
+          description: string | null
           id: string
-          notes: string | null
-          outcome: string | null
-          status: string
-          submitted_at: string | null
-          updated_at: string
-          user_id: string
+          is_default: boolean | null
+          name: string
+          optional_attachments: string[] | null
+          payer_specific: string | null
+          reason_codes: string[] | null
+          required_attachments: string[] | null
+          subject_template: string | null
+          success_rate: number | null
+          times_used: number | null
+          updated_at: string | null
         }
         Insert: {
-          claim_id?: string | null
-          content?: string | null
-          created_at?: string
-          denial_id?: string | null
+          active?: boolean | null
+          body_template: string
+          created_at?: string | null
+          denial_category: string
+          description?: string | null
           id?: string
-          notes?: string | null
-          outcome?: string | null
-          status?: string
-          submitted_at?: string | null
-          updated_at?: string
-          user_id: string
+          is_default?: boolean | null
+          name: string
+          optional_attachments?: string[] | null
+          payer_specific?: string | null
+          reason_codes?: string[] | null
+          required_attachments?: string[] | null
+          subject_template?: string | null
+          success_rate?: number | null
+          times_used?: number | null
+          updated_at?: string | null
         }
         Update: {
-          claim_id?: string | null
-          content?: string | null
-          created_at?: string
-          denial_id?: string | null
+          active?: boolean | null
+          body_template?: string
+          created_at?: string | null
+          denial_category?: string
+          description?: string | null
           id?: string
-          notes?: string | null
-          outcome?: string | null
-          status?: string
+          is_default?: boolean | null
+          name?: string
+          optional_attachments?: string[] | null
+          payer_specific?: string | null
+          reason_codes?: string[] | null
+          required_attachments?: string[] | null
+          subject_template?: string | null
+          success_rate?: number | null
+          times_used?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      appeals: {
+        Row: {
+          ai_confidence: number | null
+          ai_generated: boolean | null
+          appeal_date: string | null
+          appeal_number: string | null
+          appeal_type: string | null
+          attachments: Json | null
+          claim_id: string | null
+          clinical_justification: string | null
+          confirmation_number: string | null
+          created_at: string | null
+          denial_queue_id: string | null
+          disputed_amount: number | null
+          id: string
+          letter_body: string | null
+          outcome_amount: number | null
+          patient_id: string | null
+          payer_address: string | null
+          payer_email: string | null
+          payer_fax: string | null
+          payer_name: string | null
+          requested_amount: number | null
+          response_date: string | null
+          response_deadline: string | null
+          response_notes: string | null
+          status: string | null
+          subject_line: string | null
+          submission_method: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          supporting_documents: string[] | null
+          template_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_generated?: boolean | null
+          appeal_date?: string | null
+          appeal_number?: string | null
+          appeal_type?: string | null
+          attachments?: Json | null
+          claim_id?: string | null
+          clinical_justification?: string | null
+          confirmation_number?: string | null
+          created_at?: string | null
+          denial_queue_id?: string | null
+          disputed_amount?: number | null
+          id?: string
+          letter_body?: string | null
+          outcome_amount?: number | null
+          patient_id?: string | null
+          payer_address?: string | null
+          payer_email?: string | null
+          payer_fax?: string | null
+          payer_name?: string | null
+          requested_amount?: number | null
+          response_date?: string | null
+          response_deadline?: string | null
+          response_notes?: string | null
+          status?: string | null
+          subject_line?: string | null
+          submission_method?: string | null
           submitted_at?: string | null
-          updated_at?: string
-          user_id?: string
+          submitted_by?: string | null
+          supporting_documents?: string[] | null
+          template_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_generated?: boolean | null
+          appeal_date?: string | null
+          appeal_number?: string | null
+          appeal_type?: string | null
+          attachments?: Json | null
+          claim_id?: string | null
+          clinical_justification?: string | null
+          confirmation_number?: string | null
+          created_at?: string | null
+          denial_queue_id?: string | null
+          disputed_amount?: number | null
+          id?: string
+          letter_body?: string | null
+          outcome_amount?: number | null
+          patient_id?: string | null
+          payer_address?: string | null
+          payer_email?: string | null
+          payer_fax?: string | null
+          payer_name?: string | null
+          requested_amount?: number | null
+          response_date?: string | null
+          response_deadline?: string | null
+          response_notes?: string | null
+          status?: string | null
+          subject_line?: string | null
+          submission_method?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          supporting_documents?: string[] | null
+          template_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -197,10 +320,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "appeals_denial_id_fkey"
-            columns: ["denial_id"]
+            foreignKeyName: "appeals_denial_queue_id_fkey"
+            columns: ["denial_queue_id"]
             isOneToOne: false
-            referencedRelation: "denials"
+            referencedRelation: "denial_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appeals_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appeals_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "appeal_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -971,6 +1108,117 @@ export type Database = {
         }
         Relationships: []
       }
+      denial_actions: {
+        Row: {
+          action_description: string | null
+          action_type: string
+          appeal_id: string | null
+          created_at: string | null
+          denial_queue_id: string | null
+          id: string
+          new_value: string | null
+          performed_at: string | null
+          performed_by: string | null
+          previous_value: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_description?: string | null
+          action_type: string
+          appeal_id?: string | null
+          created_at?: string | null
+          denial_queue_id?: string | null
+          id?: string
+          new_value?: string | null
+          performed_at?: string | null
+          performed_by?: string | null
+          previous_value?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_description?: string | null
+          action_type?: string
+          appeal_id?: string | null
+          created_at?: string | null
+          denial_queue_id?: string | null
+          id?: string
+          new_value?: string | null
+          performed_at?: string | null
+          performed_by?: string | null
+          previous_value?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denial_actions_appeal_id_fkey"
+            columns: ["appeal_id"]
+            isOneToOne: false
+            referencedRelation: "appeals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "denial_actions_denial_queue_id_fkey"
+            columns: ["denial_queue_id"]
+            isOneToOne: false
+            referencedRelation: "denial_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      denial_classifications: {
+        Row: {
+          active: boolean | null
+          appeal_success_rate: number | null
+          appealable: boolean | null
+          category: string
+          common_causes: string[] | null
+          created_at: string | null
+          id: string
+          reason_code: string
+          reason_description: string | null
+          recommended_action: string | null
+          required_documentation: string[] | null
+          subcategory: string | null
+          typical_appeal_deadline_days: number | null
+          typical_resolution: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          appeal_success_rate?: number | null
+          appealable?: boolean | null
+          category: string
+          common_causes?: string[] | null
+          created_at?: string | null
+          id?: string
+          reason_code: string
+          reason_description?: string | null
+          recommended_action?: string | null
+          required_documentation?: string[] | null
+          subcategory?: string | null
+          typical_appeal_deadline_days?: number | null
+          typical_resolution?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          appeal_success_rate?: number | null
+          appealable?: boolean | null
+          category?: string
+          common_causes?: string[] | null
+          created_at?: string | null
+          id?: string
+          reason_code?: string
+          reason_description?: string | null
+          recommended_action?: string | null
+          required_documentation?: string[] | null
+          subcategory?: string | null
+          typical_appeal_deadline_days?: number | null
+          typical_resolution?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       denial_history: {
         Row: {
           appeal_date: string | null
@@ -1051,6 +1299,44 @@ export type Database = {
             columns: ["scrub_result_id"]
             isOneToOne: false
             referencedRelation: "claim_scrub_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      denial_notes: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          denial_queue_id: string | null
+          id: string
+          note_text: string
+          note_type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          denial_queue_id?: string | null
+          id?: string
+          note_text: string
+          note_type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          denial_queue_id?: string | null
+          id?: string
+          note_text?: string
+          note_type?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denial_notes_denial_queue_id_fkey"
+            columns: ["denial_queue_id"]
+            isOneToOne: false
+            referencedRelation: "denial_queue"
             referencedColumns: ["id"]
           },
         ]
@@ -1150,6 +1436,145 @@ export type Database = {
             columns: ["scrub_result_id"]
             isOneToOne: false
             referencedRelation: "claim_scrub_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      denial_queue: {
+        Row: {
+          adjustment_reason_code: string | null
+          ai_confidence: number | null
+          allowed_amount: number | null
+          appeal_deadline: string | null
+          assigned_at: string | null
+          assigned_to: string | null
+          billed_amount: number | null
+          claim_id: string | null
+          classification_id: string | null
+          classified_category: string | null
+          cpt_code: string | null
+          cpt_description: string | null
+          created_at: string | null
+          days_until_deadline: number | null
+          denial_date: string
+          denied_amount: number | null
+          icd_codes: string[] | null
+          id: string
+          modifiers: string[] | null
+          patient_id: string | null
+          payer_id: string | null
+          payer_name: string | null
+          priority: string | null
+          reason_code: string | null
+          reason_description: string | null
+          remark_codes: string[] | null
+          remittance_id: string | null
+          resolution_amount: number | null
+          resolution_date: string | null
+          resolution_notes: string | null
+          resolution_type: string | null
+          root_cause: string | null
+          service_date: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          adjustment_reason_code?: string | null
+          ai_confidence?: number | null
+          allowed_amount?: number | null
+          appeal_deadline?: string | null
+          assigned_at?: string | null
+          assigned_to?: string | null
+          billed_amount?: number | null
+          claim_id?: string | null
+          classification_id?: string | null
+          classified_category?: string | null
+          cpt_code?: string | null
+          cpt_description?: string | null
+          created_at?: string | null
+          days_until_deadline?: number | null
+          denial_date: string
+          denied_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          modifiers?: string[] | null
+          patient_id?: string | null
+          payer_id?: string | null
+          payer_name?: string | null
+          priority?: string | null
+          reason_code?: string | null
+          reason_description?: string | null
+          remark_codes?: string[] | null
+          remittance_id?: string | null
+          resolution_amount?: number | null
+          resolution_date?: string | null
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          root_cause?: string | null
+          service_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          adjustment_reason_code?: string | null
+          ai_confidence?: number | null
+          allowed_amount?: number | null
+          appeal_deadline?: string | null
+          assigned_at?: string | null
+          assigned_to?: string | null
+          billed_amount?: number | null
+          claim_id?: string | null
+          classification_id?: string | null
+          classified_category?: string | null
+          cpt_code?: string | null
+          cpt_description?: string | null
+          created_at?: string | null
+          days_until_deadline?: number | null
+          denial_date?: string
+          denied_amount?: number | null
+          icd_codes?: string[] | null
+          id?: string
+          modifiers?: string[] | null
+          patient_id?: string | null
+          payer_id?: string | null
+          payer_name?: string | null
+          priority?: string | null
+          reason_code?: string | null
+          reason_description?: string | null
+          remark_codes?: string[] | null
+          remittance_id?: string | null
+          resolution_amount?: number | null
+          resolution_date?: string | null
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          root_cause?: string | null
+          service_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "denial_queue_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "denial_queue_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: false
+            referencedRelation: "denial_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "denial_queue_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
             referencedColumns: ["id"]
           },
         ]
