@@ -32,6 +32,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
     { id: "scrub-history", label: "Scrub History", icon: TrendingDown, isRoute: true, route: "/scrub-history" },
     { id: "charge-auditor", label: "Charge Auditor", icon: ClipboardCheck, isRoute: true, route: "/charge-auditor" },
     { id: "audit-history", label: "Audit History", icon: History, isRoute: true, route: "/audit-history" },
+    { id: "denial-management", label: "Denial Management", icon: AlertCircle, isRoute: true, route: "/denial-management" },
     { id: "analytics", label: "Analytics", icon: BarChart3, isRoute: true, route: "/analytics" },
     { id: "denials", label: "Denials & Appeals", icon: AlertCircle },
     { id: "authorizations", label: "Authorizations", icon: FileText },
