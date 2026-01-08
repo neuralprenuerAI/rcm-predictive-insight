@@ -3360,6 +3360,10 @@ export type Database = {
       }
     }
     Functions: {
+      increment_template_usage: {
+        Args: { template_id: string }
+        Returns: undefined
+      }
       link_service_requests_to_patients: { Args: never; Returns: undefined }
     }
     Enums: {
