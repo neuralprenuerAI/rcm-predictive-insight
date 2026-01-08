@@ -77,3 +77,6 @@ verify_jwt = true
 
 [functions.classify-denial]
 verify_jwt = true
+
+[functions.generate-appeal]
+verify_jwt = true
