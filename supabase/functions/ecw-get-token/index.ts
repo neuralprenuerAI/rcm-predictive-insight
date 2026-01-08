@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
+import { SignJWT, importPKCS8 } from "https://esm.sh/jose@5.2.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,7 +104,7 @@ serve(async (req) => {
 
     // Import private key using jose library
     console.log("Importing private key...");
-    const privateKey = await jose.importPKCS8(privateKeyStr, "RS384");
+    const privateKey = await importPKCS8(privateKeyStr, "RS384");
     console.log("Private key imported successfully");
 
     // Create JWT header
@@ -116,7 +116,7 @@ serve(async (req) => {
     console.log("JWT Header:", JSON.stringify(jwtHeader, null, 2));
 
     // Create and sign JWT
-    const jwt = await new jose.SignJWT(jwtPayload)
+    const jwt = await new SignJWT(jwtPayload)
       .setProtectedHeader(jwtHeader)
       .sign(privateKey);
 
