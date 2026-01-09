@@ -56,8 +56,8 @@ serve(async (req) => {
       .from("denial_queue")
       .select(`
         *,
-        patient:patients(first_name, last_name, date_of_birth, member_id),
-        claim:claims(claim_number, provider_name, provider_npi)
+        patient:patients(first_name, last_name, date_of_birth),
+        claim:claims(claim_id, provider_name, provider_npi)
       `)
       .eq("id", input.denialQueueId)
       .single();
@@ -113,7 +113,7 @@ serve(async (req) => {
     
     const variables: Record<string, string> = {
       patient_name: patientName,
-      member_id: denial.patient?.member_id || "[MEMBER ID]",
+      member_id: "[MEMBER ID]",
       dos: denial.service_date || denial.denial_date,
       claim_number: denial.claim?.claim_number || "[CLAIM NUMBER]",
       cpt_code: denial.cpt_code || "[CPT CODE]",
