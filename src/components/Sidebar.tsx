@@ -35,7 +35,6 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
     { id: "denial-management", label: "Denial Management", icon: AlertCircle, isRoute: true, route: "/denial-management" },
     { id: "appeals", label: "Appeals", icon: FileText, isRoute: true, route: "/appeals" },
     { id: "analytics", label: "Analytics", icon: BarChart3, isRoute: true, route: "/analytics" },
-    { id: "denials", label: "Denials & Appeals", icon: AlertCircle },
     { id: "authorizations", label: "Authorizations", icon: FileText },
     { id: "payment-posting", label: "Payment Posting", icon: DollarSign },
     { id: "settings", label: "Settings", icon: Settings }
