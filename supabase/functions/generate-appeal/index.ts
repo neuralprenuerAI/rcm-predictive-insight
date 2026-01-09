@@ -62,8 +62,14 @@ serve(async (req) => {
       .eq("id", input.denialQueueId)
       .single();
 
-    if (denialError || !denial) {
-      throw new Error("Denial not found");
+    if (denialError) {
+      console.error("Database error fetching denial:", denialError);
+      throw new Error(`Database error: ${denialError.message}`);
+    }
+
+    if (!denial) {
+      console.error("Denial not found with ID:", input.denialQueueId);
+      throw new Error(`Denial not found with ID: ${input.denialQueueId}. Ensure the denial exists and belongs to the current user.`);
     }
 
     // Fetch appropriate template
