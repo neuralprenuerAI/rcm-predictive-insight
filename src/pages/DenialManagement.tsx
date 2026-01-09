@@ -26,7 +26,8 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  Loader2
+  Loader2,
+  Upload
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -126,6 +127,16 @@ export default function DenialManagement() {
 
   // Appeal generation
   const [generatingAppeal, setGeneratingAppeal] = useState<string | null>(null);
+
+  // 835 Import
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+  } | null>(null);
 
   useEffect(() => {
     fetchDenials();
@@ -267,6 +278,74 @@ export default function DenialManagement() {
     }
   };
 
+  const handleImport835 = async () => {
+    if (!importFile) {
+      toast({ title: "Error", description: "Please select a file", variant: "destructive" });
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      // Read file content
+      const fileContent = await importFile.text();
+      
+      // Try to parse as JSON (if it's already parsed 835 data)
+      let remittanceData;
+      
+      try {
+        remittanceData = JSON.parse(fileContent);
+      } catch {
+        // If not JSON, it might be raw X12 835
+        toast({ 
+          title: "Format Note", 
+          description: "Please upload parsed 835 JSON data. Raw X12 support coming soon.",
+          variant: "destructive"
+        });
+        setImporting(false);
+        return;
+      }
+
+      const response = await supabase.functions.invoke("import-denials-from-835", {
+        body: {
+          remittanceData,
+          autoClassify: true,
+        },
+      });
+
+      if (response.error) throw response.error;
+
+      setImportResult({
+        imported: response.data.imported || 0,
+        skipped: response.data.skipped || 0,
+        errors: response.data.errors || [],
+      });
+
+      if (response.data.imported > 0) {
+        toast({
+          title: "Import Successful",
+          description: `Imported ${response.data.imported} denials`,
+        });
+        fetchDenials();
+      } else {
+        toast({
+          title: "No Denials Found",
+          description: "No new denials were found in the file",
+        });
+      }
+    } catch (error) {
+      console.error("Import error:", error);
+      toast({
+        title: "Import Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "critical": return <Badge variant="destructive">Critical</Badge>;
@@ -325,6 +404,10 @@ export default function DenialManagement() {
             <Button variant="outline" onClick={fetchDenials}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
+            </Button>
+            <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import 835
             </Button>
             <Dialog open={showManualEntry} onOpenChange={setShowManualEntry}>
               <DialogTrigger asChild>
@@ -701,6 +784,82 @@ export default function DenialManagement() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Import 835 Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Denials from 835</DialogTitle>
+            <DialogDescription>
+              Upload a parsed 835 remittance file to automatically import and classify denials.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>835 File (JSON format)</Label>
+              <Input
+                type="file"
+                accept=".json,.txt"
+                onChange={(e) => {
+                  setImportFile(e.target.files?.[0] || null);
+                  setImportResult(null);
+                }}
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Upload the JSON output from parse-835 or a compatible remittance file.
+              </p>
+            </div>
+
+            {importResult && (
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm">Imported:</span>
+                  <span className="font-medium text-green-600">{importResult.imported}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm">Skipped (duplicates):</span>
+                  <span className="font-medium text-yellow-600">{importResult.skipped}</span>
+                </div>
+                {importResult.errors.length > 0 && (
+                  <div className="mt-2">
+                    <span className="text-sm text-red-600">Errors:</span>
+                    <ul className="text-xs text-red-500 mt-1">
+                      {importResult.errors.slice(0, 3).map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowImportDialog(false);
+              setImportFile(null);
+              setImportResult(null);
+            }}>
+              Close
+            </Button>
+            <Button onClick={handleImport835} disabled={!importFile || importing}>
+              {importing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import Denials
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
