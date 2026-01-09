@@ -29,6 +29,7 @@ import {
   Eye
 } from "lucide-react";
 import { format } from "date-fns";
+import jsPDF from "jspdf";
 
 interface AppealRecord {
   id: string;
@@ -284,6 +285,74 @@ export default function AppealsManagement() {
     toast({ title: "Copied", description: "Appeal letter copied to clipboard" });
   };
 
+  const exportToPDF = (appeal: AppealRecord) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - (margin * 2);
+    
+    // Header
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Appeal Number: ${appeal.appeal_number}`, margin, 20);
+    doc.text(`Date: ${format(new Date(appeal.appeal_date), "MMMM d, yyyy")}`, margin, 28);
+    
+    // Payer info
+    if (appeal.payer_name) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`To: ${appeal.payer_name}`, margin, 38);
+    }
+    
+    // Subject line
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    const subjectLines = doc.splitTextToSize(appeal.subject_line || "Appeal Letter", maxWidth);
+    doc.text(subjectLines, margin, 50);
+    
+    // Letter body
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const bodyText = appeal.letter_body || "";
+    const lines = doc.splitTextToSize(bodyText, maxWidth);
+    
+    let yPosition = 65;
+    const lineHeight = 5;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (yPosition > pageHeight - 30) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      doc.text(lines[i], margin, yPosition);
+      yPosition += lineHeight;
+    }
+    
+    // Footer with appeal number on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "italic");
+      doc.text(
+        `${appeal.appeal_number} - Page ${i} of ${totalPages}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: "center" }
+      );
+    }
+    
+    // Save the PDF
+    const fileName = `Appeal_${appeal.appeal_number}_${format(new Date(), "yyyyMMdd")}.pdf`;
+    doc.save(fileName);
+    
+    toast({
+      title: "PDF Downloaded",
+      description: `Saved as ${fileName}`,
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "draft": return <Badge variant="secondary">Draft</Badge>;
@@ -451,16 +520,19 @@ export default function AppealsManagement() {
                     <TableCell>{getStatusBadge(appeal.status)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openViewDialog(appeal)}>
+                        <Button variant="ghost" size="icon" onClick={() => openViewDialog(appeal)} title="View Appeal">
                           <Eye className="h-4 w-4" />
                         </Button>
+                        <Button variant="ghost" size="icon" onClick={() => exportToPDF(appeal)} title="Download PDF">
+                          <Download className="h-4 w-4" />
+                        </Button>
                         {appeal.status === "draft" && (
-                          <Button variant="ghost" size="icon" onClick={() => openSubmitDialog(appeal)}>
+                          <Button variant="ghost" size="icon" onClick={() => openSubmitDialog(appeal)} title="Submit Appeal">
                             <Send className="h-4 w-4" />
                           </Button>
                         )}
                         {(appeal.status === "submitted" || appeal.status === "in_review") && (
-                          <Button variant="ghost" size="icon" onClick={() => openOutcomeDialog(appeal)}>
+                          <Button variant="ghost" size="icon" onClick={() => openOutcomeDialog(appeal)} title="Record Outcome">
                             <CheckCircle className="h-4 w-4" />
                           </Button>
                         )}
@@ -498,6 +570,10 @@ export default function AppealsManagement() {
                 <Button variant="outline" size="sm" onClick={() => copyToClipboard(selectedAppeal?.letter_body || "")}>
                   <Copy className="h-4 w-4 mr-2" />
                   Copy
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => selectedAppeal && exportToPDF(selectedAppeal)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  PDF
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)}>
                   <Edit className="h-4 w-4 mr-2" />
