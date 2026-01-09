@@ -14,6 +14,7 @@ import Analytics from "./pages/Analytics";
 import ChargeAuditor from "./pages/ChargeAuditor";
 import AuditHistory from "./pages/AuditHistory";
 import DenialManagement from "./pages/DenialManagement";
+import AppealsManagement from "./pages/AppealsManagement";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/charge-auditor" element={<ChargeAuditor />} />
           <Route path="/audit-history" element={<AuditHistory />} />
           <Route path="/denial-management" element={<DenialManagement />} />
+          <Route path="/appeals" element={<AppealsManagement />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
