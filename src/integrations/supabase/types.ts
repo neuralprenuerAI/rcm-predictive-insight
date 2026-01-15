@@ -2672,6 +2672,78 @@ export type Database = {
           },
         ]
       }
+      procedures: {
+        Row: {
+          code: string | null
+          code_display: string | null
+          created_at: string | null
+          external_id: string
+          id: string
+          last_synced_at: string | null
+          outcome: string | null
+          patient_external_id: string | null
+          patient_id: string | null
+          performed_date: string | null
+          raw_fhir_data: Json | null
+          source: string | null
+          source_connection_id: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          code?: string | null
+          code_display?: string | null
+          created_at?: string | null
+          external_id: string
+          id?: string
+          last_synced_at?: string | null
+          outcome?: string | null
+          patient_external_id?: string | null
+          patient_id?: string | null
+          performed_date?: string | null
+          raw_fhir_data?: Json | null
+          source?: string | null
+          source_connection_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          code?: string | null
+          code_display?: string | null
+          created_at?: string | null
+          external_id?: string
+          id?: string
+          last_synced_at?: string | null
+          outcome?: string | null
+          patient_external_id?: string | null
+          patient_id?: string | null
+          performed_date?: string | null
+          raw_fhir_data?: Json | null
+          source?: string | null
+          source_connection_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedures_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procedures_source_connection_id_fkey"
+            columns: ["source_connection_id"]
+            isOneToOne: false
+            referencedRelation: "api_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -3364,6 +3436,7 @@ export type Database = {
         Args: { template_id: string }
         Returns: undefined
       }
+      link_procedures_to_patients: { Args: never; Returns: undefined }
       link_service_requests_to_patients: { Args: never; Returns: undefined }
     }
     Enums: {

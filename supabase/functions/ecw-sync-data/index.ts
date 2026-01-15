@@ -13,6 +13,9 @@ const SERVICE_CATEGORIES: Record<string, string> = {
   procedures: "387713003"
 };
 
+// Procedure status mappings
+const PROCEDURE_STATUSES = ['completed', 'in-progress', 'preparation', 'not-done', 'on-hold', 'stopped', 'entered-in-error', 'unknown'];
+
 // Helper: Fetch all patients using search terms (fast mode)
 async function fetchAllPatients(fhirBaseUrl: string, accessToken: string): Promise<any[]> {
   console.log("=== Fetching ALL patients (comprehensive mode) ===");
@@ -130,13 +133,27 @@ serve(async (req) => {
     const fhirBaseUrl = credentials?.issuer_url || credentials?.fhir_base_url;
     if (!fhirBaseUrl) throw new Error("FHIR Base URL not configured");
 
-    // Determine scope - for ServiceRequest, we need Patient scope too
+    // Determine scope override based on resource
     let scopeOverride: string | undefined;
+    const currentScope = credentials.scope || "";
+    
     if (resource === "ServiceRequest") {
-      const currentScope = credentials.scope || "";
       if (!currentScope.includes("system/Patient.read")) {
         scopeOverride = `system/Patient.read ${currentScope}`.trim();
         console.log("ServiceRequest needs Patient scope, using override:", scopeOverride);
+      }
+    } else if (resource === "Procedure") {
+      // Procedure needs both Patient and Procedure scopes
+      let neededScopes: string[] = [];
+      if (!currentScope.includes("system/Patient.read")) {
+        neededScopes.push("system/Patient.read");
+      }
+      if (!currentScope.includes("system/Procedure.read")) {
+        neededScopes.push("system/Procedure.read");
+      }
+      if (neededScopes.length > 0) {
+        scopeOverride = `${neededScopes.join(' ')} ${currentScope}`.trim();
+        console.log("Procedure needs additional scopes, using override:", scopeOverride);
       }
     }
 
@@ -430,8 +447,200 @@ serve(async (req) => {
       );
     }
 
+    // ========== HANDLE PROCEDURE ==========
+    if (resource === "Procedure") {
+      // Determine date range
+      let dateFrom: string;
+      let dateTo: string = formatDate(new Date());
+      
+      if (dateRange === "last30days") {
+        dateFrom = getDaysAgo(30);
+      } else if (dateRange === "last90days") {
+        dateFrom = getDaysAgo(90);
+      } else if (dateRange === "lastyear") {
+        dateFrom = getDaysAgo(365);
+      } else if (dateRange === "all") {
+        dateFrom = "2000-01-01";
+      } else if (typeof dateRange === "object" && dateRange?.from) {
+        dateFrom = dateRange.from;
+        dateTo = dateRange.to || dateTo;
+      } else {
+        // Default: all time for maximum coverage
+        dateFrom = "2000-01-01";
+      }
+      
+      console.log(`Procedure date range: ${dateFrom} to ${dateTo}`);
+      
+      if (fetchAll) {
+        console.log("=== Fetching Procedures (CHUNKED MODE) ===");
+        
+        // Get pagination params (for resume functionality)
+        const startIndex = parseInt(searchParams.startIndex || "0");
+        const chunkSize = 100; // Process 100 patients per request
+        
+        // Get patients from DATABASE (already synced)
+        const { data: allPatients, error: patientsError } = await supabaseClient
+          .from('patients')
+          .select('external_id, first_name, last_name')
+          .eq('source', 'ecw')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
+
+        if (patientsError || !allPatients?.length) {
+          throw new Error("No patients found. Please sync Patients first.");
+        }
+
+        const totalPatients = allPatients.length;
+        const patientsChunk = allPatients.slice(startIndex, startIndex + chunkSize);
+        const endIndex = startIndex + patientsChunk.length;
+        const hasMore = endIndex < totalPatients;
+        
+        console.log(`Processing patients ${startIndex + 1} to ${endIndex} of ${totalPatients}`);
+
+        // Process patients in parallel batches of 10
+        const BATCH_SIZE = 10;
+        const allProcedures: any[] = [];
+        const seenIds = new Set<string>();
+        let processedCount = 0;
+
+        for (let i = 0; i < patientsChunk.length; i += BATCH_SIZE) {
+          const batch = patientsChunk.slice(i, i + BATCH_SIZE);
+          
+          const batchPromises = batch.map(async (patient) => {
+            const patientId = patient.external_id;
+            const patientName = `${patient.first_name || ''} ${patient.last_name || ''}`.trim();
+            
+            // Procedure uses 'date' parameter, not 'authored'
+            let url = `${fhirBaseUrl}/Procedure?patient=${patientId}&date=ge${dateFrom}&date=le${dateTo}`;
+            
+            try {
+              const response = await fetch(url, {
+                method: "GET",
+                headers: {
+                  "Authorization": `Bearer ${access_token}`,
+                  "Accept": "application/fhir+json",
+                },
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data.entry) {
+                  return data.entry.map((entry: any) => ({
+                    ...entry,
+                    resource: {
+                      ...entry.resource,
+                      _patientName: patientName,
+                      _patientExternalId: patientId
+                    }
+                  }));
+                }
+              }
+              return [];
+            } catch (err) {
+              console.error(`Error for patient ${patientId}:`, err);
+              return [];
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          
+          for (const results of batchResults) {
+            for (const entry of results) {
+              const entryId = entry.resource?.id;
+              if (entryId && !seenIds.has(entryId)) {
+                seenIds.add(entryId);
+                allProcedures.push(entry);
+              }
+            }
+          }
+          
+          processedCount += batch.length;
+          console.log(`Progress: ${startIndex + processedCount}/${totalPatients} patients, ${allProcedures.length} procedures found`);
+          
+          // Small delay between batches to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        console.log(`=== Chunk complete: ${allProcedures.length} Procedures found ===`);
+
+        // Update last_sync timestamp only on final chunk
+        if (!hasMore) {
+          await supabaseClient
+            .from("api_connections")
+            .update({ last_sync: new Date().toISOString() })
+            .eq("id", connectionId);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            resource: "Procedure",
+            dateRange: { from: dateFrom, to: dateTo },
+            total: allProcedures.length,
+            
+            // Pagination info for auto-resume
+            pagination: {
+              startIndex,
+              endIndex,
+              totalPatients,
+              hasMore,
+              nextStartIndex: hasMore ? endIndex : null,
+              processedInThisChunk: patientsChunk.length,
+            },
+            
+            data: {
+              resourceType: "Bundle",
+              type: "searchset",
+              total: allProcedures.length,
+              entry: allProcedures,
+            },
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Single patient Procedure search
+      if (!searchParams.patient) {
+        throw new Error("Procedure requires a patient ID. Use 'Fetch All' to get all procedures.");
+      }
+      
+      let url = `${fhirBaseUrl}/Procedure?patient=${searchParams.patient}&date=ge${dateFrom}&date=le${dateTo}`;
+      console.log("Procedure URL:", url);
+      
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${access_token}`,
+          "Accept": "application/fhir+json",
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`FHIR error: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Update last_sync timestamp
+      await supabaseClient
+        .from("api_connections")
+        .update({ last_sync: new Date().toISOString() })
+        .eq("id", connectionId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          resource: "Procedure",
+          total: data.total || data.entry?.length || 0,
+          data,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ========== OTHER RESOURCES ==========
-    throw new Error(`Resource type '${resource}' not yet supported. Currently supports: Patient, ServiceRequest`);
+    throw new Error(`Resource type '${resource}' not yet supported. Currently supports: Patient, ServiceRequest, Procedure`);
 
   } catch (error) {
     console.error("Error in ecw-sync-data:", error);
