@@ -421,21 +421,28 @@ export default function ConnectionsManager() {
         console.error("Chunk sync error:", error);
         retryCount++;
         
+        const isNetworkError = error?.message?.includes('Network') || 
+                               error?.message?.includes('fetch') ||
+                               error?.message?.includes('timeout') ||
+                               error?.name === 'TypeError';
+        
         if (retryCount >= maxRetries) {
           toast.error("Sync Failed", {
-            description: `Error at patient ${startIndex}. Max retries reached.`,
+            description: isNetworkError 
+              ? `Network error at patient ${startIndex}. Please try again.`
+              : `Error at patient ${startIndex}. Max retries reached.`,
           });
           setIsChunkedSyncing(false);
           setChunkProgress(null);
           return;
         }
         
-        toast.warning("Retrying...", {
-          description: `Error at patient ${startIndex}. Retry ${retryCount}/${maxRetries}`,
+        toast.warning(isNetworkError ? "Network issue, retrying..." : "Retrying...", {
+          description: `Continuing from patient ${startIndex}. Attempt ${retryCount}/${maxRetries}`,
         });
         
-        // Wait and retry
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Longer wait for network errors
+        await new Promise(resolve => setTimeout(resolve, isNetworkError ? 5000 : 3000));
       }
     }
     
@@ -530,21 +537,28 @@ export default function ConnectionsManager() {
         console.error("Chunk sync error:", error);
         retryCount++;
         
+        const isNetworkError = error?.message?.includes('Network') || 
+                               error?.message?.includes('fetch') ||
+                               error?.message?.includes('timeout') ||
+                               error?.name === 'TypeError';
+        
         if (retryCount >= maxRetries) {
           toast.error("Sync Failed", {
-            description: `Error at patient ${startIndex}. Max retries reached.`,
+            description: isNetworkError 
+              ? `Network error at patient ${startIndex}. Please try again.`
+              : `Error at patient ${startIndex}. Max retries reached.`,
           });
           setIsChunkedSyncing(false);
           setChunkProgress(null);
           return;
         }
         
-        toast.warning("Retrying...", {
-          description: `Error at patient ${startIndex}. Retry ${retryCount}/${maxRetries}`,
+        toast.warning(isNetworkError ? "Network issue, retrying..." : "Retrying...", {
+          description: `Continuing from patient ${startIndex}. Attempt ${retryCount}/${maxRetries}`,
         });
         
-        // Wait and retry
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Longer wait for network errors
+        await new Promise(resolve => setTimeout(resolve, isNetworkError ? 5000 : 3000));
       }
     }
     
