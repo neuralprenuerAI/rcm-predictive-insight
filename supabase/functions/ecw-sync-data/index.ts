@@ -242,52 +242,61 @@ serve(async (req) => {
         authoredFrom = dateRange.from;
         authoredTo = dateRange.to || authoredTo;
       } else {
-        // Default: last 90 days
-        authoredFrom = getDaysAgo(90);
+        // Default: all time for maximum coverage
+        authoredFrom = "2000-01-01";
       }
       
       console.log(`ServiceRequest date range: ${authoredFrom} to ${authoredTo}`);
       
       if (fetchAll) {
-        console.log("=== Fetching ALL ServiceRequests (FAST PARALLEL MODE) ===");
+        console.log("=== Fetching ServiceRequests (CHUNKED MODE) ===");
         
-        // Step 1: Get patients from DATABASE (already synced) - instant!
-        const { data: savedPatients, error: patientsError } = await supabaseClient
+        // Get pagination params (for resume functionality)
+        const startIndex = parseInt(searchParams.startIndex || "0");
+        const chunkSize = 100; // Process 100 patients per request (safe for 60sec timeout)
+        
+        // Get patients from DATABASE (already synced)
+        const { data: allPatients, error: patientsError } = await supabaseClient
           .from('patients')
           .select('external_id, first_name, last_name')
           .eq('source', 'ecw')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
 
-        if (patientsError || !savedPatients?.length) {
+        if (patientsError || !allPatients?.length) {
           throw new Error("No patients found. Please sync Patients first.");
         }
 
-        console.log(`Found ${savedPatients.length} patients in database`);
+        const totalPatients = allPatients.length;
+        const patientsChunk = allPatients.slice(startIndex, startIndex + chunkSize);
+        const endIndex = startIndex + patientsChunk.length;
+        const hasMore = endIndex < totalPatients;
+        
+        console.log(`Processing patients ${startIndex + 1} to ${endIndex} of ${totalPatients}`);
 
-        // Step 2: Build all URLs
+        // Build URLs for this chunk
         const categoryCode = category && SERVICE_CATEGORIES[category] 
           ? SERVICE_CATEGORIES[category] 
           : null;
 
-        const patientRequests = savedPatients.map(patient => ({
-          patientId: patient.external_id,
-          patientName: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
-          url: categoryCode
-            ? `${fhirBaseUrl}/ServiceRequest?patient=${patient.external_id}&category=${categoryCode}&authored=ge${authoredFrom}&authored=le${authoredTo}`
-            : `${fhirBaseUrl}/ServiceRequest?patient=${patient.external_id}&authored=ge${authoredFrom}&authored=le${authoredTo}`
-        }));
-
-        // Step 3: Fetch in PARALLEL batches (10 at a time)
+        // Process patients in parallel batches of 10
         const BATCH_SIZE = 10;
         const allServiceRequests: any[] = [];
         const seenIds = new Set<string>();
         let processedCount = 0;
 
-        for (let i = 0; i < patientRequests.length; i += BATCH_SIZE) {
-          const batch = patientRequests.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < patientsChunk.length; i += BATCH_SIZE) {
+          const batch = patientsChunk.slice(i, i + BATCH_SIZE);
           
-          // Parallel fetch for this batch
-          const batchPromises = batch.map(async ({ patientId, patientName, url }, index) => {
+          const batchPromises = batch.map(async (patient) => {
+            const patientId = patient.external_id;
+            const patientName = `${patient.first_name || ''} ${patient.last_name || ''}`.trim();
+            
+            let url = `${fhirBaseUrl}/ServiceRequest?patient=${patientId}&authored=ge${authoredFrom}&authored=le${authoredTo}`;
+            if (categoryCode) {
+              url += `&category=${categoryCode}`;
+            }
+            
             try {
               const response = await fetch(url, {
                 method: "GET",
@@ -297,54 +306,54 @@ serve(async (req) => {
                 },
               });
               
-              const responseText = await response.text();
-              
-              // Log first 3 patient responses in detail
-              if (processedCount + index < 3) {
-                console.log(`\n=== RAW ECW RESPONSE for patient ${patientId} ===`);
-                console.log(`URL: ${url}`);
-                console.log(`Status: ${response.status}`);
-                console.log(`Response: ${responseText.slice(0, 1000)}`);
-                console.log(`=== END RESPONSE ===\n`);
-              }
-              
               if (response.ok) {
-                const data = JSON.parse(responseText);
-                return { patientId, patientName, entries: data.entry || [], total: data.total || 0 };
+                const data = await response.json();
+                if (data.entry) {
+                  return data.entry.map((entry: any) => ({
+                    ...entry,
+                    resource: {
+                      ...entry.resource,
+                      _patientName: patientName,
+                      _patientExternalId: patientId
+                    }
+                  }));
+                }
               }
-              return { patientId, patientName, entries: [], total: 0, error: responseText.slice(0, 200) };
+              return [];
             } catch (err) {
-              console.log(`Error for patient ${patientId}:`, err);
-              return { patientId, patientName, entries: [], total: 0 };
+              console.error(`Error for patient ${patientId}:`, err);
+              return [];
             }
           });
 
-          // Wait for batch to complete
           const batchResults = await Promise.all(batchPromises);
           
-          // Collect results
-          for (const { patientId, patientName, entries } of batchResults) {
-            for (const entry of entries) {
-              if (entry.resource?.id && !seenIds.has(entry.resource.id)) {
-                seenIds.add(entry.resource.id);
-                entry.resource._patientName = patientName;
-                entry.resource._patientExternalId = patientId;
+          for (const results of batchResults) {
+            for (const entry of results) {
+              const entryId = entry.resource?.id;
+              if (entryId && !seenIds.has(entryId)) {
+                seenIds.add(entryId);
                 allServiceRequests.push(entry);
               }
             }
           }
           
           processedCount += batch.length;
-          console.log(`Progress: ${processedCount}/${savedPatients.length} patients, ${allServiceRequests.length} orders found`);
+          console.log(`Progress: ${startIndex + processedCount}/${totalPatients} patients, ${allServiceRequests.length} orders found`);
+          
+          // Small delay between batches to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        console.log(`=== DONE: ${allServiceRequests.length} ServiceRequests from ${savedPatients.length} patients ===`);
+        console.log(`=== Chunk complete: ${allServiceRequests.length} ServiceRequests found ===`);
 
-        // Update last_sync timestamp
-        await supabaseClient
-          .from("api_connections")
-          .update({ last_sync: new Date().toISOString() })
-          .eq("id", connectionId);
+        // Update last_sync timestamp only on final chunk
+        if (!hasMore) {
+          await supabaseClient
+            .from("api_connections")
+            .update({ last_sync: new Date().toISOString() })
+            .eq("id", connectionId);
+        }
 
         return new Response(
           JSON.stringify({
@@ -353,7 +362,17 @@ serve(async (req) => {
             category,
             dateRange: { from: authoredFrom, to: authoredTo },
             total: allServiceRequests.length,
-            patientsProcessed: savedPatients.length,
+            
+            // Pagination info for auto-resume
+            pagination: {
+              startIndex,
+              endIndex,
+              totalPatients,
+              hasMore,
+              nextStartIndex: hasMore ? endIndex : null,
+              processedInThisChunk: patientsChunk.length,
+            },
+            
             data: {
               resourceType: "Bundle",
               type: "searchset",

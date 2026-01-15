@@ -89,7 +89,7 @@ export default function ConnectionsManager() {
   const [syncResult, setSyncResult] = useState<any>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [dateRangeDialogOpen, setDateRangeDialogOpen] = useState(false);
-  const [selectedDateRange, setSelectedDateRange] = useState("last90days");
+  const [selectedDateRange, setSelectedDateRange] = useState("all");
   const [pendingSyncParams, setPendingSyncParams] = useState<{
     connectionId: string;
     resource: string;
@@ -97,6 +97,12 @@ export default function ConnectionsManager() {
     fetchAll?: boolean;
   } | null>(null);
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['patient']);
+  const [isChunkedSyncing, setIsChunkedSyncing] = useState(false);
+  const [chunkProgress, setChunkProgress] = useState<{
+    current: number;
+    total: number;
+    ordersFound: number;
+  } | null>(null);
   const [apiFormData, setApiFormData] = useState({
     connection_name: "",
     connection_type: "ehr",
@@ -342,6 +348,117 @@ export default function ConnectionsManager() {
       });
     },
   });
+
+  // Chunked ServiceRequest sync with auto-resume
+  const syncServiceRequestsChunked = async (
+    connectionId: string, 
+    category?: string | null, 
+    dateRange?: string | null
+  ) => {
+    setIsChunkedSyncing(true);
+    setChunkProgress(null);
+    
+    let startIndex = 0;
+    const allResults: any[] = [];
+    let hasMore = true;
+    let totalPatients = 0;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    toast.info("Starting ServiceRequest Sync", {
+      description: "This may take a few minutes for large patient lists...",
+    });
+    
+    while (hasMore) {
+      try {
+        const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
+          body: { 
+            connectionId, 
+            resource: 'ServiceRequest', 
+            fetchAll: true,
+            category,
+            dateRange,
+            searchParams: { startIndex: startIndex.toString() }
+          }
+        });
+        
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        // Collect results
+        if (data.data?.entry) {
+          allResults.push(...data.data.entry);
+        }
+        
+        // Update progress
+        const { pagination } = data;
+        totalPatients = pagination.totalPatients;
+        
+        setChunkProgress({
+          current: pagination.endIndex,
+          total: pagination.totalPatients,
+          ordersFound: allResults.length
+        });
+        
+        // Check if more to process
+        hasMore = pagination.hasMore;
+        startIndex = pagination.nextStartIndex || 0;
+        retryCount = 0; // Reset retry count on success
+        
+        // Small delay before next chunk
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+      } catch (error: any) {
+        console.error("Chunk sync error:", error);
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          toast.error("Sync Failed", {
+            description: `Error at patient ${startIndex}. Max retries reached.`,
+          });
+          setIsChunkedSyncing(false);
+          setChunkProgress(null);
+          return;
+        }
+        
+        toast.warning("Retrying...", {
+          description: `Error at patient ${startIndex}. Retry ${retryCount}/${maxRetries}`,
+        });
+        
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    setIsChunkedSyncing(false);
+    
+    toast.success("Sync Complete!", {
+      description: `Found ${allResults.length} ServiceRequests across ${totalPatients} patients.`,
+    });
+    
+    // Set final result for display
+    setSyncResult({
+      success: true,
+      resource: "ServiceRequest",
+      category,
+      total: allResults.length,
+      connectionId,
+      pagination: {
+        totalPatients,
+        processedInThisChunk: totalPatients,
+      },
+      data: {
+        resourceType: "Bundle",
+        type: "searchset",
+        total: allResults.length,
+        entry: allResults,
+      },
+    });
+    setSyncDialogOpen(true);
+    queryClient.invalidateQueries({ queryKey: ['api-connections'] });
+  };
 
   // Save synced patients to database
   const savePatientsMutation = useMutation({
@@ -721,10 +838,14 @@ export default function ConnectionsManager() {
                                     <Button 
                                       variant="default" 
                                       size="sm" 
-                                      disabled={syncECWData.isPending || !conn.is_active}
+                                      disabled={syncECWData.isPending || isChunkedSyncing || !conn.is_active}
                                     >
-                                      <RefreshCw className={`h-4 w-4 mr-1 ${syncECWData.isPending ? 'animate-spin' : ''}`} />
-                                      {syncECWData.isPending ? 'Syncing...' : 'Sync Data'}
+                                      <RefreshCw className={`h-4 w-4 mr-1 ${(syncECWData.isPending || isChunkedSyncing) ? 'animate-spin' : ''}`} />
+                                      {isChunkedSyncing && chunkProgress 
+                                        ? `Syncing... ${chunkProgress.current}/${chunkProgress.total}` 
+                                        : syncECWData.isPending 
+                                          ? 'Syncing...' 
+                                          : 'Sync Data'}
                                       <ChevronDown className="h-4 w-4 ml-1" />
                                     </Button>
                                   </DropdownMenuTrigger>
@@ -1192,16 +1313,18 @@ export default function ConnectionsManager() {
             <Button 
               onClick={() => {
                 if (pendingSyncParams) {
-                  syncECWData.mutate({ 
-                    ...pendingSyncParams, 
-                    dateRange: selectedDateRange 
-                  });
+                  // Use chunked sync for ServiceRequests
+                  syncServiceRequestsChunked(
+                    pendingSyncParams.connectionId, 
+                    pendingSyncParams.category,
+                    selectedDateRange
+                  );
                 }
                 setDateRangeDialogOpen(false);
               }}
-              disabled={syncECWData.isPending}
+              disabled={isChunkedSyncing}
             >
-              {syncECWData.isPending ? 'Syncing...' : 'Start Sync'}
+              {isChunkedSyncing ? 'Syncing...' : 'Start Sync'}
             </Button>
           </DialogFooter>
         </DialogContent>
