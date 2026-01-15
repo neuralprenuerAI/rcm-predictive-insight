@@ -51,6 +51,13 @@ const ECW_SCOPE_OPTIONS = [
     description: 'Lab orders, imaging orders, procedure orders'
   },
   { 
+    id: 'procedure', 
+    label: 'Procedures', 
+    scope: 'system/Procedure.read',
+    icon: Syringe,
+    description: 'Completed procedures'
+  },
+  { 
     id: 'encounter', 
     label: 'Encounters', 
     scope: 'system/Encounter.read',
@@ -460,6 +467,114 @@ export default function ConnectionsManager() {
     queryClient.invalidateQueries({ queryKey: ['api-connections'] });
   };
 
+  // Chunked Procedure sync with auto-resume
+  const syncProceduresChunked = async (
+    connectionId: string, 
+    dateRange?: string | null
+  ) => {
+    setIsChunkedSyncing(true);
+    setChunkProgress(null);
+    
+    let startIndex = 0;
+    const allResults: any[] = [];
+    let hasMore = true;
+    let totalPatients = 0;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    toast.info("Starting Procedure Sync", {
+      description: "This may take a few minutes for large patient lists...",
+    });
+    
+    while (hasMore) {
+      try {
+        const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
+          body: { 
+            connectionId, 
+            resource: 'Procedure', 
+            fetchAll: true,
+            dateRange,
+            searchParams: { startIndex: startIndex.toString() }
+          }
+        });
+        
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        // Collect results
+        if (data.data?.entry) {
+          allResults.push(...data.data.entry);
+        }
+        
+        // Update progress
+        const { pagination } = data;
+        totalPatients = pagination.totalPatients;
+        
+        setChunkProgress({
+          current: pagination.endIndex,
+          total: pagination.totalPatients,
+          ordersFound: allResults.length
+        });
+        
+        // Check if more to process
+        hasMore = pagination.hasMore;
+        startIndex = pagination.nextStartIndex || 0;
+        retryCount = 0; // Reset retry count on success
+        
+        // Small delay before next chunk
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+      } catch (error: any) {
+        console.error("Chunk sync error:", error);
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          toast.error("Sync Failed", {
+            description: `Error at patient ${startIndex}. Max retries reached.`,
+          });
+          setIsChunkedSyncing(false);
+          setChunkProgress(null);
+          return;
+        }
+        
+        toast.warning("Retrying...", {
+          description: `Error at patient ${startIndex}. Retry ${retryCount}/${maxRetries}`,
+        });
+        
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    setIsChunkedSyncing(false);
+    
+    toast.success("Sync Complete!", {
+      description: `Found ${allResults.length} Procedures across ${totalPatients} patients.`,
+    });
+    
+    // Set final result for display
+    setSyncResult({
+      success: true,
+      resource: "Procedure",
+      total: allResults.length,
+      connectionId,
+      pagination: {
+        totalPatients,
+        processedInThisChunk: totalPatients,
+      },
+      data: {
+        resourceType: "Bundle",
+        type: "searchset",
+        total: allResults.length,
+        entry: allResults,
+      },
+    });
+    setSyncDialogOpen(true);
+    queryClient.invalidateQueries({ queryKey: ['api-connections'] });
+  };
+
   // Save synced patients to database
   const savePatientsMutation = useMutation({
     mutationFn: async ({ entries, connectionId }: { entries: any[]; connectionId: string }) => {
@@ -569,6 +684,69 @@ export default function ConnectionsManager() {
       setSyncDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['service-requests'] });
       queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+    },
+    onError: (error: Error) => {
+      toast.error("Save Failed", {
+        description: error.message,
+      });
+    },
+  });
+
+  // Save synced procedures to database
+  const saveProceduresMutation = useMutation({
+    mutationFn: async ({ entries, connectionId }: { entries: any[]; connectionId: string }) => {
+      if (!entries || entries.length === 0) return 0;
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      
+      const proceduresToUpsert = entries.map((entry: any) => {
+        const proc = entry.resource;
+        const patientRef = proc.subject?.reference || '';
+        const patientExternalId = proc._patientExternalId || patientRef.replace('Patient/', '');
+        
+        // Extract performed date - can be performedDateTime or performedPeriod.start
+        let performedDate = null;
+        if (proc.performedDateTime) {
+          performedDate = proc.performedDateTime;
+        } else if (proc.performedPeriod?.start) {
+          performedDate = proc.performedPeriod.start;
+        }
+        
+        return {
+          external_id: proc.id,
+          source: 'ecw',
+          source_connection_id: connectionId,
+          patient_external_id: patientExternalId,
+          code: proc.code?.coding?.[0]?.code || null,
+          code_display: proc.code?.text || proc.code?.coding?.[0]?.display || null,
+          status: proc.status || null,
+          performed_date: performedDate,
+          outcome: proc.outcome?.text || proc.outcome?.coding?.[0]?.display || null,
+          user_id: user.id,
+          last_synced_at: new Date().toISOString(),
+          raw_fhir_data: proc,
+        };
+      });
+      
+      const { error } = await supabase
+        .from('procedures')
+        .upsert(proceduresToUpsert, {
+          onConflict: 'external_id,source',
+        });
+      
+      if (error) throw error;
+      
+      // Link to patients
+      await supabase.rpc('link_procedures_to_patients');
+      
+      return proceduresToUpsert.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`Saved ${count} procedures to database`);
+      setSyncDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['procedures'] });
+      queryClient.invalidateQueries({ queryKey: ['patients-with-procedures'] });
     },
     onError: (error: Error) => {
       toast.error("Save Failed", {
@@ -913,6 +1091,29 @@ export default function ConnectionsManager() {
                                       </>
                                     )}
                                     
+                                    {selectedScopesForConn.includes('procedure') && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                          Procedures
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuItem 
+                                          onClick={() => {
+                                            setPendingSyncParams({ 
+                                              connectionId: conn.id, 
+                                              resource: 'Procedure', 
+                                              category: null,
+                                              fetchAll: true 
+                                            });
+                                            setDateRangeDialogOpen(true);
+                                          }}
+                                        >
+                                          <Syringe className="h-4 w-4 mr-2" />
+                                          All Completed Procedures
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    
                                     {selectedScopesForConn.includes('encounter') && (
                                       <DropdownMenuItem 
                                         onClick={() => syncECWData.mutate({ connectionId: conn.id, resource: 'Encounter' })}
@@ -1196,9 +1397,40 @@ export default function ConnectionsManager() {
               </Table>
             )}
 
+            {/* Procedure Results Table */}
+            {syncResult?.resource === 'Procedure' && syncResult?.data?.entry && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Procedure</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Performed Date</TableHead>
+                    <TableHead>Outcome</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {syncResult.data.entry.slice(0, 100).map((entry: any, idx: number) => {
+                    const proc = entry.resource;
+                    const code = proc.code?.text || proc.code?.coding?.[0]?.display || proc.code?.coding?.[0]?.code || '-';
+                    const performedDate = proc.performedDateTime?.split('T')[0] || proc.performedPeriod?.start?.split('T')[0] || '-';
+                    const outcome = proc.outcome?.text || proc.outcome?.coding?.[0]?.display || '-';
+                    
+                    return (
+                      <TableRow key={proc.id || idx}>
+                        <TableCell className="font-medium">{code}</TableCell>
+                        <TableCell className="capitalize">{proc.status || '-'}</TableCell>
+                        <TableCell>{performedDate}</TableCell>
+                        <TableCell>{outcome}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+
             {/* Generic Results for other resource types */}
             {syncResult?.data?.entry && 
-             !['Patient', 'ServiceRequest', 'Encounter'].includes(syncResult?.resource) && (
+             !['Patient', 'ServiceRequest', 'Encounter', 'Procedure'].includes(syncResult?.resource) && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1277,17 +1509,35 @@ export default function ConnectionsManager() {
                 Save {syncResult?.total || 0} Orders
               </Button>
             )}
+            {syncResult?.resource === 'Procedure' && syncResult?.data?.entry?.length > 0 && (
+              <Button 
+                onClick={() => {
+                  saveProceduresMutation.mutate({
+                    entries: syncResult.data.entry,
+                    connectionId: syncResult.connectionId,
+                  });
+                }}
+                disabled={saveProceduresMutation.isPending}
+              >
+                {saveProceduresMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save {syncResult?.total || 0} Procedures
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Date Range Selection Dialog for ServiceRequest */}
+      {/* Date Range Selection Dialog for ServiceRequest/Procedure */}
       <Dialog open={dateRangeDialogOpen} onOpenChange={setDateRangeDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Select Date Range</DialogTitle>
             <DialogDescription>
-              Choose how far back to fetch service requests
+              Choose how far back to fetch {pendingSyncParams?.resource === 'Procedure' ? 'procedures' : 'service requests'}
             </DialogDescription>
           </DialogHeader>
           
@@ -1313,12 +1563,20 @@ export default function ConnectionsManager() {
             <Button 
               onClick={() => {
                 if (pendingSyncParams) {
-                  // Use chunked sync for ServiceRequests
-                  syncServiceRequestsChunked(
-                    pendingSyncParams.connectionId, 
-                    pendingSyncParams.category,
-                    selectedDateRange
-                  );
+                  if (pendingSyncParams.resource === 'Procedure') {
+                    // Use chunked sync for Procedures
+                    syncProceduresChunked(
+                      pendingSyncParams.connectionId, 
+                      selectedDateRange
+                    );
+                  } else {
+                    // Use chunked sync for ServiceRequests
+                    syncServiceRequestsChunked(
+                      pendingSyncParams.connectionId, 
+                      pendingSyncParams.category,
+                      selectedDateRange
+                    );
+                  }
                 }
                 setDateRangeDialogOpen(false);
               }}
