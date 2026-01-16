@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useRole } from "@/contexts/RoleContext";
 import { RoleBadge } from "@/components/ui/RoleBadge";
 import { 
@@ -8,15 +9,17 @@ import {
   BarChart3, 
   Wrench,
   ArrowLeft,
-  Info,
-  Shield
+  Shield,
+  UserPlus
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InviteUserModal } from "@/components/admin/InviteUserModal";
 
 export default function Admin() {
   const { role, isSuperAdmin } = useRole();
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const adminSections = [
     {
@@ -98,7 +101,16 @@ export default function Admin() {
                 </div>
               </div>
             </div>
-            <RoleBadge role={role} size="lg" />
+            <div className="flex items-center gap-3">
+              <Button 
+                onClick={() => setIsInviteModalOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite User
+              </Button>
+              <RoleBadge role={role} size="lg" />
+            </div>
           </div>
         </div>
       </div>
@@ -171,6 +183,15 @@ export default function Admin() {
           </Card>
         )}
       </div>
+
+      {/* Invite Modal */}
+      <InviteUserModal 
+        isOpen={isInviteModalOpen} 
+        onClose={() => setIsInviteModalOpen(false)}
+        onSuccess={() => {
+          // Could refresh invites list here if we add one
+        }}
+      />
     </div>
   );
 }
