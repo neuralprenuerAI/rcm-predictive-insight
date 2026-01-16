@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { EditPatientModal } from "@/components/patients/EditPatientModal";
@@ -90,6 +91,35 @@ export default function Patients() {
   const [copied, setCopied] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [patientForEdit, setPatientForEdit] = useState<any>(null);
+  const [recentlyUpdatedId, setRecentlyUpdatedId] = useState<string | null>(null);
+
+  // Keyboard shortcut for editing (Cmd+E / Ctrl+E)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'e' && (e.metaKey || e.ctrlKey) && selectedPatient) {
+        e.preventDefault();
+        handleEditPatient(selectedPatient.id);
+      }
+    };
+    
+    if (selectedPatient) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [selectedPatient]);
+
+  // Helper to open edit modal with full patient data
+  const handleEditPatient = async (patientId: string) => {
+    const { data } = await supabase
+      .from('patients')
+      .select('*')
+      .eq('id', patientId)
+      .single();
+    if (data) {
+      setPatientForEdit(data);
+      setIsEditModalOpen(true);
+    }
+  };
 
   // Fetch patients with proper counts from both tables
   const { data: patients, isLoading } = useQuery({
@@ -565,18 +595,26 @@ export default function Patients() {
                         Procedures
                       </div>
                     </TableHead>
-                    <TableHead></TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPatients?.map((patient) => (
                     <TableRow 
                       key={patient.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50 transition-colors duration-300",
+                        recentlyUpdatedId === patient.id && "bg-green-50 dark:bg-green-950/30"
+                      )}
                       onClick={() => setSelectedPatient(patient)}
                     >
                       <TableCell className="font-medium">
-                        {patient.first_name} {patient.last_name}
+                        <div className="flex items-center gap-2">
+                          {patient.first_name} {patient.last_name}
+                          {recentlyUpdatedId === patient.id && (
+                            <CheckCircle className="h-4 w-4 text-green-600 animate-in fade-in duration-300" />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{patient.date_of_birth || '-'}</TableCell>
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
@@ -590,28 +628,46 @@ export default function Patients() {
                       <TableCell className="text-center">
                         <CountBadge count={patient.procedure_count} />
                       </TableCell>
-                      <TableCell className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            // Fetch full patient data including raw_fhir_data
-                            const { data } = await supabase
-                              .from('patients')
-                              .select('*')
-                              .eq('id', patient.id)
-                              .single();
-                            if (data) {
-                              setPatientForEdit(data);
-                              setIsEditModalOpen(true);
-                            }
-                          }}
-                          title="Edit Patient"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <TableCell>
+                        <TooltipProvider>
+                          <div className="flex items-center gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditPatient(patient.id);
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Edit patient demographics</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedPatient(patient);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>View patient details</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </TooltipProvider>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -791,27 +847,27 @@ export default function Patients() {
           </div>
           
           <DialogFooter className="flex justify-between sm:justify-between">
-            <Button 
-              variant="outline"
-              onClick={async () => {
-                if (selectedPatient) {
-                  // Fetch full patient data including raw_fhir_data
-                  const { data } = await supabase
-                    .from('patients')
-                    .select('*')
-                    .eq('id', selectedPatient.id)
-                    .single();
-                  if (data) {
-                    setPatientForEdit(data);
-                    setIsEditModalOpen(true);
-                  }
-                }
-              }}
-              className="gap-2"
-            >
-              <Pencil className="h-4 w-4" />
-              Edit Patient
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      if (selectedPatient) {
+                        handleEditPatient(selectedPatient.id);
+                      }
+                    }}
+                    className="gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit Patient
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit patient demographics (⌘E)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button variant="outline" onClick={() => setSelectedPatient(null)}>
               Close
             </Button>
@@ -848,6 +904,11 @@ export default function Patients() {
         patient={patientForEdit}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+          // Show success animation on the updated patient row
+          if (patientForEdit?.id) {
+            setRecentlyUpdatedId(patientForEdit.id);
+            setTimeout(() => setRecentlyUpdatedId(null), 3000);
+          }
           setSelectedPatient(null);
         }}
       />
