@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRole } from "@/contexts/RoleContext";
 import { RoleBadge } from "@/components/ui/RoleBadge";
 import { UsersTab } from "@/components/admin/UsersTab";
+import { OverviewTab } from "@/components/admin/OverviewTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -99,62 +100,8 @@ export default function Admin() {
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview">
-            <div className="space-y-6">
-              {/* Stats cards - placeholder for Phase 2 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-card border rounded-lg p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                      <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">--</p>
-                      <p className="text-sm text-muted-foreground">Total Users</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-card border rounded-lg p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                      <Plug className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">--</p>
-                      <p className="text-sm text-muted-foreground">API Connections</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-card border rounded-lg p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                      <LayoutDashboard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">--</p>
-                      <p className="text-sm text-muted-foreground">Total Patients</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-card border rounded-lg p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                      <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">--</p>
-                      <p className="text-sm text-muted-foreground">Unresolved Errors</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 border rounded-lg p-6">
-                <p className="text-muted-foreground text-center">
-                  Phase 2 Preview: Full statistics, charts, and real-time data will be added in the next phase.
-                </p>
-              </div>
-            </div>
+          <TabsContent value="overview" className="mt-6">
+            <OverviewTab />
           </TabsContent>
 
           {/* Users Tab */}
