@@ -99,6 +99,8 @@ export default function ConnectionsManager() {
   const [payerDialogOpen, setPayerDialogOpen] = useState(false);
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
   const [tokenData, setTokenData] = useState<any>(null);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
@@ -207,6 +209,7 @@ export default function ConnectionsManager() {
 
       const { error } = await supabase.from('api_connections').insert({
         user_id: user.id,
+        name: apiFormData.connection_name, // Use connection_name as the display name
         connection_name: apiFormData.connection_name,
         connection_type: apiFormData.connection_type,
         api_url: apiFormData.api_url || apiFormData.issuer_url,
@@ -299,6 +302,18 @@ export default function ConnectionsManager() {
       toast.success("Connection deleted");
     }
   });
+
+  // Handler to save connection name inline
+  const handleSaveName = async (connectionId: string) => {
+    if (editNameValue.trim()) {
+      await supabase
+        .from("api_connections")
+        .update({ name: editNameValue.trim() })
+        .eq("id", connectionId);
+      queryClient.invalidateQueries({ queryKey: ['api-connections'] });
+    }
+    setEditingNameId(null);
+  };
 
   const testECWToken = useMutation({
     mutationFn: async (connectionId: string) => {
@@ -839,12 +854,14 @@ export default function ConnectionsManager() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <Label>Connection Name</Label>
+                      <Label>Connection Name *</Label>
                       <Input
                         value={apiFormData.connection_name}
                         onChange={(e) => setApiFormData({ ...apiFormData, connection_name: e.target.value })}
-                        placeholder="ECW Sandbox"
+                        placeholder="e.g., ECW Patients, ECW Procedures"
+                        required
                       />
+                      <p className="text-xs text-muted-foreground mt-1">A friendly name to identify this connection</p>
                     </div>
                     <div>
                       <Label>Connection Type</Label>
@@ -1005,7 +1022,31 @@ export default function ConnectionsManager() {
                     
                     return (
                       <TableRow key={conn.id}>
-                        <TableCell className="font-medium">{conn.connection_name}</TableCell>
+                        <TableCell className="font-medium">
+                          {editingNameId === conn.id ? (
+                            <Input
+                              autoFocus
+                              value={editNameValue}
+                              onChange={(e) => setEditNameValue(e.target.value)}
+                              onBlur={() => handleSaveName(conn.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveName(conn.id);
+                                if (e.key === "Escape") setEditingNameId(null);
+                              }}
+                              className="h-8 w-48"
+                            />
+                          ) : (
+                            <span 
+                              className="cursor-pointer hover:text-primary"
+                              onClick={() => {
+                                setEditingNameId(conn.id);
+                                setEditNameValue((conn as any).name || conn.connection_name || "");
+                              }}
+                            >
+                              {(conn as any).name || conn.connection_name || <span className="text-muted-foreground italic">Click to name</span>}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell>{conn.connection_type}</TableCell>
                         <TableCell className="max-w-xs truncate">{conn.api_url}</TableCell>
                         <TableCell>

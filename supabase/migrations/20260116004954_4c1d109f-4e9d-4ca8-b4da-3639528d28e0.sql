@@ -1,0 +1,1 @@
+ALTER TABLE api_connections ADD COLUMN IF NOT EXISTS name text;
