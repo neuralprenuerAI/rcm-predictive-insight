@@ -11,8 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle, UserPlus } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle, UserPlus, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -524,6 +525,16 @@ export default function Patients() {
           </Button>
         </div>
       </div>
+
+      {/* Warning when no ECW connection is available */}
+      {(!ecwConnections || ecwConnections.length === 0) && (
+        <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            No active ECW connection found. Please add and activate an ECW connection in Settings to create patients.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Search and Filters */}
       <Card className="border-border">
