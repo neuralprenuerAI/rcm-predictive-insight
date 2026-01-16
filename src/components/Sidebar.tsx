@@ -12,9 +12,11 @@ import {
   Shield,
   TrendingDown,
   ClipboardCheck,
-  History
+  History,
+  ShieldCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useRole } from "@/contexts/RoleContext";
 
 interface SidebarProps {
   activeView: string;
@@ -23,6 +25,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
   
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -75,6 +78,21 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
             </Button>
           );
         })}
+        
+        {/* Admin Center - Only visible to admins */}
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-[var(--transition-smooth)]",
+              "border-t border-sidebar-border mt-2 pt-3"
+            )}
+            onClick={() => navigate("/admin")}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span className="text-sm font-medium">Admin Center</span>
+          </Button>
+        )}
       </nav>
 
       <div className="absolute bottom-0 w-64 p-4 border-t border-sidebar-border bg-sidebar-accent/50">
