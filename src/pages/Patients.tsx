@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,8 +22,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type FilterType = 'all' | 'procedures' | 'labs' | 'imaging' | 'any';
 
@@ -48,11 +59,14 @@ interface PatientWithOrders {
 
 interface Procedure {
   id: string;
+  external_id: string | null;
   code: string | null;
   code_display: string | null;
   status: string | null;
   performed_date: string | null;
   outcome: string | null;
+  raw_fhir_data: Record<string, unknown> | null;
+  last_synced_at: string | null;
 }
 
 interface ServiceRequest {
@@ -69,12 +83,14 @@ export default function Patients() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<PatientWithOrders | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(null);
+  const [rawDataExpanded, setRawDataExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Fetch patients with proper counts from both tables
   const { data: patients, isLoading } = useQuery({
     queryKey: ['patients-with-orders'],
     queryFn: async () => {
-      // Get all patients
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
         .select('*')
@@ -82,14 +98,12 @@ export default function Patients() {
       
       if (patientsError) throw patientsError;
       
-      // Get service requests for labs and imaging counts
       const { data: serviceRequests, error: srError } = await supabase
         .from('service_requests')
         .select('patient_id, category');
       
       if (srError) throw srError;
       
-      // Get procedures for procedure counts
       const { data: procedures, error: procError } = await supabase
         .from('procedures')
         .select('patient_id');
@@ -105,14 +119,14 @@ export default function Patients() {
     }
   });
 
-  // Fetch procedures for selected patient
+  // Fetch procedures for selected patient (with raw_fhir_data)
   const { data: patientProcedures } = useQuery({
     queryKey: ['patient-procedures', selectedPatient?.id],
     queryFn: async () => {
       if (!selectedPatient?.id) return [];
       const { data, error } = await supabase
         .from('procedures')
-        .select('id, code, code_display, status, performed_date, outcome')
+        .select('id, external_id, code, code_display, status, performed_date, outcome, raw_fhir_data, last_synced_at')
         .eq('patient_id', selectedPatient.id)
         .order('performed_date', { ascending: false });
       if (error) throw error;
@@ -139,7 +153,6 @@ export default function Patients() {
 
   // Apply search and filter
   const filteredPatients = patients?.filter(patient => {
-    // Search filter
     const searchLower = searchTerm.toLowerCase();
     const fullName = `${patient.first_name} ${patient.last_name}`.toLowerCase();
     const matchesSearch = 
@@ -150,7 +163,6 @@ export default function Patients() {
     
     if (!matchesSearch) return false;
     
-    // Category filter
     switch (activeFilter) {
       case 'procedures':
         return patient.procedure_count > 0;
@@ -165,18 +177,71 @@ export default function Patients() {
     }
   });
 
-  const formatAddress = (patient: PatientWithOrders) => {
-    const parts = [
-      patient.address_line1,
-      patient.city,
-      patient.state,
-      patient.postal_code
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : '-';
+  // Helper functions for extracting FHIR data
+  const extractFhirCode = (raw: Record<string, unknown> | null): { code: string; system: string; display: string } | null => {
+    if (!raw?.code) return null;
+    const code = raw.code as { coding?: Array<{ code?: string; system?: string; display?: string }> };
+    const coding = code?.coding?.[0];
+    return coding ? {
+      code: coding.code || '',
+      system: coding.system || '',
+      display: coding.display || ''
+    } : null;
+  };
+
+  const extractFhirReference = (raw: Record<string, unknown> | null, field: string): string | null => {
+    if (!raw?.[field]) return null;
+    const ref = raw[field] as { reference?: string; display?: string };
+    return ref?.display || ref?.reference?.split('/').pop() || null;
+  };
+
+  const extractMeta = (raw: Record<string, unknown> | null): { lastUpdated: string | null; versionId: string | null } => {
+    if (!raw?.meta) return { lastUpdated: null, versionId: null };
+    const meta = raw.meta as { lastUpdated?: string; versionId?: string };
+    return {
+      lastUpdated: meta.lastUpdated || null,
+      versionId: meta.versionId || null
+    };
+  };
+
+  const copyJsonToClipboard = async () => {
+    if (!selectedProcedure?.raw_fhir_data) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(selectedProcedure.raw_fhir_data, null, 2));
+      setCopied(true);
+      toast.success("JSON copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy JSON");
+    }
+  };
+
+  const formatDate = (dateStr: string | null): string => {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatShortDate = (dateStr: string | null): string => {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return dateStr;
+    }
   };
 
   // Count badges component
-  const CountBadge = ({ count, variant }: { count: number; variant: 'labs' | 'imaging' | 'procedures' }) => {
+  const CountBadge = ({ count }: { count: number }) => {
     const hasData = count > 0;
     return (
       <Badge 
@@ -200,6 +265,164 @@ export default function Patients() {
     withAny: patients?.filter(p => p.procedure_count > 0 || p.lab_count > 0 || p.imaging_count > 0).length || 0,
   };
 
+  // Procedure detail content
+  const ProcedureDetailContent = ({ procedure }: { procedure: Procedure }) => {
+    const fhirCode = extractFhirCode(procedure.raw_fhir_data);
+    const meta = extractMeta(procedure.raw_fhir_data);
+    const practitioner = extractFhirReference(procedure.raw_fhir_data, 'asserter') || 
+                         extractFhirReference(procedure.raw_fhir_data, 'performer');
+    const encounter = extractFhirReference(procedure.raw_fhir_data, 'encounter');
+    const location = extractFhirReference(procedure.raw_fhir_data, 'location');
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="space-y-2">
+          <h3 className="text-xl font-semibold">
+            {procedure.code_display || fhirCode?.display || procedure.code || 'Unknown Procedure'}
+          </h3>
+          <Badge variant={procedure.status === 'completed' ? 'default' : 'secondary'} className="text-sm">
+            {procedure.status || 'Unknown Status'}
+          </Badge>
+        </div>
+
+        <Separator />
+
+        {/* Procedure Details */}
+        <div className="space-y-4">
+          <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Procedure Details</h4>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Hash className="h-4 w-4" />
+                CPT/Procedure Code
+              </div>
+              <p className="font-mono text-sm font-medium">
+                {fhirCode?.code || procedure.code || '-'}
+              </p>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FileCode className="h-4 w-4" />
+                Code System
+              </div>
+              <p className="text-sm font-medium">
+                {fhirCode?.system?.split('/').pop() || 'Unknown'}
+              </p>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                Date Performed
+              </div>
+              <p className="text-sm font-medium">
+                {formatDate(procedure.performed_date)}
+              </p>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Outcome</div>
+              <p className="text-sm font-medium">
+                {procedure.outcome || '-'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Provider Section */}
+        {(practitioner || encounter || location) && (
+          <>
+            <Separator />
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Provider Information</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {practitioner && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Practitioner</div>
+                    <p className="text-sm font-medium">{practitioner}</p>
+                  </div>
+                )}
+                {encounter && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Encounter</div>
+                    <p className="text-sm font-medium font-mono">{encounter}</p>
+                  </div>
+                )}
+                {location && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Location</div>
+                    <p className="text-sm font-medium">{location}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        <Separator />
+
+        {/* Metadata */}
+        <div className="space-y-4">
+          <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Metadata</h4>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Record ID</div>
+              <p className="text-sm font-medium font-mono">{procedure.external_id || procedure.id}</p>
+            </div>
+            
+            {meta.lastUpdated && (
+              <div className="space-y-1">
+                <div className="text-sm text-muted-foreground">Last Updated</div>
+                <p className="text-sm font-medium">{formatDate(meta.lastUpdated)}</p>
+              </div>
+            )}
+            
+            {procedure.last_synced_at && (
+              <div className="space-y-1">
+                <div className="text-sm text-muted-foreground">Last Synced</div>
+                <p className="text-sm font-medium">{formatDate(procedure.last_synced_at)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Raw FHIR Data */}
+        <Collapsible open={rawDataExpanded} onOpenChange={setRawDataExpanded}>
+          <div className="flex items-center justify-between">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2 p-0 h-auto">
+                {rawDataExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <span className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                  Raw FHIR Data
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            
+            <Button variant="outline" size="sm" onClick={copyJsonToClipboard} className="gap-2">
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? 'Copied!' : 'Copy JSON'}
+            </Button>
+          </div>
+          
+          <CollapsibleContent className="mt-3">
+            <div className="bg-muted rounded-lg p-4 overflow-auto max-h-80">
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                {JSON.stringify(procedure.raw_fhir_data, null, 2)}
+              </pre>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -217,7 +440,6 @@ export default function Patients() {
       {/* Search and Filters */}
       <Card className="border-border">
         <CardContent className="pt-6 space-y-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -228,7 +450,6 @@ export default function Patients() {
             />
           </div>
           
-          {/* Filter Buttons */}
           <div className="flex flex-wrap gap-2">
             <Button
               variant={activeFilter === 'all' ? 'default' : 'outline'}
@@ -357,13 +578,13 @@ export default function Patients() {
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
                       <TableCell>{patient.phone || '-'}</TableCell>
                       <TableCell className="text-center">
-                        <CountBadge count={patient.lab_count} variant="labs" />
+                        <CountBadge count={patient.lab_count} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <CountBadge count={patient.imaging_count} variant="imaging" />
+                        <CountBadge count={patient.imaging_count} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <CountBadge count={patient.procedure_count} variant="procedures" />
+                        <CountBadge count={patient.procedure_count} />
                       </TableCell>
                       <TableCell>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -425,6 +646,7 @@ export default function Patients() {
                           <TableHead>Status</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Outcome</TableHead>
+                          <TableHead className="w-[60px]">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -439,11 +661,23 @@ export default function Patients() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {proc.performed_date 
-                                ? new Date(proc.performed_date).toLocaleDateString() 
-                                : '-'}
+                              {formatShortDate(proc.performed_date)}
                             </TableCell>
                             <TableCell>{proc.outcome || '-'}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProcedure(proc);
+                                  setRawDataExpanded(false);
+                                }}
+                                title="View details"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -480,9 +714,7 @@ export default function Patients() {
                               <TableCell className="capitalize">{order.status || '-'}</TableCell>
                               <TableCell className="capitalize">{order.priority || '-'}</TableCell>
                               <TableCell>
-                                {order.authored_on 
-                                  ? new Date(order.authored_on).toLocaleDateString() 
-                                  : '-'}
+                                {formatShortDate(order.authored_on)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -521,9 +753,7 @@ export default function Patients() {
                               <TableCell className="capitalize">{order.status || '-'}</TableCell>
                               <TableCell className="capitalize">{order.priority || '-'}</TableCell>
                               <TableCell>
-                                {order.authored_on 
-                                  ? new Date(order.authored_on).toLocaleDateString() 
-                                  : '-'}
+                                {formatShortDate(order.authored_on)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -543,6 +773,25 @@ export default function Patients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Procedure Detail Sheet */}
+      <Sheet open={!!selectedProcedure} onOpenChange={() => setSelectedProcedure(null)}>
+        <SheetContent className="w-full sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5" />
+              Procedure Details
+            </SheetTitle>
+            <SheetDescription>
+              Full clinical data from FHIR record
+            </SheetDescription>
+          </SheetHeader>
+          
+          <ScrollArea className="h-[calc(100vh-120px)] mt-6 pr-4">
+            {selectedProcedure && <ProcedureDetailContent procedure={selectedProcedure} />}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
