@@ -2768,6 +2768,45 @@ export type Database = {
           },
         ]
       }
+      pending_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          email: string
+          expires_at: string | null
+          id: string
+          invite_token: string | null
+          invited_by: string
+          invited_by_email: string | null
+          role: string
+          status: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email: string
+          expires_at?: string | null
+          id?: string
+          invite_token?: string | null
+          invited_by: string
+          invited_by_email?: string | null
+          role?: string
+          status?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string | null
+          id?: string
+          invite_token?: string | null
+          invited_by?: string
+          invited_by_email?: string | null
+          role?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
       predicted_charges: {
         Row: {
           audit_id: string
@@ -3623,6 +3662,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_invite_role: { Args: { check_email: string }; Returns: string }
       get_user_role: { Args: never; Returns: string }
       has_any_role: {
         Args: { _roles: string[]; _user_id: string }
@@ -3633,6 +3673,7 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      is_email_invited: { Args: { check_email: string }; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       link_procedures_to_patients: { Args: never; Returns: undefined }
       link_service_requests_to_patients: { Args: never; Returns: undefined }
