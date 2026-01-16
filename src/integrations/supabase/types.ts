@@ -3624,6 +3624,10 @@ export type Database = {
     }
     Functions: {
       get_user_role: { Args: never; Returns: string }
+      has_any_role: {
+        Args: { _roles: string[]; _user_id: string }
+        Returns: boolean
+      }
       increment_template_usage: {
         Args: { template_id: string }
         Returns: undefined
