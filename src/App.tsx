@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { RoleProvider } from "@/contexts/RoleContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -15,32 +16,44 @@ import ChargeAuditor from "./pages/ChargeAuditor";
 import AuditHistory from "./pages/AuditHistory";
 import DenialManagement from "./pages/DenialManagement";
 import AppealsManagement from "./pages/AppealsManagement";
+import Admin from "./pages/Admin";
+import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/upload" element={<DocumentUpload />} />
-          <Route path="/claims" element={<Claims />} />
-          <Route path="/scrubber" element={<ClaimScrubber />} />
-          <Route path="/scrub-history" element={<ScrubHistory />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/charge-auditor" element={<ChargeAuditor />} />
-          <Route path="/audit-history" element={<AuditHistory />} />
-          <Route path="/denial-management" element={<DenialManagement />} />
-          <Route path="/appeals" element={<AppealsManagement />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <RoleProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/upload" element={<DocumentUpload />} />
+            <Route path="/claims" element={<Claims />} />
+            <Route path="/scrubber" element={<ClaimScrubber />} />
+            <Route path="/scrub-history" element={<ScrubHistory />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/charge-auditor" element={<ChargeAuditor />} />
+            <Route path="/audit-history" element={<AuditHistory />} />
+            <Route path="/denial-management" element={<DenialManagement />} />
+            <Route path="/appeals" element={<AppealsManagement />} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedAdminRoute>
+                  <Admin />
+                </ProtectedAdminRoute>
+              }
+            />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </RoleProvider>
   </QueryClientProvider>
 );
 
