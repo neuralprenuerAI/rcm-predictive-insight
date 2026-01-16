@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +35,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { EditPatientModal } from "@/components/patients/EditPatientModal";
 
 type FilterType = 'all' | 'procedures' | 'labs' | 'imaging' | 'any';
 
@@ -80,12 +81,15 @@ interface ServiceRequest {
 }
 
 export default function Patients() {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<PatientWithOrders | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(null);
   const [rawDataExpanded, setRawDataExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [patientForEdit, setPatientForEdit] = useState<any>(null);
 
   // Fetch patients with proper counts from both tables
   const { data: patients, isLoading } = useQuery({
@@ -586,7 +590,27 @@ export default function Patients() {
                       <TableCell className="text-center">
                         <CountBadge count={patient.procedure_count} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            // Fetch full patient data including raw_fhir_data
+                            const { data } = await supabase
+                              .from('patients')
+                              .select('*')
+                              .eq('id', patient.id)
+                              .single();
+                            if (data) {
+                              setPatientForEdit(data);
+                              setIsEditModalOpen(true);
+                            }
+                          }}
+                          title="Edit Patient"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
@@ -766,7 +790,28 @@ export default function Patients() {
             </Tabs>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                if (selectedPatient) {
+                  // Fetch full patient data including raw_fhir_data
+                  const { data } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .eq('id', selectedPatient.id)
+                    .single();
+                  if (data) {
+                    setPatientForEdit(data);
+                    setIsEditModalOpen(true);
+                  }
+                }
+              }}
+              className="gap-2"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Patient
+            </Button>
             <Button variant="outline" onClick={() => setSelectedPatient(null)}>
               Close
             </Button>
@@ -792,6 +837,20 @@ export default function Patients() {
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      {/* Edit Patient Modal */}
+      <EditPatientModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setPatientForEdit(null);
+        }}
+        patient={patientForEdit}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+          setSelectedPatient(null);
+        }}
+      />
     </div>
   );
 }

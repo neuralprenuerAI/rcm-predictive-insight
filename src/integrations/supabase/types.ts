@@ -2378,6 +2378,59 @@ export type Database = {
           },
         ]
       }
+      patient_audit_log: {
+        Row: {
+          action: string
+          after_data: Json | null
+          before_data: Json | null
+          changes: Json | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          patient_external_id: string | null
+          patient_id: string | null
+          source: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          after_data?: Json | null
+          before_data?: Json | null
+          changes?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          patient_external_id?: string | null
+          patient_id?: string | null
+          source?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          after_data?: Json | null
+          before_data?: Json | null
+          changes?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          patient_external_id?: string | null
+          patient_id?: string | null
+          source?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_audit_log_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patients: {
         Row: {
           address_line1: string | null

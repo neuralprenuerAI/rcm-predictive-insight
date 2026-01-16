@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, User, Phone, MapPin, Heart, Globe, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Patient {
   id: string;
@@ -286,9 +287,26 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
     return Object.keys(newErrors).length === 0;
   };
 
+  // Get account number from FHIR data
+  const getAccountNumber = (pat: Patient): string => {
+    const fhirData = pat.raw_fhir_data || {};
+    const identifiers = fhirData.identifier || [];
+    
+    // Find secondary identifier (account number)
+    const secondaryId = identifiers.find((id: any) => id.use === "secondary");
+    if (secondaryId?.value) return secondaryId.value;
+    
+    // Fall back to usual identifier
+    const usualId = identifiers.find((id: any) => id.use === "usual");
+    if (usualId?.value) return usualId.value;
+    
+    // Fall back to external_id
+    return pat.external_id;
+  };
+
   // Handle form submission
   const handleSubmit = async () => {
-    if (!validateForm()) {
+    if (!validateForm() || !patient) {
       toast({
         title: "Validation Error",
         description: "Please fix the errors before saving.",
@@ -297,11 +315,221 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       return;
     }
 
-    // This will be connected in Part 3
-    toast({
-      title: "Ready to Submit",
-      description: "Form validated. Integration will be connected in Part 3."
-    });
+    // Check for missing connection ID
+    if (!patient.source_connection_id) {
+      toast({
+        title: "Cannot Update",
+        description: "This patient is not linked to an ECW connection. Please sync patients first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Get the account number for patient matching
+      const accountNumber = getAccountNumber(patient);
+
+      // Prepare race data if selected
+      const raceData = formData.race ? {
+        code: formData.race,
+        display: RACE_OPTIONS.find(r => r.code === formData.race)?.display || formData.race
+      } : undefined;
+
+      // Prepare ethnicity data if selected
+      const ethnicityData = formData.ethnicity ? {
+        code: formData.ethnicity,
+        display: ETHNICITY_OPTIONS.find(e => e.code === formData.ethnicity)?.display || formData.ethnicity
+      } : undefined;
+
+      // Prepare language data if selected
+      const languageData = formData.preferredLanguage ? {
+        code: formData.preferredLanguage,
+        display: LANGUAGE_OPTIONS.find(l => l.code === formData.preferredLanguage)?.display || formData.preferredLanguage
+      } : undefined;
+
+      // Build the update payload
+      const updatePayload = {
+        connectionId: patient.source_connection_id,
+        patientExternalId: patient.external_id,
+        accountNumber: accountNumber,
+        data: {
+          prefix: formData.prefix || undefined,
+          firstName: formData.firstName,
+          middleName: formData.middleName || undefined,
+          lastName: formData.lastName,
+          suffix: formData.suffix || undefined,
+          birthDate: formData.birthDate,
+          gender: formData.gender,
+          active: formData.active,
+          deceased: formData.deceased,
+          maritalStatus: formData.maritalStatus || undefined,
+          homePhone: formData.homePhone || undefined,
+          workPhone: formData.workPhone || undefined,
+          mobilePhone: formData.mobilePhone || undefined,
+          email: formData.email || undefined,
+          addressLine1: formData.addressLine1 || undefined,
+          addressLine2: formData.addressLine2 || undefined,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          postalCode: formData.postalCode || undefined,
+          country: formData.country || "US",
+          race: raceData,
+          ethnicity: ethnicityData,
+          birthSex: formData.birthSex || undefined,
+          preferredLanguage: languageData,
+          emergencyContactName: formData.emergencyContactName || undefined,
+          emergencyContactRelationship: formData.emergencyContactRelationship || undefined,
+          emergencyContactPhone: formData.emergencyContactPhone || undefined
+        }
+      };
+
+      // Store before data for audit log
+      const beforeData = {
+        firstName: patient.first_name,
+        lastName: patient.last_name,
+        birthDate: patient.date_of_birth,
+        gender: patient.gender,
+        phone: patient.phone,
+        email: patient.email
+      };
+
+      console.log("Sending patient update:", updatePayload);
+
+      // Call the edge function
+      const { data: response, error } = await supabase.functions.invoke("ecw-patient-update", {
+        body: updatePayload
+      });
+
+      if (error) {
+        throw new Error(error.message || "Failed to update patient");
+      }
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to update patient in ECW");
+      }
+
+      // Update succeeded - now update local database
+      const { error: localUpdateError } = await supabase
+        .from("patients")
+        .update({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          gender: formData.gender,
+          phone: formData.mobilePhone || formData.homePhone || null,
+          email: formData.email || null,
+          address_line1: formData.addressLine1 || null,
+          address_line2: formData.addressLine2 || null,
+          city: formData.city || null,
+          state: formData.state || null,
+          postal_code: formData.postalCode || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", patient.id);
+
+      if (localUpdateError) {
+        console.error("Failed to update local database:", localUpdateError);
+        // Don't throw - ECW update succeeded
+      }
+
+      // Log to audit table
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const afterData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        birthDate: formData.birthDate,
+        gender: formData.gender,
+        phone: formData.mobilePhone || formData.homePhone,
+        email: formData.email
+      };
+
+      // Calculate what changed
+      const changes: Record<string, { from: any; to: any }> = {};
+      Object.keys(afterData).forEach(key => {
+        const beforeVal = beforeData[key as keyof typeof beforeData];
+        const afterVal = afterData[key as keyof typeof afterData];
+        if (beforeVal !== afterVal) {
+          changes[key] = { from: beforeVal, to: afterVal };
+        }
+      });
+
+      if (user) {
+        await supabase.from("patient_audit_log").insert({
+          patient_id: patient.id,
+          patient_external_id: patient.external_id,
+          user_id: user.id,
+          action: "patient_update",
+          changes: changes,
+          before_data: beforeData,
+          after_data: afterData,
+          source: "ecw",
+          status: "success"
+        });
+      }
+
+      toast({
+        title: "Patient Updated",
+        description: `Successfully updated ${formData.firstName} ${formData.lastName} in eClinicalWorks.`
+      });
+
+      onSuccess();
+      onClose();
+
+    } catch (error: unknown) {
+      console.error("Patient update error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Failed to update patient";
+
+      // Log failed attempt to audit table
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("patient_audit_log").insert({
+            patient_id: patient.id,
+            patient_external_id: patient.external_id,
+            user_id: user.id,
+            action: "patient_update",
+            changes: null,
+            before_data: null,
+            after_data: null,
+            source: "ecw",
+            status: "failed",
+            error_message: errorMsg
+          });
+        }
+      } catch (auditError) {
+        console.error("Failed to log audit:", auditError);
+      }
+
+      // Show user-friendly error message
+      let errorMessage = errorMsg;
+      
+      // Map common ECW errors to user-friendly messages
+      if (errorMessage.includes("100") || errorMessage.includes("not found")) {
+        errorMessage = "Patient not found in ECW. The account number or date of birth may not match.";
+      } else if (errorMessage.includes("103")) {
+        errorMessage = "Invalid patient ID. Please try refreshing the patient data.";
+      } else if (errorMessage.includes("203")) {
+        errorMessage = "Invalid characters in the data. Please check for special characters.";
+      } else if (errorMessage.includes("401") || errorMessage.includes("Authentication")) {
+        errorMessage = "Authentication failed. Please reconnect to ECW in Settings.";
+      } else if (errorMessage.includes("403") || errorMessage.includes("authorized")) {
+        errorMessage = "Not authorized. Please ensure Patient Update scope is enabled.";
+      } else if (errorMessage.includes("408") || errorMessage.includes("timeout")) {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (errorMessage.includes("500")) {
+        errorMessage = "ECW server error. Please try again later.";
+      }
+
+      toast({
+        title: "Update Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!patient) return null;
