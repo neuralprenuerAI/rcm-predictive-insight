@@ -115,6 +115,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           last_sync: string | null
+          name: string | null
           updated_at: string
           user_id: string
         }
@@ -129,6 +130,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_sync?: string | null
+          name?: string | null
           updated_at?: string
           user_id: string
         }
@@ -143,6 +145,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_sync?: string | null
+          name?: string | null
           updated_at?: string
           user_id?: string
         }
