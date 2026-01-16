@@ -25,35 +25,58 @@ const RoleContext = createContext<RoleContextType>({
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>("user");
-  const [isLoading, setIsLoading] = useState(true);
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  const fetchRole = async (userId?: string) => {
-    const targetUserId = userId || user?.id;
+  // 1) Track auth state (independent from role)
+  useEffect(() => {
+    let isMounted = true;
 
-    // Always end loading even if role lookup fails/hangs
-    setIsLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      setUser(session?.user ?? null);
+      setAuthChecked(true);
+    });
 
-    if (!targetUserId) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+        setAuthChecked(true);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // 2) Fetch role (never blocks forever)
+  const fetchRole = async () => {
+    if (!user?.id) {
       setRole("user");
-      setIsLoading(false);
+      setRoleLoading(false);
       return;
     }
+
+    setRoleLoading(true);
 
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Role fetch timeout")), 5000)
     );
 
     try {
-      const roleQuery = supabase
+      const query = supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", targetUserId)
-        .single();
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      const { data, error } = await Promise.race([roleQuery, timeout]);
+      const { data, error } = await Promise.race([query, timeout]);
 
       if (error) {
-        console.log("No role found, defaulting to user:", error.message);
+        console.log("Error fetching role, defaulting to user:", error.message);
         setRole("user");
       } else {
         setRole((data?.role as Role) || "user");
@@ -62,50 +85,31 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       console.error("Error fetching role:", err);
       setRole("user");
     } finally {
-      setIsLoading(false);
+      setRoleLoading(false);
     }
   };
 
+  // 3) When auth is known, fetch role once per user
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        await fetchRole(session.user.id);
-      } else {
-        setIsLoading(false);
-      }
-    };
+    if (!authChecked) return;
 
-    getInitialSession();
+    if (!user) {
+      setRole("user");
+      setRoleLoading(false);
+      return;
+    }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          await fetchRole(session.user.id);
-        } else {
-          setUser(null);
-          setRole("user");
-          setIsLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    fetchRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, user?.id]);
 
   const value: RoleContextType = {
     role,
-    isLoading,
+    isLoading: !authChecked || roleLoading,
     isAdmin: role === "admin" || role === "super_admin",
     isSuperAdmin: role === "super_admin",
     user,
-    refetchRole: () => fetchRole(),
+    refetchRole: fetchRole,
   };
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
@@ -113,13 +117,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
 
 export function useRole() {
   const context = useContext(RoleContext);
-  if (!context) {
-    throw new Error("useRole must be used within a RoleProvider");
-  }
+  if (!context) throw new Error("useRole must be used within a RoleProvider");
   return context;
 }
 
-// Convenience hooks
 export function useIsAdmin() {
   const { isAdmin, isLoading } = useRole();
   return { isAdmin, isLoading };
