@@ -14,11 +14,13 @@ import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NotificationFeed, ActionAlerts, ScrubberActivityCard, ChargeAuditorCard, DenialManagementCard } from "@/components/dashboard";
+import { LogOut, Loader2 } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
   const [activeView, setActiveView] = useState("dashboard");
   const [user, setUser] = useState<any>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,8 +43,20 @@ const Index = () => {
   }, [navigate]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
+    setIsSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Sign out error:", error);
+      }
+      // Always navigate to auth, even if there's an error
+      navigate("/auth");
+    } catch (err) {
+      console.error("Sign out failed:", err);
+      navigate("/auth");
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const renderView = () => {
@@ -107,7 +121,19 @@ const Index = () => {
       <Sidebar activeView={activeView} onViewChange={setActiveView} />
       <main className="flex-1 p-8">
         <div className="flex justify-end mb-4">
-          <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+          <Button 
+            variant="outline" 
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="gap-2"
+          >
+            {isSigningOut ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <LogOut className="h-4 w-4" />
+            )}
+            {isSigningOut ? "Signing out..." : "Sign Out"}
+          </Button>
         </div>
         {renderView()}
       </main>
