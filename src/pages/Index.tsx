@@ -45,17 +45,14 @@ const Index = () => {
   const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("Sign out error:", error);
-      }
-      // Always navigate to auth, even if there's an error
-      navigate("/auth");
+      // Local signout clears this browser immediately (avoids “stuck signed-in”)
+      const { error } = await supabase.auth.signOut({ scope: "local" } as any);
+      if (error) console.error("Sign out error:", error);
     } catch (err) {
       console.error("Sign out failed:", err);
-      navigate("/auth");
     } finally {
       setIsSigningOut(false);
+      navigate("/auth");
     }
   };
 

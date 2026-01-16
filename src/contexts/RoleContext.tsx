@@ -29,19 +29,28 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
 
   const fetchRole = async (userId?: string) => {
     const targetUserId = userId || user?.id;
-    
+
+    // Always end loading even if role lookup fails/hangs
+    setIsLoading(true);
+
     if (!targetUserId) {
       setRole("user");
       setIsLoading(false);
       return;
     }
 
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Role fetch timeout")), 5000)
+    );
+
     try {
-      const { data, error } = await supabase
+      const roleQuery = supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", targetUserId)
         .single();
+
+      const { data, error } = await Promise.race([roleQuery, timeout]);
 
       if (error) {
         console.log("No role found, defaulting to user:", error.message);
