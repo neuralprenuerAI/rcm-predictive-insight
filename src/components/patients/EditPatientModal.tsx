@@ -419,13 +419,49 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         throw new Error(response?.error || "Failed to update patient in ECW");
       }
 
-      // Update succeeded - now update local database
+      // Update succeeded - now update local database with ALL fields
       const stateValue = cleanValue(formData.state);
+      const prefixValue = cleanValue(formData.prefix);
+      const suffixValue = cleanValue(formData.suffix);
+      
+      // Build updated FHIR data to keep raw_fhir_data in sync
+      const updatedFhirData = {
+        ...patient.raw_fhir_data,
+        name: [{
+          family: formData.lastName,
+          given: [formData.firstName, formData.middleName].filter(Boolean),
+          prefix: prefixValue ? [prefixValue] : [],
+          suffix: suffixValue ? [suffixValue] : []
+        }],
+        birthDate: formData.birthDate,
+        gender: formData.gender,
+        active: formData.active,
+        deceasedBoolean: formData.deceased,
+        telecom: [
+          formData.homePhone && { system: "phone", value: formData.homePhone, use: "home" },
+          formData.mobilePhone && { system: "phone", value: formData.mobilePhone, use: "mobile" },
+          formData.workPhone && { system: "phone", value: formData.workPhone, use: "work" },
+          formData.email && { system: "email", value: formData.email, use: "home" }
+        ].filter(Boolean),
+        address: [{
+          use: "home",
+          line: [formData.addressLine1, formData.addressLine2].filter(Boolean),
+          city: formData.city || undefined,
+          state: stateValue || undefined,
+          postalCode: formData.postalCode || undefined,
+          country: formData.country || "US"
+        }]
+      };
+
       const { error: localUpdateError } = await supabase
         .from("patients")
         .update({
           first_name: formData.firstName,
           last_name: formData.lastName,
+          middle_name: formData.middleName || null,
+          prefix: prefixValue || null,
+          suffix: suffixValue || null,
+          date_of_birth: formData.birthDate,
           gender: formData.gender,
           phone: formData.mobilePhone || formData.homePhone || null,
           email: formData.email || null,
@@ -434,6 +470,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
           city: formData.city || null,
           state: stateValue || null,
           postal_code: formData.postalCode || null,
+          raw_fhir_data: updatedFhirData,
           updated_at: new Date().toISOString()
         })
         .eq("id", patient.id);

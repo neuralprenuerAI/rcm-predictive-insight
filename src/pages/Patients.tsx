@@ -896,20 +896,44 @@ export default function Patients() {
 
       {/* Edit Patient Modal */}
       <EditPatientModal
+        key={patientForEdit?.id + patientForEdit?.updated_at}
         isOpen={isEditModalOpen}
         onClose={() => {
           setIsEditModalOpen(false);
           setPatientForEdit(null);
         }}
         patient={patientForEdit}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+        onSuccess={async () => {
+          // Invalidate queries to refetch fresh data
+          await queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+          
+          // If viewing a specific patient in dialog, refetch that patient
+          if (selectedPatient && patientForEdit?.id === selectedPatient.id) {
+            const { data: updatedPatient } = await supabase
+              .from('patients')
+              .select('*')
+              .eq('id', selectedPatient.id)
+              .single();
+            
+            if (updatedPatient) {
+              // Update with fresh data including counts
+              setSelectedPatient({
+                ...updatedPatient,
+                lab_count: selectedPatient.lab_count,
+                imaging_count: selectedPatient.imaging_count,
+                procedure_count: selectedPatient.procedure_count
+              } as PatientWithOrders);
+            }
+          }
+          
           // Show success animation on the updated patient row
           if (patientForEdit?.id) {
             setRecentlyUpdatedId(patientForEdit.id);
             setTimeout(() => setRecentlyUpdatedId(null), 3000);
           }
-          setSelectedPatient(null);
+          
+          setIsEditModalOpen(false);
+          setPatientForEdit(null);
         }}
       />
     </div>
