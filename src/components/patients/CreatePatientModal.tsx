@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, UserPlus, Phone, MapPin, Heart, Globe, AlertCircle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CreatePatientModalProps {
   isOpen: boolean;
@@ -253,12 +254,12 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle form submission (will be connected in Part 3)
+  // Handle form submission
   const handleSubmit = async () => {
     if (!validateForm()) {
       toast({
         title: "Validation Error",
-        description: "Please fix the errors before saving.",
+        description: "Please fix the errors before creating the patient.",
         variant: "destructive"
       });
       return;
@@ -273,11 +274,254 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       return;
     }
 
-    // This will be connected in Part 3
-    toast({
-      title: "Ready to Submit",
-      description: "Form validated. Integration will be connected in Part 3."
-    });
+    setIsLoading(true);
+
+    try {
+      // Helper function to clean "unspecified" and "none" values
+      const cleanValue = (val: string | undefined): string | undefined => {
+        if (!val || val === "none" || val === "unspecified") return undefined;
+        return val;
+      };
+
+      // Prepare race data if selected
+      const raceCode = cleanValue(formData.race);
+      const raceData = raceCode ? {
+        code: raceCode,
+        display: RACE_OPTIONS.find(r => r.code === raceCode)?.display || raceCode
+      } : undefined;
+
+      // Prepare ethnicity data if selected
+      const ethnicityCode = cleanValue(formData.ethnicity);
+      const ethnicityData = ethnicityCode ? {
+        code: ethnicityCode,
+        display: ETHNICITY_OPTIONS.find(e => e.code === ethnicityCode)?.display || ethnicityCode
+      } : undefined;
+
+      // Prepare language data if selected
+      const languageCode = cleanValue(formData.preferredLanguage);
+      const languageData = languageCode ? {
+        code: languageCode,
+        display: LANGUAGE_OPTIONS.find(l => l.code === languageCode)?.display || languageCode
+      } : undefined;
+
+      // Build the create payload
+      const createPayload = {
+        connectionId: connectionId,
+        accountNumber: formData.accountNumber.trim(),
+        data: {
+          prefix: cleanValue(formData.prefix),
+          firstName: formData.firstName.trim(),
+          middleName: formData.middleName?.trim() || undefined,
+          lastName: formData.lastName.trim(),
+          suffix: cleanValue(formData.suffix),
+          birthDate: formData.birthDate,
+          gender: formData.gender,
+          active: formData.active,
+          maritalStatus: cleanValue(formData.maritalStatus),
+          homePhone: formData.homePhone?.trim() || undefined,
+          workPhone: formData.workPhone?.trim() || undefined,
+          mobilePhone: formData.mobilePhone?.trim() || undefined,
+          email: formData.email?.trim() || undefined,
+          addressLine1: formData.addressLine1?.trim() || undefined,
+          addressLine2: formData.addressLine2?.trim() || undefined,
+          city: formData.city?.trim() || undefined,
+          state: cleanValue(formData.state),
+          postalCode: formData.postalCode?.trim() || undefined,
+          country: formData.country || "US",
+          race: raceData,
+          ethnicity: ethnicityData,
+          birthSex: cleanValue(formData.birthSex),
+          preferredLanguage: languageData,
+          emergencyContactName: formData.emergencyContactName?.trim() || undefined,
+          emergencyContactRelationship: cleanValue(formData.emergencyContactRelationship),
+          emergencyContactPhone: formData.emergencyContactPhone?.trim() || undefined
+        }
+      };
+
+      console.log("=== PATIENT CREATE START ===");
+      console.log("Payload:", createPayload);
+
+      // Call the edge function
+      const { data: response, error } = await supabase.functions.invoke("ecw-patient-create", {
+        body: createPayload
+      });
+
+      console.log("ECW Response:", response);
+      console.log("ECW Error:", error);
+
+      if (error) {
+        throw new Error(error.message || "Failed to create patient in ECW");
+      }
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to create patient in ECW");
+      }
+
+      // ECW creation successful - now save to local database
+      console.log("ECW create successful, saving to local database...");
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Build raw_fhir_data for local storage
+      const rawFhirData = {
+        resourceType: "Patient",
+        id: response.externalId,
+        identifier: [
+          { use: "usual", value: formData.accountNumber },
+          { use: "secondary", value: formData.accountNumber }
+        ],
+        name: [{
+          family: formData.lastName,
+          given: [formData.firstName, formData.middleName].filter(Boolean),
+          prefix: cleanValue(formData.prefix) ? [formData.prefix] : [],
+          suffix: cleanValue(formData.suffix) ? [formData.suffix] : []
+        }],
+        birthDate: formData.birthDate,
+        gender: formData.gender,
+        telecom: [
+          formData.homePhone && { system: "phone", value: formData.homePhone, use: "home" },
+          formData.mobilePhone && { system: "phone", value: formData.mobilePhone, use: "mobile" },
+          formData.workPhone && { system: "phone", value: formData.workPhone, use: "work" },
+          formData.email && { system: "email", value: formData.email, use: "home" }
+        ].filter(Boolean),
+        address: (formData.addressLine1 || formData.city) ? [{
+          use: "home",
+          line: [formData.addressLine1, formData.addressLine2].filter(Boolean),
+          city: formData.city,
+          state: cleanValue(formData.state),
+          postalCode: formData.postalCode,
+          country: formData.country
+        }] : []
+      };
+
+      // Insert new patient into local database
+      const { data: newPatient, error: insertError } = await supabase
+        .from("patients")
+        .insert({
+          external_id: response.externalId || formData.accountNumber,
+          source: "ecw",
+          source_connection_id: connectionId,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
+          middle_name: formData.middleName?.trim() || null,
+          prefix: cleanValue(formData.prefix) || null,
+          suffix: cleanValue(formData.suffix) || null,
+          date_of_birth: formData.birthDate,
+          gender: formData.gender,
+          phone: formData.mobilePhone?.trim() || formData.homePhone?.trim() || null,
+          email: formData.email?.trim() || null,
+          address_line1: formData.addressLine1?.trim() || null,
+          address_line2: formData.addressLine2?.trim() || null,
+          city: formData.city?.trim() || null,
+          state: cleanValue(formData.state) || null,
+          postal_code: formData.postalCode?.trim() || null,
+          user_id: user?.id,
+          raw_fhir_data: rawFhirData,
+          last_synced_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Failed to save patient locally:", insertError);
+        // Don't throw - ECW creation succeeded, just warn about local save
+        toast({
+          title: "Patient Created in ECW",
+          description: "Patient was created in ECW but failed to save locally. Please sync patients to update.",
+          variant: "default"
+        });
+      } else {
+        console.log("Patient saved locally:", newPatient);
+      }
+
+      // Log to audit table
+      try {
+        if (user) {
+          await supabase.from("patient_audit_log").insert({
+            patient_id: newPatient?.id || null,
+            patient_external_id: response.externalId || formData.accountNumber,
+            user_id: user.id,
+            action: "patient_create",
+            changes: null,
+            before_data: null,
+            after_data: {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              birthDate: formData.birthDate,
+              gender: formData.gender,
+              accountNumber: formData.accountNumber
+            },
+            source: "ecw",
+            status: "success"
+          });
+        }
+      } catch (auditError) {
+        console.error("Failed to log audit:", auditError);
+      }
+
+      console.log("=== PATIENT CREATE COMPLETE ===");
+
+      toast({
+        title: "Patient Created",
+        description: `Successfully created ${formData.firstName} ${formData.lastName} in eClinicalWorks.`
+      });
+
+      onSuccess();
+      onClose();
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to create patient";
+      console.error("Patient create error:", error);
+
+      // Log failed attempt to audit table
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("patient_audit_log").insert({
+            patient_id: null,
+            patient_external_id: formData.accountNumber,
+            user_id: user.id,
+            action: "patient_create",
+            changes: null,
+            before_data: null,
+            after_data: null,
+            source: "ecw",
+            status: "failed",
+            error_message: errorMessage
+          });
+        }
+      } catch (auditError) {
+        console.error("Failed to log audit:", auditError);
+      }
+
+      // Show user-friendly error message
+      let displayError = errorMessage;
+      
+      // Map common ECW errors
+      if (displayError.includes("already exists") || displayError.includes("100")) {
+        displayError = "A patient with this account number already exists in ECW. Please use a different account number.";
+      } else if (displayError.includes("103")) {
+        displayError = "Invalid account number format. Please try a different account number.";
+      } else if (displayError.includes("203")) {
+        displayError = "Invalid characters in the data. Please check for special characters and try again.";
+      } else if (displayError.includes("401") || displayError.includes("Authentication")) {
+        displayError = "Authentication failed. Please reconnect to ECW in Settings.";
+      } else if (displayError.includes("403") || displayError.includes("authorized")) {
+        displayError = "Not authorized. Please ensure Patient Create scope is enabled in your ECW connection.";
+      } else if (displayError.includes("408") || displayError.includes("timeout")) {
+        displayError = "Request timed out. Please try again.";
+      } else if (displayError.includes("500")) {
+        displayError = "ECW server error. Please try again later.";
+      }
+
+      toast({
+        title: "Create Failed",
+        description: displayError,
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
