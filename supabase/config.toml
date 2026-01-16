@@ -83,3 +83,6 @@ verify_jwt = true
 
 [functions.import-denials-from-835]
 verify_jwt = true
+
+[functions.ecw-patient-create]
+verify_jwt = true
