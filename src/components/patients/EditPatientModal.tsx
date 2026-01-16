@@ -195,32 +195,32 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       const fhirName = fhirData.name?.[0] || {};
 
       setFormData({
-        prefix: fhirName.prefix?.[0] || patient.prefix || "",
+        prefix: fhirName.prefix?.[0] || patient.prefix || "none",
         firstName: fhirName.given?.[0] || patient.first_name || "",
         middleName: fhirName.given?.[1] || patient.middle_name || "",
         lastName: fhirName.family || patient.last_name || "",
-        suffix: fhirName.suffix?.[0] || patient.suffix || "",
+        suffix: fhirName.suffix?.[0] || patient.suffix || "none",
         birthDate: patient.date_of_birth || fhirData.birthDate || "",
         gender: patient.gender || fhirData.gender || "",
-        birthSex: birthSexExt?.valueCode || "",
+        birthSex: birthSexExt?.valueCode || "none",
         active: fhirData.active !== undefined ? fhirData.active : true,
         deceased: fhirData.deceasedBoolean || false,
-        maritalStatus: fhirData.maritalStatus?.coding?.[0]?.code || "",
-        race: raceExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "",
-        ethnicity: ethnicityExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "",
+        maritalStatus: fhirData.maritalStatus?.coding?.[0]?.code || "none",
+        race: raceExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "none",
+        ethnicity: ethnicityExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "none",
         homePhone,
         workPhone,
         mobilePhone,
         email,
-        preferredLanguage: fhirData.communication?.[0]?.language?.coding?.[0]?.code || "",
+        preferredLanguage: fhirData.communication?.[0]?.language?.coding?.[0]?.code || "none",
         addressLine1: address.line?.[0] || patient.address_line1 || "",
         addressLine2: address.line?.[1] || patient.address_line2 || "",
         city: address.city || patient.city || "",
-        state: address.state || patient.state || "",
+        state: address.state || patient.state || "none",
         postalCode: address.postalCode || patient.postal_code || "",
         country: address.country || "US",
         emergencyContactName: contactName,
-        emergencyContactRelationship: contact.relationship?.[0]?.coding?.[0]?.code || "",
+        emergencyContactRelationship: contact.relationship?.[0]?.coding?.[0]?.code || "none",
         emergencyContactPhone: contact.telecom?.[0]?.value || ""
       });
 
@@ -287,6 +287,12 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
     return Object.keys(newErrors).length === 0;
   };
 
+  // Clean value helper - converts "none" placeholder back to undefined
+  const cleanValue = (val: string): string | undefined => {
+    if (val === "none" || val === "") return undefined;
+    return val;
+  };
+
   // Get account number from FHIR data
   const getAccountNumber = (pat: Patient): string => {
     const fhirData = pat.raw_fhir_data || {};
@@ -332,21 +338,24 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       const accountNumber = getAccountNumber(patient);
 
       // Prepare race data if selected
-      const raceData = formData.race ? {
-        code: formData.race,
-        display: RACE_OPTIONS.find(r => r.code === formData.race)?.display || formData.race
+      const raceValue = cleanValue(formData.race);
+      const raceData = raceValue ? {
+        code: raceValue,
+        display: RACE_OPTIONS.find(r => r.code === raceValue)?.display || raceValue
       } : undefined;
 
       // Prepare ethnicity data if selected
-      const ethnicityData = formData.ethnicity ? {
-        code: formData.ethnicity,
-        display: ETHNICITY_OPTIONS.find(e => e.code === formData.ethnicity)?.display || formData.ethnicity
+      const ethnicityValue = cleanValue(formData.ethnicity);
+      const ethnicityData = ethnicityValue ? {
+        code: ethnicityValue,
+        display: ETHNICITY_OPTIONS.find(e => e.code === ethnicityValue)?.display || ethnicityValue
       } : undefined;
 
       // Prepare language data if selected
-      const languageData = formData.preferredLanguage ? {
-        code: formData.preferredLanguage,
-        display: LANGUAGE_OPTIONS.find(l => l.code === formData.preferredLanguage)?.display || formData.preferredLanguage
+      const languageValue = cleanValue(formData.preferredLanguage);
+      const languageData = languageValue ? {
+        code: languageValue,
+        display: LANGUAGE_OPTIONS.find(l => l.code === languageValue)?.display || languageValue
       } : undefined;
 
       // Build the update payload
@@ -355,16 +364,16 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         patientExternalId: patient.external_id,
         accountNumber: accountNumber,
         data: {
-          prefix: formData.prefix || undefined,
+          prefix: cleanValue(formData.prefix),
           firstName: formData.firstName,
           middleName: formData.middleName || undefined,
           lastName: formData.lastName,
-          suffix: formData.suffix || undefined,
+          suffix: cleanValue(formData.suffix),
           birthDate: formData.birthDate,
           gender: formData.gender,
           active: formData.active,
           deceased: formData.deceased,
-          maritalStatus: formData.maritalStatus || undefined,
+          maritalStatus: cleanValue(formData.maritalStatus),
           homePhone: formData.homePhone || undefined,
           workPhone: formData.workPhone || undefined,
           mobilePhone: formData.mobilePhone || undefined,
@@ -372,15 +381,15 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
           addressLine1: formData.addressLine1 || undefined,
           addressLine2: formData.addressLine2 || undefined,
           city: formData.city || undefined,
-          state: formData.state || undefined,
+          state: cleanValue(formData.state),
           postalCode: formData.postalCode || undefined,
           country: formData.country || "US",
           race: raceData,
           ethnicity: ethnicityData,
-          birthSex: formData.birthSex || undefined,
+          birthSex: cleanValue(formData.birthSex),
           preferredLanguage: languageData,
           emergencyContactName: formData.emergencyContactName || undefined,
-          emergencyContactRelationship: formData.emergencyContactRelationship || undefined,
+          emergencyContactRelationship: cleanValue(formData.emergencyContactRelationship),
           emergencyContactPhone: formData.emergencyContactPhone || undefined
         }
       };
@@ -411,6 +420,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       }
 
       // Update succeeded - now update local database
+      const stateValue = cleanValue(formData.state);
       const { error: localUpdateError } = await supabase
         .from("patients")
         .update({
@@ -422,7 +432,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
           address_line1: formData.addressLine1 || null,
           address_line2: formData.addressLine2 || null,
           city: formData.city || null,
-          state: formData.state || null,
+          state: stateValue || null,
           postal_code: formData.postalCode || null,
           updated_at: new Date().toISOString()
         })
@@ -575,7 +585,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {PREFIX_OPTIONS.map(p => (
                       <SelectItem key={p} value={p}>{p}</SelectItem>
                     ))}
@@ -613,7 +623,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {SUFFIX_OPTIONS.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
@@ -675,7 +685,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="none">Not specified</SelectItem>
                     <SelectItem value="M">Male</SelectItem>
                     <SelectItem value="F">Female</SelectItem>
                     <SelectItem value="UNK">Unknown</SelectItem>
@@ -691,7 +701,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="none">Not specified</SelectItem>
                     {MARITAL_STATUS_OPTIONS.map(m => (
                       <SelectItem key={m.code} value={m.code}>{m.display}</SelectItem>
                     ))}
@@ -709,7 +719,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select race" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="none">Not specified</SelectItem>
                     {RACE_OPTIONS.map(r => (
                       <SelectItem key={r.code} value={r.code}>{r.display}</SelectItem>
                     ))}
@@ -725,7 +735,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                     <SelectValue placeholder="Select ethnicity" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Not specified</SelectItem>
+                    <SelectItem value="none">Not specified</SelectItem>
                     {ETHNICITY_OPTIONS.map(e => (
                       <SelectItem key={e.code} value={e.code}>{e.display}</SelectItem>
                     ))}
@@ -825,7 +835,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not specified</SelectItem>
+                  <SelectItem value="none">Not specified</SelectItem>
                   {LANGUAGE_OPTIONS.map(l => (
                     <SelectItem key={l.code} value={l.code}>{l.display}</SelectItem>
                   ))}
@@ -879,7 +889,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                       <SelectValue placeholder="Select state" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Select state</SelectItem>
+                      <SelectItem value="none">Select state</SelectItem>
                       {US_STATES.map(s => (
                         <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
                       ))}
@@ -934,7 +944,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                       <SelectValue placeholder="Select relationship" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Select relationship</SelectItem>
+                      <SelectItem value="none">Select relationship</SelectItem>
                       {RELATIONSHIP_OPTIONS.map(r => (
                         <SelectItem key={r.code} value={r.code}>{r.display}</SelectItem>
                       ))}
