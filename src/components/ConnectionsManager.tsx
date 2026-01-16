@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
-  Users, FlaskConical, Calendar, Receipt, Shield, Activity, Scan, Syringe, Save, Loader2 
+  Users, FlaskConical, Calendar, Receipt, Shield, Activity, Scan, Syringe, Save, Loader2, UserCog 
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -84,6 +84,13 @@ const ECW_SCOPE_OPTIONS = [
     scope: 'system/Observation.read',
     icon: Activity,
     description: 'Lab results, vitals, measurements'
+  },
+  { 
+    id: 'patientUpdate', 
+    label: 'Patient Update', 
+    scope: 'system/Patient.update',
+    icon: UserCog,
+    description: 'Update patient demographics in eClinicalWorks'
   },
 ];
 
