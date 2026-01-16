@@ -4,6 +4,7 @@ import { RoleBadge } from "@/components/ui/RoleBadge";
 import { UsersTab } from "@/components/admin/UsersTab";
 import { OverviewTab } from "@/components/admin/OverviewTab";
 import { ConnectionsTab } from "@/components/admin/ConnectionsTab";
+import { ErrorsTab } from "@/components/admin/ErrorsTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -115,12 +116,9 @@ export default function Admin() {
             <ConnectionsTab />
           </TabsContent>
 
-          {/* Errors Tab - Placeholder */}
-          <TabsContent value="errors">
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <AlertTriangle className="h-16 w-16 mb-4 opacity-50" />
-              <p className="text-lg font-medium">Error logs coming in Phase 2</p>
-            </div>
+          {/* Errors Tab */}
+          <TabsContent value="errors" className="mt-6">
+            <ErrorsTab />
           </TabsContent>
 
           {/* Analytics Tab - Placeholder */}
