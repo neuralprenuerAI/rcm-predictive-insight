@@ -2449,12 +2449,15 @@ export type Database = {
           insurance_info: Json | null
           last_name: string | null
           last_synced_at: string | null
+          middle_name: string | null
           phone: string | null
           postal_code: string | null
+          prefix: string | null
           raw_fhir_data: Json | null
           source: string
           source_connection_id: string | null
           state: string | null
+          suffix: string | null
           updated_at: string
           user_id: string
         }
@@ -2472,12 +2475,15 @@ export type Database = {
           insurance_info?: Json | null
           last_name?: string | null
           last_synced_at?: string | null
+          middle_name?: string | null
           phone?: string | null
           postal_code?: string | null
+          prefix?: string | null
           raw_fhir_data?: Json | null
           source?: string
           source_connection_id?: string | null
           state?: string | null
+          suffix?: string | null
           updated_at?: string
           user_id: string
         }
@@ -2495,12 +2501,15 @@ export type Database = {
           insurance_info?: Json | null
           last_name?: string | null
           last_synced_at?: string | null
+          middle_name?: string | null
           phone?: string | null
           postal_code?: string | null
+          prefix?: string | null
           raw_fhir_data?: Json | null
           source?: string
           source_connection_id?: string | null
           state?: string | null
+          suffix?: string | null
           updated_at?: string
           user_id?: string
         }
