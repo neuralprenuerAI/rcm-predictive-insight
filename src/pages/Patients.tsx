@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { EditPatientModal } from "@/components/patients/EditPatientModal";
+import { CreatePatientModal } from "@/components/patients/CreatePatientModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type FilterType = 'all' | 'procedures' | 'labs' | 'imaging' | 'any';
 
@@ -92,6 +94,29 @@ export default function Patients() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [patientForEdit, setPatientForEdit] = useState<any>(null);
   const [recentlyUpdatedId, setRecentlyUpdatedId] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+
+  // Fetch ECW connections for patient create
+  const { data: ecwConnections } = useQuery({
+    queryKey: ['ecw-connections'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('api_connections')
+        .select('id, connection_name, name, is_active')
+        .eq('connection_type', 'ecw')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Auto-select first ECW connection if available
+  useEffect(() => {
+    if (ecwConnections && ecwConnections.length > 0 && !selectedConnectionId) {
+      setSelectedConnectionId(ecwConnections[0].id);
+    }
+  }, [ecwConnections, selectedConnectionId]);
 
   // Keyboard shortcut for editing (Cmd+E / Ctrl+E)
   useEffect(() => {
@@ -468,6 +493,35 @@ export default function Patients() {
           <p className="text-muted-foreground">
             {patients?.length || 0} patients synced from ECW
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* ECW Connection Selector (if multiple connections) */}
+          {ecwConnections && ecwConnections.length > 1 && (
+            <Select 
+              value={selectedConnectionId || ""} 
+              onValueChange={(v) => setSelectedConnectionId(v)}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select ECW Connection" />
+              </SelectTrigger>
+              <SelectContent>
+                {ecwConnections.map((conn) => (
+                  <SelectItem key={conn.id} value={conn.id}>
+                    {conn.name || conn.connection_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Create Patient Button */}
+          <Button 
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+            disabled={!ecwConnections || ecwConnections.length === 0}
+          >
+            <UserPlus className="h-4 w-4" />
+            Create Patient
+          </Button>
         </div>
       </div>
 
@@ -935,6 +989,17 @@ export default function Patients() {
           setIsEditModalOpen(false);
           setPatientForEdit(null);
         }}
+      />
+
+      {/* Create Patient Modal */}
+      <CreatePatientModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={async () => {
+          await queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+          setIsCreateModalOpen(false);
+        }}
+        connectionId={selectedConnectionId}
       />
     </div>
   );
