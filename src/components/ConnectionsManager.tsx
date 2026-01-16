@@ -92,6 +92,13 @@ const ECW_SCOPE_OPTIONS = [
     icon: UserCog,
     description: 'Update patient demographics in eClinicalWorks'
   },
+  { 
+    id: 'patientCreate', 
+    label: 'Patient Create', 
+    scope: 'system/Patient.create',
+    icon: UserCog,
+    description: 'Create new patients in eClinicalWorks'
+  },
 ];
 
 export default function ConnectionsManager() {
