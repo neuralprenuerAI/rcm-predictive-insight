@@ -5,6 +5,7 @@ import { UsersTab } from "@/components/admin/UsersTab";
 import { OverviewTab } from "@/components/admin/OverviewTab";
 import { ConnectionsTab } from "@/components/admin/ConnectionsTab";
 import { ErrorsTab } from "@/components/admin/ErrorsTab";
+import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -121,12 +122,9 @@ export default function Admin() {
             <ErrorsTab />
           </TabsContent>
 
-          {/* Analytics Tab - Placeholder */}
-          <TabsContent value="analytics">
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <BarChart3 className="h-16 w-16 mb-4 opacity-50" />
-              <p className="text-lg font-medium">Analytics dashboard coming in Phase 2</p>
-            </div>
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="mt-6">
+            <AnalyticsTab />
           </TabsContent>
 
           {/* Dev Tools Tab - Super Admin Only */}
