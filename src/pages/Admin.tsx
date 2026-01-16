@@ -3,6 +3,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { RoleBadge } from "@/components/ui/RoleBadge";
 import { UsersTab } from "@/components/admin/UsersTab";
 import { OverviewTab } from "@/components/admin/OverviewTab";
+import { ConnectionsTab } from "@/components/admin/ConnectionsTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -109,12 +110,9 @@ export default function Admin() {
             <UsersTab />
           </TabsContent>
 
-          {/* Connections Tab - Placeholder */}
-          <TabsContent value="connections">
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <Plug className="h-16 w-16 mb-4 opacity-50" />
-              <p className="text-lg font-medium">API Connections monitoring coming in Phase 2</p>
-            </div>
+          {/* Connections Tab */}
+          <TabsContent value="connections" className="mt-6">
+            <ConnectionsTab />
           </TabsContent>
 
           {/* Errors Tab - Placeholder */}
