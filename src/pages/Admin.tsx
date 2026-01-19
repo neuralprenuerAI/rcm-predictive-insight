@@ -8,11 +8,13 @@ import { ErrorsTab } from "@/components/admin/ErrorsTab";
 import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 import { DevToolsTab } from "@/components/admin/DevToolsTab";
 import { DocumentsTab } from "@/components/admin/DocumentsTab";
+import { SecurityAuditTab } from "@/components/admin/SecurityAuditTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
   ShieldCheck, 
+  Shield,
   Users, 
   Plug, 
   AlertTriangle, 
@@ -76,7 +78,7 @@ export default function Admin() {
       {/* Tabs Navigation */}
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:grid-cols-7 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-8 h-auto p-1">
             <TabsTrigger value="overview" className="flex items-center gap-2 py-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -101,6 +103,12 @@ export default function Admin() {
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Analytics</span>
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="security" className="flex items-center gap-2 py-2">
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline">Security</span>
+              </TabsTrigger>
+            )}
             {isSuperAdmin && (
               <TabsTrigger value="devtools" className="flex items-center gap-2 py-2">
                 <Wrench className="h-4 w-4" />
@@ -138,6 +146,13 @@ export default function Admin() {
           <TabsContent value="analytics" className="mt-6">
             <AnalyticsTab />
           </TabsContent>
+
+          {/* Security Tab - Super Admin Only */}
+          {isSuperAdmin && (
+            <TabsContent value="security" className="mt-6">
+              <SecurityAuditTab />
+            </TabsContent>
+          )}
 
           {/* Dev Tools Tab - Super Admin Only */}
           {isSuperAdmin && (
