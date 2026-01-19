@@ -3573,6 +3573,92 @@ export type Database = {
           },
         ]
       }
+      shared_document_assignments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          document_id: string
+          downloaded_at: string | null
+          id: string
+          user_id: string
+          viewed_at: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          document_id: string
+          downloaded_at?: string | null
+          id?: string
+          user_id: string
+          viewed_at?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          document_id?: string
+          downloaded_at?: string | null
+          id?: string
+          user_id?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_document_assignments_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "shared_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shared_documents: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          is_public: boolean | null
+          title: string
+          updated_at: string | null
+          uploaded_by: string
+          uploaded_by_email: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_public?: boolean | null
+          title: string
+          updated_at?: string | null
+          uploaded_by: string
+          uploaded_by_email?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_public?: boolean | null
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string
+          uploaded_by_email?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           company: string | null
