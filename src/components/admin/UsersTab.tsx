@@ -47,6 +47,7 @@ interface UserWithRole {
   id: string;
   email: string;
   full_name: string | null;
+  company: string | null;
   created_at: string;
   last_sign_in_at: string | null;
   role: "super_admin" | "admin" | "user";
@@ -82,6 +83,7 @@ export function UsersTab() {
         id: r.user_id,
         email: r.email,
         full_name: null,
+        company: r.company || null,
         created_at: r.created_at,
         last_sign_in_at: null,
         role: r.role,
@@ -122,7 +124,8 @@ export function UsersTab() {
   const filteredUsers = users.filter((user) => {
     const matchesSearch = 
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+      (user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+      (user.company?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     
@@ -285,6 +288,7 @@ export function UsersTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Email</TableHead>
+                    <TableHead>Company</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead>Last Active</TableHead>
@@ -294,7 +298,7 @@ export function UsersTab() {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isSuperAdmin ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={isSuperAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
                         No users found
                       </TableCell>
                     </TableRow>
@@ -308,6 +312,11 @@ export function UsersTab() {
                               <span className="text-sm text-muted-foreground">{user.full_name}</span>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground font-medium">
+                            {user.company || "-"}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <RoleBadge role={user.role} />
