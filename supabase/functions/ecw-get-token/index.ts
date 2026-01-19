@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { SignJWT, importPKCS8 } from "https://esm.sh/jose@5.2.0";
+import { safeLog, logError, logOperation } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +33,12 @@ serve(async (req) => {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    console.log("Fetching API connection details for connection:", connectionId);
+    logOperation("ecw-get-token", { 
+      userId: user.id, 
+      resourceType: "api_connection", 
+      resourceId: connectionId,
+      status: "started" 
+    });
 
     // Fetch API connection details
     const { data: connection, error: connError } = await supabaseClient
@@ -43,7 +49,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (connError) {
-      console.error("Connection fetch error:", connError);
+      logError("Connection fetch error", connError);
       throw new Error("Failed to fetch connection");
     }
 
@@ -68,11 +74,10 @@ serve(async (req) => {
 
     // Select token endpoint based on environment
     const tokenUrl = TOKEN_ENDPOINTS[environment as keyof typeof TOKEN_ENDPOINTS] || TOKEN_ENDPOINTS.sandbox;
-    console.log("=== ECW Token Request Debug ===");
+    
+    // Log only non-sensitive operation metadata
     console.log("Environment:", environment);
-    console.log("Token Endpoint (aud):", tokenUrl);
-    console.log("Client ID (iss/sub):", credentials.client_id);
-    console.log("KID:", credentials.kid || "neuralprenuer-key-1");
+    console.log("Token endpoint configured");
 
     // Generate JWT payload - CRITICAL: aud MUST be the token endpoint URL
     const now = Math.floor(Date.now() / 1000);
@@ -86,19 +91,9 @@ serve(async (req) => {
       exp: now + 300, // 5 minutes expiration
     };
 
-    console.log("=== FRESH JWT TOKEN GENERATED ===");
-    console.log("Unique Token ID (jti):", jti);
-    console.log("Issued At (iat):", new Date(now * 1000).toISOString());
-    console.log("Expires At (exp):", new Date((now + 300) * 1000).toISOString());
-    console.log("Client ID (iss/sub):", credentials.client_id);
-    console.log("Token Endpoint (aud):", tokenUrl);
-    console.log("=================================");
-    console.log("JWT Payload:", JSON.stringify(jwtPayload, null, 2));
-
     // Validate private key format
     const privateKeyStr = credentials.private_key.trim();
     if (!privateKeyStr.includes("-----BEGIN PRIVATE KEY-----")) {
-      console.error("Private key does not appear to be in PKCS#8 PEM format");
       throw new Error("Private key must be in PKCS#8 PEM format (-----BEGIN PRIVATE KEY-----)");
     }
 
@@ -113,15 +108,13 @@ serve(async (req) => {
       typ: "JWT",
       kid: credentials.kid || "neuralprenuer-key-1",
     };
-    console.log("JWT Header:", JSON.stringify(jwtHeader, null, 2));
 
     // Create and sign JWT
     const jwt = await new SignJWT(jwtPayload)
       .setProtectedHeader(jwtHeader)
       .sign(privateKey);
 
-    console.log("JWT generated successfully, length:", jwt.length);
-    console.log("JWT preview (first 100 chars):", jwt.substring(0, 100) + "...");
+    console.log("JWT generated successfully");
 
     // Use scopeOverride if provided, otherwise use connection's scope
     const effectiveScope = scopeOverride || credentials.scope;
@@ -139,17 +132,7 @@ serve(async (req) => {
       scope: effectiveScope,
     });
 
-    console.log("=== Token Request ===");
-    console.log("Scope being requested:", effectiveScope);
-    if (scopeOverride) {
-      console.log("(Using scope override, original was:", credentials.scope, ")");
-    }
-
-    console.log("Token Request Body Parameters:");
-    console.log("  grant_type:", "client_credentials");
-    console.log("  client_assertion_type:", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
-    console.log("  scope:", effectiveScope);
-    console.log("Making token request to:", tokenUrl);
+    console.log("Making token request...");
 
     const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
@@ -159,28 +142,24 @@ serve(async (req) => {
       body: tokenRequestBody.toString(),
     });
 
-    console.log("Token Response Status:", tokenResponse.status);
+    console.log("Token response status:", tokenResponse.status);
 
     if (!tokenResponse.ok) {
       const rawText = await tokenResponse.text();
-      console.error("Token Response Raw:", rawText);
       let parsed: any = null;
       try { parsed = JSON.parse(rawText); } catch (_) {}
-      const message = parsed?.error_description || parsed?.error || rawText;
-      console.error("Token request failed:", {
-        status: tokenResponse.status,
-        error: parsed?.error,
-        error_description: parsed?.error_description,
-        raw: rawText
-      });
+      const message = parsed?.error_description || parsed?.error || "Token request failed";
+      logError("Token request failed", { status: tokenResponse.status, error: message });
       throw new Error(`Token request failed: ${message}`);
     }
 
     const tokenData = await tokenResponse.json();
-    console.log("=== Access token obtained successfully ===");
-    console.log("Token type:", tokenData.token_type);
-    console.log("Expires in:", tokenData.expires_in, "seconds");
-    console.log("Scope:", tokenData.scope);
+    
+    logOperation("ecw-get-token", { 
+      userId: user.id, 
+      resourceType: "access_token", 
+      status: "obtained",
+    });
 
     // Store the token in the connection for reuse
     const { error: updateError } = await supabaseClient
@@ -196,7 +175,7 @@ serve(async (req) => {
       .eq("id", connectionId);
 
     if (updateError) {
-      console.error("Failed to update token in database:", updateError);
+      logError("Failed to update token in database", updateError);
     }
 
     return new Response(
@@ -209,7 +188,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in ecw-get-token:", error);
+    logError("Error in ecw-get-token", error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error",
