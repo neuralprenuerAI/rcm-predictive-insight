@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logError, logOperation } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +64,12 @@ serve(async (req) => {
       throw new Error("Account number is required for creating a new patient");
     }
 
+    logOperation("ecw-patient-create", { 
+      userId: user.id, 
+      resourceType: "patient", 
+      status: "started" 
+    });
+
     // Get connection credentials
     const { data: connection, error: connError } = await supabaseClient
       .from("api_connections")
@@ -87,7 +94,7 @@ serve(async (req) => {
     });
 
     if (tokenResponse.error || !tokenResponse.data?.access_token) {
-      throw new Error("Failed to get access token: " + JSON.stringify(tokenResponse.error));
+      throw new Error("Failed to get access token");
     }
 
     const accessToken = tokenResponse.data.access_token;
@@ -292,7 +299,7 @@ serve(async (req) => {
       }]
     };
 
-    console.log("Sending Patient Create Bundle:", JSON.stringify(bundle, null, 2));
+    console.log("Sending Patient Create Bundle to ECW FHIR API");
 
     // Send to ECW FHIR API
     const fhirResponse = await fetch(fhirBaseUrl, {
@@ -306,7 +313,12 @@ serve(async (req) => {
     });
 
     const responseData = await fhirResponse.json();
-    console.log("ECW Response:", JSON.stringify(responseData, null, 2));
+    
+    logOperation("ecw-patient-create", { 
+      userId: user.id, 
+      resourceType: "patient", 
+      status: fhirResponse.ok ? "success" : "failed" 
+    });
 
     // Check for errors
     if (!fhirResponse.ok) {
@@ -359,14 +371,13 @@ serve(async (req) => {
         success: true,
         message: "Patient created successfully",
         patientLocation: newPatientLocation,
-        externalId: newPatientExternalId,
-        response: responseData
+        externalId: newPatientExternalId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("Patient create error:", error);
+    logError("Patient create error", error);
     return new Response(
       JSON.stringify({
         success: false,

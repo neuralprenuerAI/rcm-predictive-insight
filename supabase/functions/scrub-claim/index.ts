@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logError, logOperation, logCount } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,11 +40,11 @@ serve(async (req) => {
     const request: ScrubRequest = await req.json();
     const { claim_id, claim_data, pdf_content, save_results = true } = request;
 
-    console.log("📥 Received scrub request:", {
-      has_claim_id: !!claim_id,
-      has_claim_data: !!claim_data,
-      has_pdf_content: !!pdf_content,
-      pdf_content_length: pdf_content?.length || 0
+    // Log only metadata, not the actual data
+    logOperation("scrub-claim", { 
+      resourceType: "scrub_request",
+      status: "started",
+      count: claim_data?.procedures?.length || 0
     });
 
     // Get auth header for user context
@@ -70,7 +71,7 @@ serve(async (req) => {
       throw new Error("Authentication required");
     }
 
-    console.log(`🔍 Starting claim scrub for user: ${user.id}`);
+    console.log("Starting claim scrub for user");
 
     let claimInfo: ClaimData | null = claim_data || null;
     let linkedClaimId = claim_id || null;
@@ -79,7 +80,7 @@ serve(async (req) => {
     // OPTION 1: Use provided claim_data directly
     // ========================================
     if (claim_data && claim_data.procedures && claim_data.procedures.length > 0) {
-      console.log("📋 Using provided claim_data");
+      console.log("Using provided claim_data");
       claimInfo = claim_data;
     }
 
@@ -87,7 +88,7 @@ serve(async (req) => {
     // OPTION 2: Load from existing claim
     // ========================================
     if (claim_id && !claimInfo) {
-      console.log(`📂 Loading claim: ${claim_id}`);
+      console.log("Loading claim from database");
       
       const { data: claim, error: claimError } = await supabaseAuth
         .from('claims')
@@ -96,7 +97,7 @@ serve(async (req) => {
         .single();
 
       if (claimError || !claim) {
-        throw new Error(`Claim not found: ${claim_id}`);
+        throw new Error("Claim not found");
       }
 
       const procedures: Procedure[] = [];
@@ -125,8 +126,7 @@ serve(async (req) => {
     // OPTION 3: Extract from PDF using Lovable AI
     // ========================================
     if (pdf_content && !claimInfo) {
-      console.log("📄 Extracting claim data from PDF...");
-      console.log(`📄 PDF content length: ${pdf_content.length} characters`);
+      console.log("Extracting claim data from PDF");
       
       const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
       if (!lovableApiKey) {
@@ -159,7 +159,7 @@ Rules:
 
 IMPORTANT: Return ONLY the JSON object, no other text.`;
 
-      console.log("🤖 Calling Lovable AI Gateway for PDF extraction...");
+      console.log("Calling AI Gateway for PDF extraction");
       
       try {
         const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -187,7 +187,7 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
           })
         });
 
-        console.log(`📡 AI Gateway response status: ${aiResponse.status}`);
+        console.log("AI Gateway response status:", aiResponse.status);
 
         if (aiResponse.status === 429) {
           throw new Error("Rate limit exceeded. Please try again in a moment.");
@@ -198,15 +198,11 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
         }
 
         if (!aiResponse.ok) {
-          const errorText = await aiResponse.text();
-          console.error("❌ AI Gateway error:", errorText);
           throw new Error(`AI extraction failed: ${aiResponse.status}`);
         }
 
         const aiData = await aiResponse.json();
         const text = aiData.choices?.[0]?.message?.content || "";
-        console.log("📝 Extracted text length:", text.length);
-        console.log("📝 Extracted text preview:", text.substring(0, 300));
         
         // Try to find JSON in the response
         const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -218,20 +214,19 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
             // Validate we got procedures
             if (parsed.procedures && Array.isArray(parsed.procedures) && parsed.procedures.length > 0) {
               claimInfo = parsed;
-              console.log(`✅ Extracted ${parsed.procedures.length} procedures from PDF`);
+              logCount("Extracted procedures from PDF", parsed.procedures);
             } else {
               throw new Error("No procedures found in the extracted data. The PDF may not be a valid CMS-1500 form.");
             }
           } catch (parseError) {
-            console.error("❌ JSON parse error:", parseError);
+            logError("JSON parse error", parseError);
             throw new Error("Failed to parse claim data from PDF. Please try manual entry.");
           }
         } else {
-          console.log("⚠️ No JSON found in response. Raw text:", text.substring(0, 500));
           throw new Error("Could not extract structured claim data from PDF. Please try manual entry.");
         }
       } catch (extractError) {
-        console.error("❌ PDF extraction error:", extractError);
+        logError("PDF extraction error", extractError);
         throw extractError;
       }
     }
@@ -243,13 +238,12 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       throw new Error("No valid claim data available. Please ensure your PDF contains readable claim information or use manual entry.");
     }
 
-    console.log(`📋 Processing ${claimInfo.procedures.length} procedures:`, 
-      claimInfo.procedures.map(p => p.cpt_code).join(', '));
+    logCount("Processing procedures", claimInfo.procedures);
 
     // ========================================
     // CALL RULES ENGINE
     // ========================================
-    console.log("🔍 Calling validation rules engine...");
+    console.log("Calling validation rules engine");
     
     const validationResponse = await fetch(
       `${Deno.env.get("SUPABASE_URL")}/functions/v1/validate-claim-rules`,
@@ -271,8 +265,6 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
     );
 
     if (!validationResponse.ok) {
-      const errorText = await validationResponse.text();
-      console.error("❌ Validation failed:", errorText);
       throw new Error(`Validation service error: ${validationResponse.status}`);
     }
 
@@ -282,7 +274,7 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       throw new Error(validationResult.error || "Validation failed");
     }
 
-    console.log(`✅ Validation complete: ${validationResult.issues?.length || 0} issues found`);
+    logCount("Validation complete, issues found", validationResult.issues);
 
     // ========================================
     // GENERATE AI CORRECTIONS (if issues found)
@@ -293,13 +285,13 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
       
       if (lovableApiKey) {
-        console.log("🤖 Generating AI corrections...");
+        console.log("Generating AI corrections");
         
         const correctionPrompt = `You are a certified medical coder. Review these claim issues and provide specific, compliant corrections.
 
 CLAIM INFORMATION:
-- Procedures: ${JSON.stringify(claimInfo.procedures)}
-- Diagnoses: ${JSON.stringify(claimInfo.icd_codes)}
+- Procedures: ${JSON.stringify(claimInfo.procedures.map(p => ({ cpt: p.cpt_code, units: p.units })))}
+- Diagnoses: ${claimInfo.icd_codes?.length || 0} codes
 - Payer: ${claimInfo.payer || 'Unknown'}
 
 ISSUES FOUND:
@@ -341,13 +333,13 @@ Return ONLY the JSON array, no other text.`;
             
             if (jsonMatch) {
               aiCorrections = JSON.parse(jsonMatch[0]);
-              console.log(`✅ Generated ${aiCorrections.length} AI corrections`);
+              logCount("Generated AI corrections", aiCorrections);
             }
           } else {
-            console.log("⚠️ AI corrections request failed:", aiResponse.status);
+            console.log("AI corrections request failed");
           }
         } catch (aiError) {
-          console.error("⚠️ AI correction error (non-fatal):", aiError);
+          logError("AI correction error (non-fatal)", aiError);
         }
       }
     }
@@ -379,7 +371,7 @@ Return ONLY the JSON array, no other text.`;
     let scrubResultId: string | null = null;
 
     if (save_results) {
-      console.log("💾 Saving scrub results...");
+      console.log("Saving scrub results");
       
       const { data: savedResult, error: saveError } = await supabaseService
         .from('claim_scrub_results')
@@ -407,10 +399,10 @@ Return ONLY the JSON array, no other text.`;
         .single();
 
       if (saveError) {
-        console.error("⚠️ Save error (non-fatal):", saveError);
+        logError("Save error (non-fatal)", saveError);
       } else if (savedResult) {
         scrubResultId = savedResult.id;
-        console.log(`✅ Saved scrub result: ${scrubResultId}`);
+        console.log("Saved scrub result");
       }
 
       // Create notification for high risk
@@ -421,8 +413,8 @@ Return ONLY the JSON array, no other text.`;
             user_id: user.id,
             notification_type: 'high_risk_claim',
             severity: scrubResult.critical_count > 0 ? 'critical' : 'high',
-            title: `⚠️ High Risk Claim Detected`,
-            message: `Claim for ${claimInfo.patient_name || 'patient'} has ${scrubResult.critical_count + scrubResult.high_count} critical/high issue(s)`,
+            title: 'High Risk Claim Detected',
+            message: `Claim has ${scrubResult.critical_count + scrubResult.high_count} critical/high issue(s)`,
             claim_id: linkedClaimId,
             scrub_result_id: scrubResultId
           });
@@ -432,7 +424,13 @@ Return ONLY the JSON array, no other text.`;
     // ========================================
     // RETURN FINAL RESPONSE
     // ========================================
-    console.log("✅ Scrub complete, returning results");
+    logOperation("scrub-claim", { 
+      userId: user.id,
+      resourceType: "scrub_result",
+      resourceId: scrubResultId || undefined,
+      status: "completed",
+      count: scrubResult.total_issues
+    });
     
     return new Response(
       JSON.stringify({
@@ -440,14 +438,14 @@ Return ONLY the JSON array, no other text.`;
         scrub_result_id: scrubResultId,
         ...scrubResult,
         message: scrubResult.total_issues === 0 
-          ? "✅ Claim passed all checks - ready to submit!"
-          : `⚠️ Found ${scrubResult.total_issues} issue(s) - review recommended`
+          ? "Claim passed all checks - ready to submit!"
+          : `Found ${scrubResult.total_issues} issue(s) - review recommended`
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("❌ Scrub error:", error);
+    logError("Scrub error", error);
     
     return new Response(
       JSON.stringify({

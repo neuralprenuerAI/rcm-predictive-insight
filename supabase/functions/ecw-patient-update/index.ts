@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logError, logOperation } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,12 @@ serve(async (req) => {
     const requestData: PatientUpdateRequest = await req.json();
     const { connectionId, patientExternalId, accountNumber, data } = requestData;
 
+    logOperation("ecw-patient-update", { 
+      userId: user.id, 
+      resourceType: "patient", 
+      status: "started" 
+    });
+
     // Get connection credentials
     const { data: connection, error: connError } = await supabaseClient
       .from("api_connections")
@@ -85,7 +92,7 @@ serve(async (req) => {
     });
 
     if (tokenResponse.error || !tokenResponse.data?.access_token) {
-      throw new Error("Failed to get access token: " + JSON.stringify(tokenResponse.error));
+      throw new Error("Failed to get access token");
     }
 
     const accessToken = tokenResponse.data.access_token;
@@ -289,7 +296,7 @@ serve(async (req) => {
       }]
     };
 
-    console.log("Sending Patient Update Bundle:", JSON.stringify(bundle, null, 2));
+    console.log("Sending Patient Update Bundle to ECW FHIR API");
 
     // Send to ECW FHIR API
     const fhirResponse = await fetch(fhirBaseUrl, {
@@ -303,7 +310,12 @@ serve(async (req) => {
     });
 
     const responseData = await fhirResponse.json();
-    console.log("ECW Response:", JSON.stringify(responseData, null, 2));
+    
+    logOperation("ecw-patient-update", { 
+      userId: user.id, 
+      resourceType: "patient", 
+      status: fhirResponse.ok ? "success" : "failed" 
+    });
 
     // Check for errors
     if (!fhirResponse.ok) {
@@ -350,14 +362,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: "Patient updated successfully",
-        patientLocation: updatedPatientLocation,
-        response: responseData
+        patientLocation: updatedPatientLocation
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error: unknown) {
-    console.error("Patient update error:", error);
+    logError("Patient update error", error);
     const errorMessage = error instanceof Error ? error.message : "Failed to update patient";
     return new Response(
       JSON.stringify({
