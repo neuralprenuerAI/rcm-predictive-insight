@@ -27,6 +27,8 @@ import {
   Search, 
   MoreVertical, 
   Shield,
+  ShieldCheck,
+  UserX,
   Clock,
   CheckCircle,
   XCircle,
@@ -136,7 +138,7 @@ export function UsersTab() {
   const pendingInvites = invites.filter((i) => i.status === "pending");
 
   // Handle role change (super_admin only)
-  const handleRoleChange = async (userId: string, newRole: "admin" | "user") => {
+  const handleRoleChange = async (userId: string, newRole: "super_admin" | "admin" | "user") => {
     if (!isSuperAdmin) {
       toast({
         title: "Permission Denied",
@@ -156,7 +158,7 @@ export function UsersTab() {
 
       toast({
         title: "Role Updated",
-        description: `User role changed to ${newRole}`,
+        description: `User role changed to ${newRole.replace("_", " ")}`,
       });
 
       fetchUsers();
@@ -335,28 +337,51 @@ export function UsersTab() {
                         </TableCell>
                         {isSuperAdmin && (
                           <TableCell>
-                            {user.role !== "super_admin" && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => handleRoleChange(
-                                      user.id,
-                                      user.role === "admin" ? "user" : "admin"
-                                    )}
-                                  >
-                                    <Shield className="h-4 w-4 mr-2" />
-                                    {user.role === "admin" 
-                                      ? "Demote to User" 
-                                      : "Promote to Admin"}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {user.role === "user" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "admin")}>
+                                      <Shield className="h-4 w-4 mr-2" />
+                                      Promote to Admin
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "super_admin")}>
+                                      <ShieldCheck className="h-4 w-4 mr-2" />
+                                      Promote to Super Admin
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {user.role === "admin" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "super_admin")}>
+                                      <ShieldCheck className="h-4 w-4 mr-2" />
+                                      Promote to Super Admin
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "user")} className="text-destructive">
+                                      <UserX className="h-4 w-4 mr-2" />
+                                      Demote to User
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {user.role === "super_admin" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "admin")} className="text-amber-600 dark:text-amber-500">
+                                      <Shield className="h-4 w-4 mr-2" />
+                                      Demote to Admin
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleRoleChange(user.id, "user")} className="text-destructive">
+                                      <UserX className="h-4 w-4 mr-2" />
+                                      Demote to User
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         )}
                       </TableRow>
