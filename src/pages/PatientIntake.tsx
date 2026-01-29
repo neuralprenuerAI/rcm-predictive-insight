@@ -250,26 +250,29 @@ export default function PatientIntake() {
         setStep("syncing");
         setProgress(60);
 
+        // Generate a unique account number for ECW patient matching
+        const accountNumber = `DOC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        
         const ecwFunction = isNewPatient ? "ecw-patient-create" : "ecw-patient-update";
         
         const ecwResponse = await supabase.functions.invoke(ecwFunction, {
           body: {
             connectionId: ecwConnectionId,
-            accountNumber: `DOC-${Date.now()}`,
+            accountNumber: accountNumber,
             patientLocalId: localPatientId,
-            patientExternalId: isNewPatient ? undefined : localPatientId, // For updates
+            patientExternalId: isNewPatient ? undefined : localPatientId,
             data: {
               firstName: editedData.firstName,
               middleName: editedData.middleName,
               lastName: editedData.lastName,
               prefix: editedData.prefix,
               suffix: editedData.suffix,
-              birthDate: editedData.dateOfBirth,
-              gender: editedData.gender,
+              birthDate: editedData.dateOfBirth,  // Edge function expects birthDate
+              gender: editedData.gender || "unknown",
               email: editedData.email,
-              homePhone: editedData.phoneHome,
-              workPhone: editedData.phoneWork,
-              mobilePhone: editedData.phoneMobile,
+              homePhone: editedData.phoneHome,    // Edge function expects homePhone
+              workPhone: editedData.phoneWork,    // Edge function expects workPhone
+              mobilePhone: editedData.phoneMobile, // Edge function expects mobilePhone
               addressLine1: editedData.addressLine1,
               addressLine2: editedData.addressLine2,
               city: editedData.city,
