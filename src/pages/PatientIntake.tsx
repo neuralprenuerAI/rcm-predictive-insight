@@ -242,6 +242,20 @@ export default function PatientIntake() {
       setStep("ocr");
       setProgress(30);
       
+      // === OCR REQUEST DEBUG ===
+      console.log("=== OCR REQUEST DEBUG ===");
+      console.log("Filename being sent:", filename);
+      console.log("MimeType being sent:", mimeType);
+      console.log("Content length:", base64.length);
+      console.log("First 50 chars:", base64.substring(0, 50));
+      // Check if content looks like valid base64 PDF
+      if (base64.startsWith("JVBERi")) {
+        console.log("✅ Content starts with PDF header (JVBERi = %PDF)");
+      } else {
+        console.log("❌ Content does NOT start with PDF header. First chars:", base64.substring(0, 20));
+      }
+      console.log("=== END DEBUG ===");
+
       const ocrResponse = await supabase.functions.invoke("ocr-document", {
         body: {
           content: base64,

@@ -115,6 +115,7 @@ serve(async (req) => {
       binary += String.fromCharCode(...pdfBytes.subarray(i, i + chunkSize));
     }
     const pdfBase64 = btoa(binary);
+    const convertedFilename = filename.replace(/\.(oxps|xps)$/i, ".pdf");
 
     console.log("[convert-oxps] Conversion successful, PDF size:", pdfArrayBuffer.byteLength, "bytes");
 
@@ -128,13 +129,28 @@ serve(async (req) => {
       console.warn("[convert-oxps] Failed to cleanup conversion:", e);
     }
 
+    // === DEBUG LOGGING ===
+    console.log("=== OXPS CONVERSION DEBUG ===");
+    console.log("Original filename:", filename);
+    console.log("Converted filename:", convertedFilename);
+    console.log("Output mimeType:", "application/pdf");
+    console.log("Content length (base64):", pdfBase64.length);
+    console.log("First 100 chars of content:", pdfBase64.substring(0, 100));
+    // Check if it looks like a valid PDF (JVBERi = %PDF in base64)
+    if (pdfBase64.startsWith("JVBERi")) {
+      console.log("✅ Content starts with PDF header (JVBERi = %PDF)");
+    } else {
+      console.log("❌ Content does NOT start with PDF header. First chars:", pdfBase64.substring(0, 20));
+    }
+    console.log("=== END DEBUG ===");
+
     return new Response(
       JSON.stringify({
         success: true,
         content: pdfBase64,
         mimeType: "application/pdf",
         originalFilename: filename,
-        convertedFilename: filename.replace(/\.(oxps|xps)$/i, ".pdf")
+        convertedFilename: convertedFilename
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
