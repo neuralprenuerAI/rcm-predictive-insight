@@ -578,8 +578,22 @@ serve(async (req) => {
       }
       ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
     } else if (awsAccessKeyId && awsSecretAccessKey) {
-      // Default to AWS if configured
-      ocrResult = await ocrWithTextract(documentContent, filename || "", mimeType || "application/pdf", awsAccessKeyId, awsSecretAccessKey, awsRegion);
+      // Default to AWS if configured, with fallback to OCR.space for unsupported formats
+      try {
+        ocrResult = await ocrWithTextract(documentContent, filename || "", mimeType || "application/pdf", awsAccessKeyId, awsSecretAccessKey, awsRegion);
+      } catch (textractError) {
+        const errorMsg = textractError instanceof Error ? textractError.message : String(textractError);
+        // Check if it's an unsupported document format error - fallback to OCR.space
+        if (errorMsg.includes("UnsupportedDocumentException") && ocrSpaceKey) {
+          console.log("Textract rejected document format, falling back to OCR.space...");
+          ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
+        } else if (errorMsg.includes("UnsupportedDocumentException") && azureEndpoint && azureKey) {
+          console.log("Textract rejected document format, falling back to Azure...");
+          ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
+        } else {
+          throw textractError;
+        }
+      }
     } else if (azureEndpoint && azureKey) {
       // Fallback to Azure if configured
       ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
