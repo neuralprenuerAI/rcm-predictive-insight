@@ -89,10 +89,15 @@ export default function PatientIntake() {
   }, []);
 
   async function loadEcwConnections() {
+    // Get current user first
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
     const { data } = await supabase
       .from("api_connections")
       .select("id, name, connection_name")
       .eq("connection_type", "ecw")
+      .eq("user_id", user.id)  // Only load current user's connections
       .eq("is_active", true);
     
     if (data && data.length > 0) {
