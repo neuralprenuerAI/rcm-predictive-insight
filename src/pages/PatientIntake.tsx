@@ -214,9 +214,9 @@ export default function PatientIntake() {
       let filename = file.name;
       setProgress(15);
 
-      // Check if OXPS/XPS file - convert to PDF first
+      // Check if OXPS/XPS file - extract image for Textract
       if (isOxpsFile(file)) {
-        console.log("[PatientIntake] Converting OXPS file to PDF...");
+        console.log("[PatientIntake] Converting OXPS file to image...");
         setProgress(20);
         
         const convertResponse = await supabase.functions.invoke("convert-oxps", {
@@ -231,9 +231,9 @@ export default function PatientIntake() {
             (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
         }
 
-        console.log(`[PatientIntake] OXPS converted: ${convertResponse.data.pageCount} pages`);
+        console.log(`[PatientIntake] OXPS converted to ${convertResponse.data.mimeType}: ${convertResponse.data.totalImages} images found`);
         base64 = convertResponse.data.content;
-        mimeType = "application/pdf";
+        mimeType = convertResponse.data.mimeType;  // Will be image/png, image/jpeg, or image/tiff
         filename = convertResponse.data.convertedFilename;
       }
 
