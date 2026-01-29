@@ -1,6 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import JSZip from "https://esm.sh/jszip@3.10.1";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,58 +10,6 @@ interface ConvertRequest {
   filename: string;
 }
 
-// Decode common XML entities
-const decodeXmlEntities = (input: string): string =>
-  input
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-// Convert Uint8Array to base64 in chunks
-const uint8ToBase64 = (bytes: Uint8Array): string => {
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-};
-
-// Extract text from OXPS/XPS FixedPage XML
-const extractTextFromXml = (xml: string): string[] => {
-  const lines: string[] = [];
-  
-  // Pattern 1: UnicodeString attribute (most common)
-  const unicodeMatches = xml.matchAll(/UnicodeString="([^"]*)"/g);
-  for (const match of unicodeMatches) {
-    const decoded = decodeXmlEntities(match[1]).trim();
-    if (decoded) lines.push(decoded);
-  }
-  
-  // Pattern 2: Glyphs with Indices (character positions)
-  const glyphMatches = xml.matchAll(/<Glyphs[^>]*UnicodeString="([^"]*)"[^>]*>/g);
-  for (const match of glyphMatches) {
-    const decoded = decodeXmlEntities(match[1]).trim();
-    if (decoded && !lines.includes(decoded)) lines.push(decoded);
-  }
-  
-  // Pattern 3: Path with text data
-  const pathMatches = xml.matchAll(/<Path[^>]*Data="([^"]*)"[^>]*>/g);
-  for (const match of pathMatches) {
-    // Skip vector paths, only look for text-like content
-    if (match[1].length < 500 && /[A-Za-z]{3,}/.test(match[1])) {
-      const decoded = decodeXmlEntities(match[1]).trim();
-      if (decoded) lines.push(decoded);
-    }
-  }
-  
-  return lines;
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -71,169 +17,116 @@ serve(async (req) => {
 
   try {
     const { content, filename } = await req.json() as ConvertRequest;
-
+    
     if (!content) {
       throw new Error("No file content provided");
     }
 
-    console.log(`[convert-oxps] Processing file: ${filename}`);
-
-    // Decode base64 and load as ZIP archive
-    const binaryContent = Uint8Array.from(atob(content), c => c.charCodeAt(0));
-    const zip = await JSZip.loadAsync(binaryContent);
-    
-    const allPaths = Object.keys(zip.files);
-    console.log(`[convert-oxps] Archive contains ${allPaths.length} files`);
-
-    // First, try to find embedded images (PNG, JPEG, TIFF)
-    const imageFiles: { path: string; content: Uint8Array; mimeType: string }[] = [];
-    
-    for (const [path, file] of Object.entries(zip.files)) {
-      if (file.dir) continue;
-      const lowerPath = path.toLowerCase();
-      
-      if (lowerPath.endsWith('.png') || 
-          lowerPath.endsWith('.jpg') || 
-          lowerPath.endsWith('.jpeg') ||
-          lowerPath.endsWith('.tif') ||
-          lowerPath.endsWith('.tiff')) {
-        const bytes = await file.async("uint8array");
-        let mimeType = "image/png";
-        if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) mimeType = "image/jpeg";
-        else if (lowerPath.endsWith('.tif') || lowerPath.endsWith('.tiff')) mimeType = "image/tiff";
-        
-        imageFiles.push({ path, content: bytes, mimeType });
-      }
+    const apiKey = Deno.env.get("CONVERTIO_API_KEY");
+    if (!apiKey) {
+      throw new Error("Convertio API key not configured. Please add CONVERTIO_API_KEY to secrets.");
     }
 
-    // If we found images, use the largest one directly
-    if (imageFiles.length > 0) {
-      imageFiles.sort((a, b) => b.content.length - a.content.length);
-      const mainImage = imageFiles[0];
-      
-      console.log(`[convert-oxps] Found ${imageFiles.length} images, using: ${mainImage.path}`);
-      
-      let ext = ".png";
-      if (mainImage.mimeType === "image/jpeg") ext = ".jpg";
-      else if (mainImage.mimeType === "image/tiff") ext = ".tiff";
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          content: uint8ToBase64(mainImage.content),
-          mimeType: mainImage.mimeType,
-          originalFilename: filename,
-          convertedFilename: filename.replace(/\.(oxps|xps)$/i, ext),
-          conversionMode: "image-extraction"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log("[convert-oxps] Starting OXPS to PDF conversion via Convertio for:", filename);
 
-    // No images found - extract text from FixedPage XML files
-    console.log("[convert-oxps] No raster images found, extracting text from XML...");
-    
-    const fixedPageFiles = allPaths
-      .filter(p => {
-        const lp = p.toLowerCase();
-        return (lp.includes("pages") || lp.includes("fixeddocument") || lp.includes("documents")) &&
-               (lp.endsWith(".fpage") || lp.endsWith(".xml"));
+    // Step 1: Start conversion
+    const startResponse = await fetch("https://api.convertio.co/convert", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        apikey: apiKey,
+        input: "base64",
+        file: content,
+        filename: filename,
+        outputformat: "pdf"
       })
-      .sort();
+    });
 
-    console.log(`[convert-oxps] Found ${fixedPageFiles.length} FixedPage files`);
+    if (!startResponse.ok) {
+      const errorText = await startResponse.text();
+      console.error("[convert-oxps] Convertio start failed:", errorText);
+      throw new Error(`Convertio API error: ${startResponse.status} - ${errorText}`);
+    }
+
+    const startData = await startResponse.json();
     
-    const allTextLines: string[] = [];
-    
-    for (const pagePath of fixedPageFiles.slice(0, 50)) { // Limit to 50 pages
-      const xmlContent = await zip.file(pagePath)?.async("string");
-      if (!xmlContent) continue;
+    if (startData.status !== "ok") {
+      throw new Error(`Convertio error: ${startData.error || "Unknown error"}`);
+    }
+
+    const conversionId = startData.data.id;
+    console.log("[convert-oxps] Conversion started, ID:", conversionId);
+
+    // Step 2: Poll for completion (max 120 seconds)
+    let attempts = 0;
+    const maxAttempts = 60;
+    let resultData = null;
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
       
-      const lines = extractTextFromXml(xmlContent);
-      allTextLines.push(...lines);
-    }
-
-    // Remove duplicates while preserving order
-    const uniqueLines = [...new Set(allTextLines)];
-    const extractedText = uniqueLines.join("\n");
-
-    console.log(`[convert-oxps] Extracted ${uniqueLines.length} unique text lines, ${extractedText.length} chars`);
-
-    if (!extractedText.trim()) {
-      // Last resort: list file structure for debugging
-      const sampleFiles = allPaths.slice(0, 30).join(", ");
-      throw new Error(
-        `No extractable content found in OXPS file. ` +
-        `The file may contain only vector graphics or use unsupported formats (WDP/HD Photo). ` +
-        `Sample files: ${sampleFiles}`
-      );
-    }
-
-    // Create a PDF with the extracted text (Textract can OCR this)
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    
-    const fontSize = 10;
-    const margin = 50;
-    const lineHeight = 14;
-    const pageWidth = 612; // US Letter
-    const pageHeight = 792;
-    const maxCharsPerLine = 90;
-    const linesPerPage = Math.floor((pageHeight - margin * 2) / lineHeight);
-
-    // Word-wrap and paginate text
-    const wrappedLines: string[] = [];
-    for (const line of uniqueLines) {
-      if (line.length <= maxCharsPerLine) {
-        wrappedLines.push(line);
-      } else {
-        // Simple word wrap
-        const words = line.split(/\s+/);
-        let currentLine = "";
-        for (const word of words) {
-          if ((currentLine + " " + word).length > maxCharsPerLine) {
-            if (currentLine) wrappedLines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = currentLine ? currentLine + " " + word : word;
-          }
+      const statusResponse = await fetch(`https://api.convertio.co/convert/${conversionId}/status`, {
+        headers: {
+          "Content-Type": "application/json"
         }
-        if (currentLine) wrappedLines.push(currentLine);
+      });
+
+      const statusData = await statusResponse.json();
+      
+      if (statusData.status !== "ok") {
+        throw new Error(`Status check failed: ${statusData.error || "Unknown error"}`);
       }
+
+      const step = statusData.data.step;
+      console.log(`[convert-oxps] Conversion status (attempt ${attempts + 1}):`, step);
+
+      if (step === "finish") {
+        resultData = statusData.data;
+        break;
+      } else if (step === "error") {
+        throw new Error(`Conversion failed: ${statusData.data.error || "Unknown error"}`);
+      }
+
+      attempts++;
     }
 
-    // Create pages
-    let pageIndex = 0;
-    while (pageIndex * linesPerPage < wrappedLines.length) {
-      const page = pdfDoc.addPage([pageWidth, pageHeight]);
-      const pageLines = wrappedLines.slice(
-        pageIndex * linesPerPage,
-        (pageIndex + 1) * linesPerPage
-      );
-      
-      let y = pageHeight - margin;
-      for (const line of pageLines) {
-        // Filter out non-printable characters
-        const safeLine = line.replace(/[^\x20-\x7E]/g, "");
-        if (safeLine) {
-          page.drawText(safeLine, {
-            x: margin,
-            y: y,
-            size: fontSize,
-            font,
-            color: rgb(0, 0, 0),
-          });
-        }
-        y -= lineHeight;
-      }
-      
-      pageIndex++;
+    if (!resultData) {
+      throw new Error("Conversion timed out after 120 seconds");
     }
 
-    const pdfBytes = await pdfDoc.save();
-    const pdfBase64 = uint8ToBase64(pdfBytes);
+    // Step 3: Download the converted file
+    const downloadUrl = resultData.output.url;
+    console.log("[convert-oxps] Downloading converted PDF...");
 
-    console.log(`[convert-oxps] Created PDF with ${pdfDoc.getPageCount()} pages, ${pdfBytes.length} bytes`);
+    const pdfResponse = await fetch(downloadUrl);
+    if (!pdfResponse.ok) {
+      throw new Error(`Failed to download converted PDF: ${pdfResponse.status}`);
+    }
+
+    const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+    const pdfBytes = new Uint8Array(pdfArrayBuffer);
+    
+    // Convert to base64 in chunks to avoid stack overflow
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...pdfBytes.subarray(i, i + chunkSize));
+    }
+    const pdfBase64 = btoa(binary);
+
+    console.log("[convert-oxps] Conversion successful, PDF size:", pdfArrayBuffer.byteLength, "bytes");
+
+    // Step 4: Delete the conversion (cleanup)
+    try {
+      await fetch(`https://api.convertio.co/convert/${conversionId}`, {
+        method: "DELETE"
+      });
+      console.log("[convert-oxps] Cleanup successful");
+    } catch (e) {
+      console.warn("[convert-oxps] Failed to cleanup conversion:", e);
+    }
 
     return new Response(
       JSON.stringify({
@@ -241,24 +134,21 @@ serve(async (req) => {
         content: pdfBase64,
         mimeType: "application/pdf",
         originalFilename: filename,
-        convertedFilename: filename.replace(/\.(oxps|xps)$/i, ".pdf"),
-        conversionMode: "text-to-pdf",
-        extractedLines: wrappedLines.length,
-        pageCount: pdfDoc.getPageCount()
+        convertedFilename: filename.replace(/\.(oxps|xps)$/i, ".pdf")
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = error instanceof Error ? error.message : "Failed to convert OXPS file";
     console.error("[convert-oxps] Conversion error:", errorMessage);
-
+    
     return new Response(
       JSON.stringify({
         success: false,
         error: errorMessage
       }),
-      {
+      { 
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
