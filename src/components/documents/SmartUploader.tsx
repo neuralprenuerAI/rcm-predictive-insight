@@ -59,7 +59,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
            file.type === 'application/vnd.ms-xpsdocument';
   };
 
-  // Convert OXPS to PDF if needed
+  // Convert OXPS to image if needed (AWS Textract accepts images directly)
   const convertOxpsIfNeeded = async (file: File, content: string): Promise<{ content: string; filename: string; mimeType: string }> => {
     if (!isOxpsFile(file)) {
       return { content, filename: file.name, mimeType: file.type || 'application/pdf' };
@@ -79,12 +79,12 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
         (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
     }
 
-    console.log(`[SmartUploader] OXPS converted: ${convertResponse.data.pageCount} pages`);
+    console.log(`[SmartUploader] OXPS converted to ${convertResponse.data.mimeType}: ${convertResponse.data.totalImages} images found`);
     
     return {
       content: convertResponse.data.content,
       filename: convertResponse.data.convertedFilename,
-      mimeType: "application/pdf"
+      mimeType: convertResponse.data.mimeType  // Will be image/png, image/jpeg, or image/tiff
     };
   };
 
