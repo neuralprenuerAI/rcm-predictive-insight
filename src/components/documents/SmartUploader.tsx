@@ -50,6 +50,44 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
     });
   };
 
+  // Helper to detect OXPS/XPS files
+  const isOxpsFile = (file: File): boolean => {
+    const filename = file.name.toLowerCase();
+    return filename.endsWith('.oxps') || 
+           filename.endsWith('.xps') ||
+           file.type === 'application/oxps' ||
+           file.type === 'application/vnd.ms-xpsdocument';
+  };
+
+  // Convert OXPS to PDF if needed
+  const convertOxpsIfNeeded = async (file: File, content: string): Promise<{ content: string; filename: string; mimeType: string }> => {
+    if (!isOxpsFile(file)) {
+      return { content, filename: file.name, mimeType: file.type || 'application/pdf' };
+    }
+
+    console.log(`[SmartUploader] Converting OXPS file: ${file.name}`);
+    
+    const convertResponse = await supabase.functions.invoke("convert-oxps", {
+      body: {
+        content,
+        filename: file.name
+      }
+    });
+
+    if (convertResponse.error || !convertResponse.data?.success) {
+      throw new Error("Failed to convert OXPS file: " + 
+        (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
+    }
+
+    console.log(`[SmartUploader] OXPS converted: ${convertResponse.data.pageCount} pages`);
+    
+    return {
+      content: convertResponse.data.content,
+      filename: convertResponse.data.convertedFilename,
+      mimeType: "application/pdf"
+    };
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newFiles: UploadedFile[] = [];
     
@@ -70,6 +108,8 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
     accept: {
       'application/pdf': ['.pdf'],
       'image/*': ['.png', '.jpg', '.jpeg', '.tiff', '.tif'],
+      'application/oxps': ['.oxps'],
+      'application/vnd.ms-xpsdocument': ['.xps', '.oxps'],
     },
     multiple: true,
   });
@@ -83,11 +123,18 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
       setIsProcessing(true);
       setProgress(10);
 
-      const documents = files.map(f => ({
-        content: f.content,
-        filename: f.file.name,
-        mimeType: f.file.type || 'application/pdf',
-      }));
+      // Convert OXPS files to PDF before processing
+      const documents = [];
+      for (const f of files) {
+        const converted = await convertOxpsIfNeeded(f.file, f.content);
+        documents.push({
+          content: converted.content,
+          filename: converted.filename,
+          mimeType: converted.mimeType,
+        });
+      }
+      
+      setProgress(25);
 
       setProgress(30);
 
@@ -160,7 +207,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
               <>
                 <p className="text-lg font-medium">Drop CMS-1500 claims & clinical documents</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  PDF, PNG, JPG, TIFF supported • Documents will be auto-linked
+                  PDF, PNG, JPG, TIFF, OXPS supported • Documents will be auto-linked
                 </p>
               </>
             )}
