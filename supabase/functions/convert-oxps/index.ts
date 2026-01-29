@@ -1,6 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import JSZip from "https://esm.sh/jszip@3.10.1";
-import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,27 +9,6 @@ interface ConvertRequest {
   content: string; // Base64 encoded OXPS file
   filename: string;
 }
-
-const decodeXmlEntities = (input: string) =>
-  input
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    // Numeric entities
-    .replaceAll(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replaceAll(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-const uint8ToBase64 = (bytes: Uint8Array) => {
-  // btoa expects binary string; chunk to avoid call stack limits.
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -45,164 +22,121 @@ serve(async (req) => {
       throw new Error("No file content provided");
     }
 
-    console.log(`[convert-oxps] Processing file: ${filename}`);
-
-    // OXPS/XPS is a ZIP archive containing images
-    const binaryContent = Uint8Array.from(atob(content), c => c.charCodeAt(0));
-    const zip = await JSZip.loadAsync(binaryContent);
-
-    const allPaths = Object.keys(zip.files);
-    console.log(`[convert-oxps] Archive entries: ${allPaths.length}`);
-
-    // Find all image files in the archive
-    const imageFiles: { name: string; content: string; mimeType: string }[] = [];
-
-    for (const [path, file] of Object.entries(zip.files)) {
-      if (file.dir) continue;
-
-      const lowerPath = path.toLowerCase();
-
-      // Look for images in Resources or Pages folders
-      if (lowerPath.endsWith('.png') ||
-          lowerPath.endsWith('.jpg') ||
-          lowerPath.endsWith('.jpeg') ||
-          lowerPath.endsWith('.tif') ||
-          lowerPath.endsWith('.tiff')) {
-
-        const imageBytes = await file.async("base64");
-
-        let mimeType = "image/png";
-        if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) {
-          mimeType = "image/jpeg";
-        } else if (lowerPath.endsWith('.tif') || lowerPath.endsWith('.tiff')) {
-          mimeType = "image/tiff";
-        }
-
-        imageFiles.push({
-          name: path,
-          content: imageBytes,
-          mimeType: mimeType
-        });
-      }
+    const apiKey = Deno.env.get("CLOUDCONVERT_API_KEY");
+    if (!apiKey) {
+      throw new Error("CloudConvert API key not configured. Please add CLOUDCONVERT_API_KEY to secrets.");
     }
 
-    if (imageFiles.length === 0) {
-      // Many OXPS files are vector-based (no embedded PNG/JPEG/TIFF). In that case,
-      // extract text from FixedPage XML and build a simple PDF that Textract accepts.
-      const fixedPageCandidates = allPaths
-        .filter((p) => {
-          const lp = p.toLowerCase();
-          return (
-            (lp.includes("pages") || lp.includes("fixedpage")) &&
-            (lp.endsWith(".fpage") || lp.endsWith(".xml"))
-          );
-        })
-        .sort();
+    console.log(`[convert-oxps] Starting CloudConvert conversion for: ${filename}`);
 
-      console.warn(
-        `[convert-oxps] No raster images found. FixedPage candidates: ${fixedPageCandidates.length}`,
-      );
-
-      let extractedText = "";
-      for (const pagePath of fixedPageCandidates.slice(0, 25)) {
-        const xml = await zip.file(pagePath)?.async("string");
-        if (!xml) continue;
-
-        // Common XPS/OXPS text representation.
-        const matches = xml.match(/UnicodeString="([^"]*)"/g) || [];
-        for (const m of matches) {
-          const raw = m.replace('UnicodeString="', "").replace('"', "");
-          const decoded = decodeXmlEntities(raw);
-          if (decoded.trim()) extractedText += decoded + "\n";
+    // Step 1: Create a job with import, convert, and export tasks
+    const jobResponse = await fetch("https://api.cloudconvert.com/v2/jobs", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        tasks: {
+          "import-my-file": {
+            operation: "import/base64",
+            file: content,
+            filename: filename
+          },
+          "convert-my-file": {
+            operation: "convert",
+            input: "import-my-file",
+            output_format: "pdf"
+          },
+          "export-my-file": {
+            operation: "export/url",
+            input: "convert-my-file",
+            inline: false,
+            archive_multiple_files: false
+          }
         }
-      }
+      })
+    });
 
-      extractedText = extractedText.trim();
-      if (!extractedText) {
-        // Add extra diagnostics to help identify unsupported embedded formats (e.g., WDP/JXR)
-        const interesting = allPaths
-          .map((p) => p.toLowerCase())
-          .filter((p) =>
-            p.endsWith(".wdp") ||
-            p.endsWith(".jxr") ||
-            p.endsWith(".rels") ||
-            p.endsWith(".fpage") ||
-            p.endsWith(".xml"),
-          )
-          .slice(0, 50);
-
-        throw new Error(
-          `No images found in OXPS/XPS file and no extractable text found in FixedPage XML. ` +
-            `This file may be pure vector content or use unsupported embedded image formats (e.g., .wdp/.jxr). ` +
-            `Sample entries: ${interesting.join(", ")}`,
-        );
-      }
-
-      // Build a minimal PDF with extracted text so Textract can process it.
-      const pdfDoc = await PDFDocument.create();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const page = pdfDoc.addPage([612, 792]); // US Letter
-      const fontSize = 10;
-      const margin = 48;
-      const lineHeight = 12;
-      const maxLines = Math.floor((792 - margin * 2) / lineHeight);
-
-      const lines = extractedText
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .slice(0, maxLines);
-
-      let y = 792 - margin - fontSize;
-      for (const line of lines) {
-        // Keep within page width (rough wrap)
-        const safe = line.length > 140 ? line.slice(0, 140) + "…" : line;
-        page.drawText(safe, { x: margin, y, size: fontSize, font });
-        y -= lineHeight;
-      }
-
-      const pdfBytes = await pdfDoc.save();
-      const pdfBase64 = uint8ToBase64(pdfBytes);
-
-      console.log(
-        `[convert-oxps] Fallback PDF created from extracted text. chars=${extractedText.length} lines=${lines.length}`,
-      );
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          content: pdfBase64,
-          mimeType: "application/pdf",
-          originalFilename: filename,
-          convertedFilename: filename.replace(/\.(oxps|xps)$/i, ".pdf"),
-          totalImages: 0,
-          extractedTextChars: extractedText.length,
-          conversionMode: "text-to-pdf",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!jobResponse.ok) {
+      const errorText = await jobResponse.text();
+      console.error("[convert-oxps] CloudConvert job creation failed:", errorText);
+      throw new Error(`CloudConvert API error: ${jobResponse.status} - ${errorText}`);
     }
 
-    // Sort by content length to get the largest (most detailed) image
-    imageFiles.sort((a, b) => b.content.length - a.content.length);
+    const jobData = await jobResponse.json();
+    const jobId = jobData.data.id;
+    console.log(`[convert-oxps] Job created: ${jobId}`);
 
-    const mainImage = imageFiles[0];
+    // Step 2: Poll for job completion (max 60 seconds)
+    let attempts = 0;
+    const maxAttempts = 30;
+    let completedJob = null;
 
-    console.log(`[convert-oxps] Found ${imageFiles.length} images, using: ${mainImage.name} (${mainImage.mimeType})`);
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
 
-    // Determine file extension based on mimeType
-    let ext = ".png";
-    if (mainImage.mimeType === "image/jpeg") ext = ".jpg";
-    else if (mainImage.mimeType === "image/tiff") ext = ".tiff";
+      const statusResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobId}`, {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`
+        }
+      });
+
+      const statusData = await statusResponse.json();
+      const status = statusData.data.status;
+
+      console.log(`[convert-oxps] Job status (attempt ${attempts + 1}): ${status}`);
+
+      if (status === "finished") {
+        completedJob = statusData.data;
+        break;
+      } else if (status === "error") {
+        const errorTask = statusData.data.tasks.find((t: { status: string; message?: string }) => t.status === "error");
+        throw new Error(`Conversion failed: ${errorTask?.message || "Unknown error"}`);
+      }
+
+      attempts++;
+    }
+
+    if (!completedJob) {
+      throw new Error("Conversion timed out after 60 seconds");
+    }
+
+    // Step 3: Get the export task and download URL
+    const exportTask = completedJob.tasks.find((t: { name: string; result?: { files?: { url: string }[] } }) => t.name === "export-my-file");
+    if (!exportTask || !exportTask.result?.files?.[0]?.url) {
+      throw new Error("No export URL found in completed job");
+    }
+
+    const downloadUrl = exportTask.result.files[0].url;
+    console.log("[convert-oxps] Downloading converted PDF...");
+
+    // Step 4: Download the converted PDF
+    const pdfResponse = await fetch(downloadUrl);
+    if (!pdfResponse.ok) {
+      throw new Error(`Failed to download converted PDF: ${pdfResponse.status}`);
+    }
+
+    const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+    
+    // Convert to base64 in chunks to avoid call stack limits
+    const pdfBytes = new Uint8Array(pdfArrayBuffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...pdfBytes.subarray(i, i + chunkSize));
+    }
+    const pdfBase64 = btoa(binary);
+
+    console.log(`[convert-oxps] Conversion successful, PDF size: ${pdfArrayBuffer.byteLength} bytes`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        content: mainImage.content,
-        mimeType: mainImage.mimeType,
+        content: pdfBase64,
+        mimeType: "application/pdf",
         originalFilename: filename,
-        convertedFilename: filename.replace(/\.(oxps|xps)$/i, ext),
-        totalImages: imageFiles.length
+        convertedFilename: filename.replace(/\.(oxps|xps)$/i, ".pdf")
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -214,11 +148,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: errorMessage,
+        error: errorMessage
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
