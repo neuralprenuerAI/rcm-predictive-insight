@@ -566,7 +566,30 @@ serve(async (req) => {
       if (!awsAccessKeyId || !awsSecretAccessKey) {
         throw new Error("AWS Textract not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.");
       }
-      ocrResult = await ocrWithTextract(documentContent, filename || "", mimeType || "application/pdf", awsAccessKeyId, awsSecretAccessKey, awsRegion);
+
+      // Even when AWS is explicitly requested, fall back for known unsupported PDF formats.
+      try {
+        ocrResult = await ocrWithTextract(
+          documentContent,
+          filename || "",
+          mimeType || "application/pdf",
+          awsAccessKeyId,
+          awsSecretAccessKey,
+          awsRegion
+        );
+      } catch (textractError) {
+        const errorMsg = textractError instanceof Error ? textractError.message : String(textractError);
+
+        if (errorMsg.includes("UnsupportedDocumentException") && ocrSpaceKey) {
+          console.log("Textract rejected document format (provider=aws), falling back to OCR.space...");
+          ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
+        } else if (errorMsg.includes("UnsupportedDocumentException") && azureEndpoint && azureKey) {
+          console.log("Textract rejected document format (provider=aws), falling back to Azure...");
+          ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
+        } else {
+          throw textractError;
+        }
+      }
     } else if (provider === "azure") {
       if (!azureEndpoint || !azureKey) {
         throw new Error("Azure Document Intelligence not configured. Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY.");
