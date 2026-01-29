@@ -16,6 +16,7 @@ import ChargeAuditor from "./pages/ChargeAuditor";
 import AuditHistory from "./pages/AuditHistory";
 import DenialManagement from "./pages/DenialManagement";
 import AppealsManagement from "./pages/AppealsManagement";
+import PatientIntake from "./pages/PatientIntake";
 import Admin from "./pages/Admin";
 import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
 
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/audit-history" element={<AuditHistory />} />
             <Route path="/denial-management" element={<DenialManagement />} />
             <Route path="/appeals" element={<AppealsManagement />} />
+            <Route path="/patient-intake" element={<PatientIntake />} />
             <Route
               path="/admin"
               element={

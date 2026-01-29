@@ -13,7 +13,8 @@ import {
   TrendingDown,
   ClipboardCheck,
   History,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
@@ -30,6 +31,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "patients", label: "Patients", icon: Users },
+    { id: "patient-intake", label: "Patient Intake", icon: UserPlus, isRoute: true, route: "/patient-intake" },
     { id: "claim-review", label: "Claim Review", icon: FileUp },
     { id: "scrubber", label: "Claim Scrubber", icon: Shield, isRoute: true, route: "/scrubber" },
     { id: "scrub-history", label: "Scrub History", icon: TrendingDown, isRoute: true, route: "/scrub-history" },
