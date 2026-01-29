@@ -256,6 +256,8 @@ export default function PatientIntake() {
           body: {
             connectionId: ecwConnectionId,
             accountNumber: `DOC-${Date.now()}`,
+            patientLocalId: localPatientId,
+            patientExternalId: isNewPatient ? undefined : localPatientId, // For updates
             data: {
               firstName: editedData.firstName,
               middleName: editedData.middleName,

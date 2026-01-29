@@ -10,6 +10,7 @@ const corsHeaders = {
 interface PatientCreateRequest {
   connectionId: string;
   accountNumber: string;
+  patientLocalId?: string;  // Local database patient ID to update after ECW sync
   data: {
     prefix?: string;
     firstName: string;
@@ -58,7 +59,7 @@ serve(async (req) => {
     }
 
     const requestData: PatientCreateRequest = await req.json();
-    const { connectionId, accountNumber, data } = requestData;
+    const { connectionId, accountNumber, patientLocalId, data } = requestData;
 
     if (!accountNumber || !accountNumber.trim()) {
       throw new Error("Account number is required for creating a new patient");
@@ -366,12 +367,39 @@ serve(async (req) => {
     const newPatientLocation = responseData?.entry?.[0]?.response?.location;
     const newPatientExternalId = newPatientLocation?.split("/").pop() || accountNumber;
 
+    // Update local patient record with ECW ID if we have a local ID
+    if (patientLocalId && newPatientExternalId) {
+      await supabaseClient
+        .from("patients")
+        .update({
+          external_id: newPatientExternalId,
+          source: "ecw",
+          source_connection_id: connectionId,
+          last_synced_at: new Date().toISOString()
+        })
+        .eq("id", patientLocalId);
+
+      // Log to patient audit
+      await supabaseClient
+        .from("patient_audit_log")
+        .insert({
+          user_id: user.id,
+          patient_id: patientLocalId,
+          patient_external_id: newPatientExternalId,
+          action: "create",
+          source: "ecw",
+          status: "success",
+          after_data: data
+        });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         message: "Patient created successfully",
         patientLocation: newPatientLocation,
-        externalId: newPatientExternalId
+        externalId: newPatientExternalId,
+        ecwPatientId: newPatientExternalId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
