@@ -2549,6 +2549,7 @@ export type Database = {
           phone: string | null
           postal_code: string | null
           prefix: string | null
+          raw_extracted_data: Json | null
           raw_fhir_data: Json | null
           source: string
           source_connection_id: string | null
@@ -2575,6 +2576,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           prefix?: string | null
+          raw_extracted_data?: Json | null
           raw_fhir_data?: Json | null
           source?: string
           source_connection_id?: string | null
@@ -2601,6 +2603,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           prefix?: string | null
+          raw_extracted_data?: Json | null
           raw_fhir_data?: Json | null
           source?: string
           source_connection_id?: string | null
