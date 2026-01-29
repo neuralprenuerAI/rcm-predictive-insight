@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, ArrowLeft } from "lucide-react";
+import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, ArrowLeft, FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,6 +82,7 @@ export default function PatientIntake() {
   const [ecwConnectionId, setEcwConnectionId] = useState<string | null>(null);
   
   const [ecwConnections, setEcwConnections] = useState<EcwConnection[]>([]);
+  const [isTestingEcw, setIsTestingEcw] = useState(false);
 
   useEffect(() => {
     loadEcwConnections();
@@ -97,6 +98,90 @@ export default function PatientIntake() {
     if (data && data.length > 0) {
       setEcwConnections(data);
       setEcwConnectionId(data[0].id);
+    }
+  }
+
+  // Test function for ECW Patient Create
+  async function testEcwCreate() {
+    if (!ecwConnectionId) {
+      toast({
+        title: "No ECW Connection",
+        description: "Please configure an ECW connection first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsTestingEcw(true);
+    
+    try {
+      const testAccountNumber = `TEST${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      
+      console.log("🧪 Testing ECW Patient Create...");
+      console.log("📋 Connection ID:", ecwConnectionId);
+      console.log("🔢 Account Number:", testAccountNumber);
+      
+      const response = await supabase.functions.invoke("ecw-patient-create", {
+        body: {
+          connectionId: ecwConnectionId,
+          accountNumber: testAccountNumber,
+          data: {
+            firstName: "Test",
+            middleName: "ECW",
+            lastName: "Integration",
+            birthDate: "1990-05-15",
+            gender: "male",
+            homePhone: "5551234567",
+            mobilePhone: "5559876543",
+            email: "test.integration@example.com",
+            addressLine1: "123 Test Street",
+            addressLine2: "Suite 100",
+            city: "Houston",
+            state: "TX",
+            postalCode: "77001",
+            country: "US",
+            maritalStatus: "single",
+            preferredLanguage: "en",
+            emergencyContactName: "Emergency Contact",
+            emergencyContactPhone: "5551112222"
+          }
+        }
+      });
+
+      console.log("📨 ECW Response:", response);
+      
+      if (response.error) {
+        console.error("❌ ECW Error:", response.error);
+        toast({
+          title: "ECW Test Failed",
+          description: response.error.message || JSON.stringify(response.error),
+          variant: "destructive"
+        });
+      } else if (response.data?.success) {
+        console.log("✅ ECW Success! Patient ID:", response.data.ecwPatientId);
+        toast({
+          title: "ECW Test Successful! 🎉",
+          description: `Patient created with ECW ID: ${response.data.ecwPatientId || response.data.accountNumber}`,
+        });
+      } else {
+        console.warn("⚠️ ECW Response:", response.data);
+        toast({
+          title: "ECW Test Result",
+          description: response.data?.error || JSON.stringify(response.data),
+          variant: "destructive"
+        });
+      }
+      
+      return response;
+    } catch (err: unknown) {
+      console.error("❌ ECW Test Error:", err);
+      toast({
+        title: "ECW Test Error",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive"
+      });
+    } finally {
+      setIsTestingEcw(false);
     }
   }
 
@@ -398,11 +483,28 @@ export default function PatientIntake() {
                 </p>
               </div>
             </div>
-            {step !== "idle" && (
-              <Button variant="outline" onClick={handleReset}>
-                Start Over
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {ecwConnections.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  onClick={testEcwCreate}
+                  disabled={isTestingEcw}
+                  className="bg-accent/50 border-primary/30 hover:bg-accent"
+                >
+                  {isTestingEcw ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FlaskConical className="h-4 w-4 mr-2" />
+                  )}
+                  Test ECW Create
+                </Button>
+              )}
+              {step !== "idle" && (
+                <Button variant="outline" onClick={handleReset}>
+                  Start Over
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Progress bar */}
