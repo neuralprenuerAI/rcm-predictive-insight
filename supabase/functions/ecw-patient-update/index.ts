@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { logError, logOperation } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
@@ -11,21 +11,21 @@ interface PatientUpdateRequest {
   connectionId: string;
   patientExternalId: string;
   accountNumber: string;
-  patientLocalId?: string;  // Local database patient ID to update after ECW sync
+  patientLocalId?: string;
   data: {
     prefix?: string;
     firstName: string;
     middleName?: string;
     lastName: string;
     suffix?: string;
-    birthDate: string;
+    dateOfBirth: string;
     gender: string;
     active?: boolean;
     deceased?: boolean;
     maritalStatus?: string;
-    homePhone?: string;
-    workPhone?: string;
-    mobilePhone?: string;
+    phoneHome?: string;
+    phoneWork?: string;
+    phoneMobile?: string;
     email?: string;
     addressLine1?: string;
     addressLine2?: string;
@@ -33,10 +33,10 @@ interface PatientUpdateRequest {
     state?: string;
     postalCode?: string;
     country?: string;
-    race?: { code: string; display: string };
-    ethnicity?: { code: string; display: string };
+    race?: string;
+    ethnicity?: string;
     birthSex?: string;
-    preferredLanguage?: { code: string; display: string };
+    preferredLanguage?: string;
     emergencyContactName?: string;
     emergencyContactRelationship?: string;
     emergencyContactPhone?: string;
@@ -69,6 +69,20 @@ serve(async (req) => {
       status: "started" 
     });
 
+    // Validate required fields
+    if (!data.firstName || !data.lastName) {
+      throw new Error("First name and last name are required");
+    }
+    if (!data.gender) {
+      throw new Error("Gender is required");
+    }
+    if (!data.dateOfBirth) {
+      throw new Error("Date of birth is required for ECW patient matching");
+    }
+    if (!accountNumber && !patientExternalId) {
+      throw new Error("Account number or patient external ID is required");
+    }
+
     // Get connection credentials
     const { data: connection, error: connError } = await supabaseClient
       .from("api_connections")
@@ -81,206 +95,44 @@ serve(async (req) => {
       throw new Error("Connection not found");
     }
 
-    const credentials = connection.credentials;
+    const credentials = connection.credentials as {
+      client_id: string;
+      private_key: string;
+      issuer_url: string;
+      kid?: string;
+      scope?: string;
+    };
+    
     const fhirBaseUrl = credentials.issuer_url;
 
-    // Get OAuth token with Patient.update scope
+    if (!fhirBaseUrl) {
+      throw new Error("FHIR base URL not configured in connection");
+    }
+
+    // Get OAuth token with Patient.write scope
+    console.log("Requesting token with Patient.write scope...");
     const tokenResponse = await supabaseClient.functions.invoke("ecw-get-token", {
       body: {
         connectionId,
-        scopeOverride: "system/Patient.update system/Patient.read"
+        scopeOverride: "system/Patient.write system/Patient.read"
       }
     });
 
     if (tokenResponse.error || !tokenResponse.data?.access_token) {
+      logError("Token error", tokenResponse.error || tokenResponse.data);
       throw new Error("Failed to get access token");
     }
 
     const accessToken = tokenResponse.data.access_token;
 
     // Build FHIR Patient resource per ECW documentation
-    const patientResource: any = {
-      resourceType: "Patient",
-      id: patientExternalId,
-      meta: {
-        lastUpdated: new Date().toISOString(),
-        profile: ["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"]
-      },
-      extension: [],
-      identifier: [
-        {
-          use: "usual",
-          system: "urn:oid:2.16.840.1.113883.4.391.326070",
-          value: patientExternalId
-        },
-        {
-          use: "secondary",
-          system: "urn:oid:2.16.840.1.113883.4.391.326070",
-          value: accountNumber
-        }
-      ],
-      active: data.active !== undefined ? data.active : true,
-      name: [{
-        family: data.lastName,
-        given: [data.firstName, data.middleName].filter(Boolean),
-        prefix: data.prefix ? [data.prefix] : [],
-        suffix: data.suffix ? [data.suffix] : []
-      }],
-      birthDate: data.birthDate,
-      gender: data.gender,
-      telecom: [],
-      address: []
-    };
+    const patientResource = buildEcwPatientResourceForUpdate(
+      patientExternalId || accountNumber,
+      accountNumber,
+      data
+    );
 
-    // Add race extension if provided
-    if (data.race) {
-      patientResource.extension.push({
-        url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
-        extension: [
-          {
-            url: "ombCategory",
-            valueCoding: {
-              system: "urn:oid:2.16.840.1.113883.6.238",
-              code: data.race.code,
-              display: data.race.display
-            }
-          },
-          {
-            url: "text",
-            valueString: data.race.display
-          }
-        ]
-      });
-    }
-
-    // Add ethnicity extension if provided
-    if (data.ethnicity) {
-      patientResource.extension.push({
-        url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
-        extension: [
-          {
-            url: "ombCategory",
-            valueCoding: {
-              system: "urn:oid:2.16.840.1.113883.6.238",
-              code: data.ethnicity.code,
-              display: data.ethnicity.display
-            }
-          },
-          {
-            url: "text",
-            valueString: data.ethnicity.display
-          }
-        ]
-      });
-    }
-
-    // Add birth sex extension if provided
-    if (data.birthSex) {
-      patientResource.extension.push({
-        url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex",
-        valueCode: data.birthSex
-      });
-    }
-
-    // Add telecom (phone numbers and email)
-    if (data.homePhone) {
-      patientResource.telecom.push({
-        system: "phone",
-        value: data.homePhone,
-        use: "home"
-      });
-    }
-    if (data.workPhone) {
-      patientResource.telecom.push({
-        system: "phone",
-        value: data.workPhone,
-        use: "work"
-      });
-    }
-    if (data.mobilePhone) {
-      patientResource.telecom.push({
-        system: "phone",
-        value: data.mobilePhone,
-        use: "mobile"
-      });
-    }
-    if (data.email) {
-      patientResource.telecom.push({
-        system: "email",
-        value: data.email,
-        use: "home"
-      });
-    }
-
-    // Add address if any address field is provided
-    if (data.addressLine1 || data.city || data.state || data.postalCode) {
-      const addressLines = [data.addressLine1, data.addressLine2].filter(Boolean);
-      patientResource.address.push({
-        use: "home",
-        line: addressLines,
-        city: data.city || "",
-        state: data.state || "",
-        postalCode: data.postalCode || "",
-        country: data.country || "US"
-      });
-    }
-
-    // Add marital status if provided
-    if (data.maritalStatus) {
-      patientResource.maritalStatus = {
-        coding: [{
-          system: "http://terminology.hl7.org/CodeSystem/v3-MaritalStatus",
-          code: data.maritalStatus
-        }]
-      };
-    }
-
-    // Add deceased if provided
-    if (data.deceased !== undefined) {
-      patientResource.deceasedBoolean = data.deceased;
-    }
-
-    // Add preferred language if provided
-    if (data.preferredLanguage) {
-      patientResource.communication = [{
-        language: {
-          coding: [{
-            system: "urn:ietf:bcp:47",
-            code: data.preferredLanguage.code,
-            display: data.preferredLanguage.display
-          }],
-          text: data.preferredLanguage.display
-        }
-      }];
-    }
-
-    // Add emergency contact if provided
-    if (data.emergencyContactName) {
-      const nameParts = data.emergencyContactName.split(" ");
-      const contactFamily = nameParts.pop() || "";
-      const contactGiven = nameParts;
-      
-      patientResource.contact = [{
-        relationship: [{
-          coding: [{
-            system: "http://terminology.hl7.org/CodeSystem/v2-0131",
-            code: data.emergencyContactRelationship || "E"
-          }]
-        }],
-        name: {
-          use: "usual",
-          family: contactFamily,
-          given: contactGiven
-        },
-        telecom: data.emergencyContactPhone ? [{
-          system: "phone",
-          value: data.emergencyContactPhone,
-          use: "mobile"
-        }] : []
-      }];
-    }
-
-    // Build the Bundle per ECW documentation
+    // Build the Bundle - MUST use method: "PUT" for update
     const bundle = {
       resourceType: "Bundle",
       id: "",
@@ -310,7 +162,15 @@ serve(async (req) => {
       body: JSON.stringify(bundle)
     });
 
-    const responseData = await fhirResponse.json();
+    const responseText = await fhirResponse.text();
+    console.log("ECW Response Status:", fhirResponse.status);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      throw new Error(`ECW returned invalid JSON: ${responseText.substring(0, 500)}`);
+    }
     
     logOperation("ecw-patient-update", { 
       userId: user.id, 
@@ -337,7 +197,7 @@ serve(async (req) => {
           errorMessage = "Authentication failed. Please reconnect to ECW.";
           break;
         case "403":
-          errorMessage = "Not authorized. Check that Patient.update scope is enabled.";
+          errorMessage = "Not authorized. Check that Patient.write scope is enabled.";
           break;
         case "408":
           errorMessage = "Request timed out. Please try again.";
@@ -406,3 +266,202 @@ serve(async (req) => {
     );
   }
 });
+
+function buildEcwPatientResourceForUpdate(
+  patientExternalId: string,
+  accountNumber: string,
+  data: PatientUpdateRequest["data"]
+): Record<string, unknown> {
+  const resource: Record<string, unknown> = {
+    resourceType: "Patient",
+    id: patientExternalId,
+    meta: {
+      lastUpdated: new Date().toISOString(),
+      profile: ["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"]
+    },
+    extension: [] as unknown[],
+    identifier: [
+      {
+        use: "usual",
+        system: "urn:oid:2.16.840.1.113883.4.391.326070",
+        value: patientExternalId
+      },
+      {
+        use: "secondary",
+        system: "urn:oid:2.16.840.1.113883.4.391.326070",
+        value: accountNumber
+      }
+    ],
+    active: data.active !== undefined ? data.active : true,
+    name: [{
+      family: data.lastName,
+      given: [data.firstName, data.middleName].filter(Boolean),
+      prefix: data.prefix ? [data.prefix] : [],
+      suffix: data.suffix ? [data.suffix] : []
+    }],
+    birthDate: data.dateOfBirth,
+    gender: data.gender,
+    telecom: [] as unknown[],
+    address: [] as unknown[]
+  };
+
+  // Add telecom (phone numbers and email)
+  const telecom = resource.telecom as unknown[];
+  if (data.phoneHome) {
+    telecom.push({ system: "phone", value: data.phoneHome, use: "home" });
+  }
+  if (data.phoneWork) {
+    telecom.push({ system: "phone", value: data.phoneWork, use: "work" });
+  }
+  if (data.phoneMobile) {
+    telecom.push({ system: "phone", value: data.phoneMobile, use: "mobile" });
+  }
+  if (data.email) {
+    telecom.push({ system: "email", value: data.email, use: "home" });
+  }
+
+  // Add address if any address field is provided
+  if (data.addressLine1 || data.city || data.state || data.postalCode) {
+    const addressLines = [data.addressLine1, data.addressLine2].filter(Boolean);
+    (resource.address as unknown[]).push({
+      use: "home",
+      line: addressLines,
+      city: data.city || "",
+      state: data.state || "",
+      postalCode: data.postalCode || "",
+      country: data.country || "US"
+    });
+  }
+
+  // Add marital status if provided
+  if (data.maritalStatus) {
+    const maritalCodes: Record<string, string> = {
+      "single": "S", "married": "M", "divorced": "D", "widowed": "W"
+    };
+    resource.maritalStatus = {
+      coding: [{
+        system: "http://terminology.hl7.org/CodeSystem/v3-MaritalStatus",
+        code: maritalCodes[data.maritalStatus.toLowerCase()] || data.maritalStatus
+      }]
+    };
+  }
+
+  // Add deceased if provided
+  if (data.deceased !== undefined) {
+    resource.deceasedBoolean = data.deceased;
+  }
+
+  // Add preferred language if provided
+  if (data.preferredLanguage) {
+    resource.communication = [{
+      language: {
+        coding: [{
+          system: "urn:ietf:bcp:47",
+          code: data.preferredLanguage,
+          display: data.preferredLanguage
+        }],
+        text: data.preferredLanguage
+      }
+    }];
+  }
+
+  // Add US Core extensions
+  const extensions = resource.extension as unknown[];
+
+  // Race extension
+  if (data.race) {
+    extensions.push({
+      url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+      extension: [
+        {
+          url: "ombCategory",
+          valueCoding: {
+            system: "urn:oid:2.16.840.1.113883.6.238",
+            code: getRaceCode(data.race),
+            display: data.race
+          }
+        },
+        { url: "text", valueString: data.race }
+      ]
+    });
+  }
+
+  // Ethnicity extension
+  if (data.ethnicity) {
+    extensions.push({
+      url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
+      extension: [
+        {
+          url: "ombCategory",
+          valueCoding: {
+            system: "urn:oid:2.16.840.1.113883.6.238",
+            code: getEthnicityCode(data.ethnicity),
+            display: data.ethnicity
+          }
+        },
+        { url: "text", valueString: data.ethnicity }
+      ]
+    });
+  }
+
+  // Birth sex extension
+  if (data.birthSex) {
+    extensions.push({
+      url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex",
+      valueCode: data.birthSex
+    });
+  }
+
+  // Add emergency contact if provided
+  if (data.emergencyContactName) {
+    const nameParts = data.emergencyContactName.split(" ");
+    const contactFamily = nameParts.pop() || "";
+    const contactGiven = nameParts;
+    
+    resource.contact = [{
+      relationship: [{
+        coding: [{
+          system: "http://terminology.hl7.org/CodeSystem/v2-0131",
+          code: data.emergencyContactRelationship || "E"
+        }]
+      }],
+      name: {
+        use: "usual",
+        family: contactFamily,
+        given: contactGiven
+      },
+      telecom: data.emergencyContactPhone ? [{
+        system: "phone",
+        value: data.emergencyContactPhone,
+        use: "mobile"
+      }] : []
+    }];
+  }
+
+  // Clean up empty arrays
+  if (extensions.length === 0) delete resource.extension;
+  if ((resource.telecom as unknown[]).length === 0) delete resource.telecom;
+  if ((resource.address as unknown[]).length === 0) delete resource.address;
+
+  return resource;
+}
+
+function getRaceCode(race: string): string {
+  const codes: Record<string, string> = {
+    "white": "2106-3", "black": "2054-5", "asian": "2028-9",
+    "american indian": "1002-5", "alaska native": "1002-5",
+    "native hawaiian": "2076-8", "pacific islander": "2076-8",
+    "other": "2131-1", "declined": "ASKU", "unknown": "UNK"
+  };
+  return codes[race.toLowerCase()] || "UNK";
+}
+
+function getEthnicityCode(ethnicity: string): string {
+  const codes: Record<string, string> = {
+    "hispanic": "2135-2", "latino": "2135-2",
+    "hispanic or latino": "2135-2",
+    "not hispanic": "2186-5", "not hispanic or latino": "2186-5",
+    "declined": "ASKU", "unknown": "UNK"
+  };
+  return codes[ethnicity.toLowerCase()] || "UNK";
+}
