@@ -192,7 +192,7 @@ export function UploadDocumentModal({ isOpen, onClose, onSuccess }: UploadDocume
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg"
+              accept=".pdf,.png,.jpg,.jpeg,.oxps,.xps"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -227,7 +227,7 @@ export function UploadDocumentModal({ isOpen, onClose, onSuccess }: UploadDocume
                 <div className="text-center">
                   <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                   <p className="font-medium">Click to select a file</p>
-                  <p className="text-sm text-muted-foreground">PDF, PNG, JPG up to 10MB</p>
+                  <p className="text-sm text-muted-foreground">PDF, PNG, JPG, OXPS up to 10MB</p>
                 </div>
               )}
             </div>

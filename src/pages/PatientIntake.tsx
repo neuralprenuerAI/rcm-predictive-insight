@@ -185,6 +185,15 @@ export default function PatientIntake() {
     }
   }
 
+  // Helper to detect OXPS/XPS files
+  const isOxpsFile = (file: File): boolean => {
+    const filename = file.name.toLowerCase();
+    return filename.endsWith('.oxps') || 
+           filename.endsWith('.xps') ||
+           file.type === 'application/oxps' ||
+           file.type === 'application/vnd.ms-xpsdocument';
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -195,8 +204,35 @@ export default function PatientIntake() {
     setProgress(10);
 
     try {
-      const base64 = await fileToBase64(file);
-      setProgress(20);
+      let base64 = await fileToBase64(file);
+      let mimeType = file.type || 'application/pdf';
+      let filename = file.name;
+      setProgress(15);
+
+      // Check if OXPS/XPS file - convert to PDF first
+      if (isOxpsFile(file)) {
+        console.log("[PatientIntake] Converting OXPS file to PDF...");
+        setProgress(20);
+        
+        const convertResponse = await supabase.functions.invoke("convert-oxps", {
+          body: {
+            content: base64,
+            filename: file.name
+          }
+        });
+
+        if (convertResponse.error || !convertResponse.data?.success) {
+          throw new Error("Failed to convert OXPS file: " + 
+            (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
+        }
+
+        console.log(`[PatientIntake] OXPS converted: ${convertResponse.data.pageCount} pages`);
+        base64 = convertResponse.data.content;
+        mimeType = "application/pdf";
+        filename = convertResponse.data.convertedFilename;
+      }
+
+      setProgress(25);
 
       setStep("ocr");
       setProgress(30);
@@ -204,8 +240,8 @@ export default function PatientIntake() {
       const ocrResponse = await supabase.functions.invoke("ocr-document", {
         body: {
           content: base64,
-          filename: file.name,
-          mimeType: file.type,
+          filename: filename,
+          mimeType: mimeType,
           provider: "aws"
         }
       });
@@ -259,7 +295,9 @@ export default function PatientIntake() {
     onDrop,
     accept: {
       "application/pdf": [".pdf"],
-      "image/*": [".png", ".jpg", ".jpeg", ".tiff", ".tif"]
+      "image/*": [".png", ".jpg", ".jpeg", ".tiff", ".tif"],
+      "application/oxps": [".oxps"],
+      "application/vnd.ms-xpsdocument": [".xps", ".oxps"]
     },
     maxFiles: 1,
     disabled: step !== "idle" && step !== "error" && step !== "complete"
