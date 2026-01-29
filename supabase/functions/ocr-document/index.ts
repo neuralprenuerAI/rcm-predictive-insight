@@ -19,6 +19,213 @@ interface OCRResult {
 }
 
 // ============================================
+// AWS TEXTRACT PROVIDER (PRODUCTION)
+// ============================================
+
+async function signAWSRequest(
+  method: string,
+  url: string,
+  body: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  service: string
+): Promise<Headers> {
+  const encoder = new TextEncoder();
+  
+  const urlObj = new URL(url);
+  const host = urlObj.host;
+  const path = urlObj.pathname;
+  
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z";
+  const dateStamp = amzDate.slice(0, 8);
+  
+  // Create canonical request
+  const payloadHash = await crypto.subtle.digest("SHA-256", encoder.encode(body));
+  const payloadHashHex = Array.from(new Uint8Array(payloadHash))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  
+  const canonicalHeaders = `content-type:application/x-amz-json-1.1\nhost:${host}\nx-amz-date:${amzDate}\nx-amz-target:Textract.DetectDocumentText\n`;
+  const signedHeaders = "content-type;host;x-amz-date;x-amz-target";
+  
+  const canonicalRequest = [
+    method,
+    path,
+    "", // query string
+    canonicalHeaders,
+    signedHeaders,
+    payloadHashHex,
+  ].join("\n");
+  
+  // Create string to sign
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  
+  const canonicalRequestHash = await crypto.subtle.digest("SHA-256", encoder.encode(canonicalRequest));
+  const canonicalRequestHashHex = Array.from(new Uint8Array(canonicalRequestHash))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  
+  const stringToSign = [
+    algorithm,
+    amzDate,
+    credentialScope,
+    canonicalRequestHashHex,
+  ].join("\n");
+  
+  // Calculate signature
+  async function hmacSHA256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
+    const keyBytes = key instanceof Uint8Array ? key : new Uint8Array(key);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes as unknown as BufferSource,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    return crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(data));
+  }
+  
+  const kDate = await hmacSHA256(encoder.encode("AWS4" + secretAccessKey), dateStamp);
+  const kRegion = await hmacSHA256(kDate, region);
+  const kService = await hmacSHA256(kRegion, service);
+  const kSigning = await hmacSHA256(kService, "aws4_request");
+  
+  const signature = await hmacSHA256(kSigning, stringToSign);
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  
+  const authorizationHeader = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signatureHex}`;
+  
+  const headers = new Headers();
+  headers.set("Content-Type", "application/x-amz-json-1.1");
+  headers.set("Host", host);
+  headers.set("X-Amz-Date", amzDate);
+  headers.set("X-Amz-Target", "Textract.DetectDocumentText");
+  headers.set("Authorization", authorizationHeader);
+  
+  return headers;
+}
+
+async function ocrWithTextract(
+  content: string,
+  filename: string,
+  mimeType: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string
+): Promise<OCRResult> {
+  console.log("Using AWS Textract provider...");
+  
+  const startTime = Date.now();
+  
+  // Prepare base64 content
+  let base64Data = content;
+  
+  // Handle data URL format
+  if (content.startsWith("data:")) {
+    const match = content.match(/^data:[^;]+;base64,(.+)$/);
+    if (match) {
+      base64Data = match[1];
+    }
+  }
+  
+  // Handle URL - need to fetch and convert to base64
+  if (content.startsWith("http://") || content.startsWith("https://")) {
+    const response = await fetch(content);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    base64Data = btoa(String.fromCharCode(...bytes));
+  }
+  
+  // Prepare Textract request
+  const textractUrl = `https://textract.${region}.amazonaws.com/`;
+  const requestBody = JSON.stringify({
+    Document: {
+      Bytes: base64Data,
+    },
+  });
+  
+  // Sign the request
+  const headers = await signAWSRequest(
+    "POST",
+    textractUrl,
+    requestBody,
+    accessKeyId,
+    secretAccessKey,
+    region,
+    "textract"
+  );
+  
+  // Make the API call
+  const response = await fetch(textractUrl, {
+    method: "POST",
+    headers,
+    body: requestBody,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Textract error:", response.status, errorText);
+    throw new Error(`AWS Textract API error: ${response.status} - ${errorText}`);
+  }
+  
+  const data = await response.json();
+  
+  // Parse Textract response
+  const blocks = data.Blocks || [];
+  
+  // Extract text from LINE blocks (maintains reading order)
+  const lines: string[] = [];
+  let totalConfidence = 0;
+  let wordCount = 0;
+  let pageCount = 0;
+  const pageTexts: Map<number, string[]> = new Map();
+  
+  for (const block of blocks) {
+    if (block.BlockType === "PAGE") {
+      pageCount++;
+    } else if (block.BlockType === "LINE") {
+      const pageNum = block.Page || 1;
+      if (!pageTexts.has(pageNum)) {
+        pageTexts.set(pageNum, []);
+      }
+      pageTexts.get(pageNum)!.push(block.Text || "");
+      lines.push(block.Text || "");
+    } else if (block.BlockType === "WORD") {
+      wordCount++;
+      if (block.Confidence) {
+        totalConfidence += block.Confidence;
+      }
+    }
+  }
+  
+  const fullText = lines.join("\n");
+  const avgConfidence = wordCount > 0 ? totalConfidence / wordCount / 100 : 0; // Convert to 0-1 scale
+  
+  // Build pages array
+  const pages = Array.from(pageTexts.entries()).map(([pageNum, texts]) => ({
+    pageNumber: pageNum,
+    text: texts.join("\n"),
+    lineCount: texts.length,
+  }));
+  
+  return {
+    success: true,
+    text: fullText,
+    confidence: avgConfidence,
+    pageCount: pageCount || 1,
+    wordCount,
+    processingTimeMs: Date.now() - startTime,
+    provider: "aws_textract",
+    pages,
+  };
+}
+
+// ============================================
 // OCR.SPACE PROVIDER (FREE - 25,000 requests/month)
 // ============================================
 
@@ -265,7 +472,7 @@ serve(async (req) => {
       mimeType,         // MIME type (application/pdf, image/jpeg, etc.)
       documentId,       // Optional: existing document ID to update
       url,              // Alternative: URL to document
-      provider,         // Optional: force specific provider ('ocr_space' or 'azure')
+      provider,         // Optional: force specific provider ('aws', 'azure', 'ocr_space')
       maxWaitMs = 60000,
     } = await req.json();
 
@@ -339,32 +546,53 @@ serve(async (req) => {
         .eq("user_id", user.id);
     }
 
-    // Determine which provider to use
+    // Get provider credentials
+    const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const awsRegion = Deno.env.get("AWS_REGION") || "us-east-1";
     const ocrSpaceKey = Deno.env.get("OCR_SPACE_API_KEY");
     const azureEndpoint = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT");
     const azureKey = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_KEY");
     
     let ocrResult: OCRResult;
     
-    // Provider selection logic
-    if (provider === "azure" || (!provider && azureEndpoint && azureKey)) {
-      // Use Azure if explicitly requested or if Azure is configured
+    // Provider selection logic with priority order:
+    // 1. Explicit provider parameter
+    // 2. AWS Textract (if configured)
+    // 3. Azure (if configured)
+    // 4. OCR.space (fallback)
+    
+    if (provider === "aws") {
+      if (!awsAccessKeyId || !awsSecretAccessKey) {
+        throw new Error("AWS Textract not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.");
+      }
+      ocrResult = await ocrWithTextract(documentContent, filename || "", mimeType || "application/pdf", awsAccessKeyId, awsSecretAccessKey, awsRegion);
+    } else if (provider === "azure") {
       if (!azureEndpoint || !azureKey) {
         throw new Error("Azure Document Intelligence not configured. Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY.");
       }
       ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
-    } else if (provider === "ocr_space" || ocrSpaceKey) {
-      // Use OCR.space if explicitly requested or as fallback
+    } else if (provider === "ocr_space") {
       if (!ocrSpaceKey) {
         throw new Error("OCR.space not configured. Set OCR_SPACE_API_KEY.");
       }
+      ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
+    } else if (awsAccessKeyId && awsSecretAccessKey) {
+      // Default to AWS if configured
+      ocrResult = await ocrWithTextract(documentContent, filename || "", mimeType || "application/pdf", awsAccessKeyId, awsSecretAccessKey, awsRegion);
+    } else if (azureEndpoint && azureKey) {
+      // Fallback to Azure if configured
+      ocrResult = await ocrWithAzure(documentContent, filename || "", mimeType || "application/pdf", azureEndpoint, azureKey, maxWaitMs);
+    } else if (ocrSpaceKey) {
+      // Fallback to OCR.space
       ocrResult = await ocrWithOCRSpace(documentContent, filename || "", mimeType || "application/pdf", ocrSpaceKey);
     } else {
       // No provider configured
       throw new Error(
         "No OCR provider configured. Please set either:\n" +
-        "- OCR_SPACE_API_KEY (free, 25k requests/month)\n" +
-        "- AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY (production)"
+        "- AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (recommended)\n" +
+        "- AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY\n" +
+        "- OCR_SPACE_API_KEY (free, 25k requests/month)"
       );
     }
 
