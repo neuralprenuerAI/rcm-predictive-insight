@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { 
   Upload, 
   FileText, 
@@ -165,7 +166,7 @@ export default function ChargeAuditor() {
         
         try {
           // Use Gemini to extract text from document
-          const response = await supabase.functions.invoke("ai-claim-review", {
+          const response = await awsApi.invoke("ai-claim-review", {
             body: {
               action: "extract_text",
               document: base64,
@@ -222,7 +223,7 @@ export default function ChargeAuditor() {
     try {
       // Step 1: Analyze clinical note
       setProcessingStep("Analyzing clinical note...");
-      const analyzeResponse = await supabase.functions.invoke("analyze-clinical-note", {
+      const analyzeResponse = await awsApi.invoke("analyze-clinical-note", {
         body: {
           noteContent: contentToAnalyze,
           noteType,
@@ -242,7 +243,7 @@ export default function ChargeAuditor() {
 
       // Step 2: Predict CPT codes
       setProcessingStep("Predicting CPT codes...");
-      const predictResponse = await supabase.functions.invoke("predict-cpt-codes", {
+      const predictResponse = await awsApi.invoke("predict-cpt-codes", {
         body: {
           clinicalNoteId,
           extractedData,
@@ -259,7 +260,7 @@ export default function ChargeAuditor() {
 
       // Step 3: Compare charges
       setProcessingStep("Comparing charges...");
-      const compareResponse = await supabase.functions.invoke("compare-charges", {
+      const compareResponse = await awsApi.invoke("compare-charges", {
         body: {
           clinicalNoteId,
           predictions,

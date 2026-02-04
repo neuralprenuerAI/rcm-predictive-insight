@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -137,7 +138,7 @@ export default function Claims() {
     setIsGeneratingLetter(claim.id);
     
     try {
-      const { data, error } = await supabase.functions.invoke('generate-appeal-letter', {
+      const { data, error } = await awsApi.invoke('generate-appeal-letter', {
         body: {
           claimId: claim.id,
           patientName: claim.patient_name,

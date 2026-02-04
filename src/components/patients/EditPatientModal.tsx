@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, User, Phone, MapPin, Heart, Globe, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 
 interface Patient {
   id: string;
@@ -407,7 +408,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       console.log("Sending patient update:", updatePayload);
 
       // Call the edge function
-      const { data: response, error } = await supabase.functions.invoke("ecw-patient-update", {
+      const { data: response, error } = await awsApi.invoke("ecw-patient-update", {
         body: updatePayload
       });
 

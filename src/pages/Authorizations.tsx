@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { toast } from "sonner";
 import { Plus, CheckCircle, XCircle, Clock, Wand2, RefreshCw } from "lucide-react";
 
@@ -87,7 +88,7 @@ export default function Authorizations() {
 
   const syncEHRVisits = useMutation({
     mutationFn: async (connectionId: string) => {
-      const { data, error } = await supabase.functions.invoke('sync-ehr-visits', {
+      const { data, error } = await awsApi.invoke('sync-ehr-visits', {
         body: { connectionId }
       });
       if (error) throw error;
@@ -103,7 +104,7 @@ export default function Authorizations() {
 
   const generatePriorAuthLetter = useMutation({
     mutationFn: async (authorizationId: string) => {
-      const { data, error } = await supabase.functions.invoke('generate-prior-auth-letter', {
+      const { data, error } = await awsApi.invoke('generate-prior-auth-letter', {
         body: { authorizationId }
       });
       if (error) throw error;

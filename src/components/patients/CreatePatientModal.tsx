@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, UserPlus, Phone, MapPin, Heart, Globe, AlertCircle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 
 interface CreatePatientModalProps {
   isOpen: boolean;
@@ -342,7 +343,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       console.log("Payload:", createPayload);
 
       // Call the edge function
-      const { data: response, error } = await supabase.functions.invoke("ecw-patient-create", {
+      const { data: response, error } = await awsApi.invoke("ecw-patient-create", {
         body: createPayload
       });
 

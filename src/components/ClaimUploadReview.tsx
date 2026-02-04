@@ -18,6 +18,7 @@ import {
   Save
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { toast } from "sonner";
 
 interface ExtractedData {
@@ -226,7 +227,7 @@ const ClaimUploadReview = () => {
       // Send directly to Gemini Vision analysis
       setProcessingStep("AI analyzing claim and clinical documentation...");
       
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-claim-combined', {
+      const { data: analysisData, error: analysisError } = await awsApi.invoke('analyze-claim-combined', {
         body: {
           claimContent: claimBase64,
           clinicalNotesContent: notesBase64,

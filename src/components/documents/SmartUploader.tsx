@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -67,7 +68,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
 
     console.log(`[SmartUploader] Converting OXPS file via CloudConvert: ${file.name}`);
     
-    const convertResponse = await supabase.functions.invoke("convert-oxps", {
+    const convertResponse = await awsApi.invoke("convert-oxps", {
       body: {
         content,
         filename: file.name
@@ -138,7 +139,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
 
       setProgress(30);
 
-      const response = await supabase.functions.invoke('smart-process', {
+      const response = await awsApi.invoke('smart-process', {
         body: {
           documents,
           autoLink: true,

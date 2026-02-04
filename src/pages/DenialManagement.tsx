@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { 
   ArrowLeft,
   Search,
@@ -200,7 +201,7 @@ export default function DenialManagement() {
 
     setSubmitting(true);
     try {
-      const response = await supabase.functions.invoke("classify-denial", {
+      const response = await awsApi.invoke("classify-denial", {
         body: {
           payerName: manualEntry.payerName,
           reasonCode: manualEntry.reasonCode,
@@ -256,7 +257,7 @@ export default function DenialManagement() {
   const generateAppeal = async (denial: DenialRecord) => {
     setGeneratingAppeal(denial.id);
     try {
-      const response = await supabase.functions.invoke("generate-appeal", {
+      const response = await awsApi.invoke("generate-appeal", {
         body: {
           denialQueueId: denial.id,
         },
@@ -307,7 +308,7 @@ export default function DenialManagement() {
         return;
       }
 
-      const response = await supabase.functions.invoke("import-denials-from-835", {
+      const response = await awsApi.invoke("import-denials-from-835", {
         body: {
           remittanceData,
           autoClassify: true,

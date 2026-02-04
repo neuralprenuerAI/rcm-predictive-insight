@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -200,7 +201,7 @@ export default function ClaimScrubber() {
         throw new Error("Please upload a file or enter claim data");
       }
 
-      const { data, error } = await supabase.functions.invoke('scrub-claim', { body });
+      const { data, error } = await awsApi.invoke('scrub-claim', { body });
 
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || "Scrub failed");
@@ -377,7 +378,7 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
       const claimId = selectedClaims[i];
       
       try {
-        const { data, error } = await supabase.functions.invoke('scrub-claim', {
+        const { data, error } = await awsApi.invoke('scrub-claim', {
           body: { claim_id: claimId }
         });
 

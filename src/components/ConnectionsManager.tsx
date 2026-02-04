@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { toast } from "sonner";
 import { 
   Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
@@ -324,7 +325,7 @@ export default function ConnectionsManager() {
 
   const testECWToken = useMutation({
     mutationFn: async (connectionId: string) => {
-      const { data, error } = await supabase.functions.invoke('ecw-get-token', {
+      const { data, error } = await awsApi.invoke('ecw-get-token', {
         body: { connectionId, environment }
       });
       if (error) throw error;
@@ -365,7 +366,7 @@ export default function ConnectionsManager() {
       fetchAll?: boolean;
       dateRange?: string | null;
     }) => {
-      const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
+      const { data, error } = await awsApi.invoke('ecw-sync-data', {
         body: { connectionId, resource, category, fetchAll, dateRange }
       });
       if (error) throw error;
@@ -407,7 +408,7 @@ export default function ConnectionsManager() {
     
     while (hasMore) {
       try {
-        const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
+        const { data, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
             resource: 'ServiceRequest', 
