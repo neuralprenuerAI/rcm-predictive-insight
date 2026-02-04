@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,7 +127,7 @@ export default function PatientIntake() {
       console.log("📋 Connection ID:", ecwConnectionId);
       console.log("🔢 Account Number:", testAccountNumber);
       
-      const response = await supabase.functions.invoke("ecw-patient-create", {
+      const response = await awsApi.invoke("ecw-patient-create", {
         body: {
           connectionId: ecwConnectionId,
           accountNumber: testAccountNumber,
@@ -219,7 +220,7 @@ export default function PatientIntake() {
         console.log("[PatientIntake] Converting OXPS file to PDF via CloudConvert...");
         setProgress(20);
         
-        const convertResponse = await supabase.functions.invoke("convert-oxps", {
+        const convertResponse = await awsApi.invoke("convert-oxps", {
           body: {
             content: base64,
             filename: file.name
@@ -256,7 +257,7 @@ export default function PatientIntake() {
       }
       console.log("=== END DEBUG ===");
 
-      const ocrResponse = await supabase.functions.invoke("ocr-document", {
+      const ocrResponse = await awsApi.invoke("ocr-document", {
         body: {
           content: base64,
           filename: filename,
@@ -276,7 +277,7 @@ export default function PatientIntake() {
       setStep("extracting");
       setProgress(60);
 
-      const extractResponse = await supabase.functions.invoke("extract-patient-from-document", {
+      const extractResponse = await awsApi.invoke("extract-patient-from-document", {
         body: {
           ocrText: extractedText,
           documentType: documentType
@@ -397,7 +398,7 @@ export default function PatientIntake() {
         
         const ecwFunction = isNewPatient ? "ecw-patient-create" : "ecw-patient-update";
         
-        const ecwResponse = await supabase.functions.invoke(ecwFunction, {
+        const ecwResponse = await awsApi.invoke(ecwFunction, {
           body: {
             connectionId: ecwConnectionId,
             accountNumber: accountNumber,

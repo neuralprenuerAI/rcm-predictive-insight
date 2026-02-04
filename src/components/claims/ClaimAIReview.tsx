@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -53,7 +54,7 @@ export function ClaimAIReview({ claimId, claimStatus }: ClaimAIReviewProps) {
 
       const isDenied = claimStatus?.toLowerCase().includes('denied');
 
-      const response = await supabase.functions.invoke('ai-claim-review', {
+      const response = await awsApi.invoke('ai-claim-review', {
         body: {
           claimId,
           includeAppealStrategy: isDenied,
