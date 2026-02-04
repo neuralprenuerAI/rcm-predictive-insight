@@ -14,13 +14,56 @@ import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NotificationFeed, ActionAlerts, ScrubberActivityCard, ChargeAuditorCard, DenialManagementCard } from "@/components/dashboard";
-import { LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2, Zap } from "lucide-react";
+import { awsApi } from "@/integrations/aws/awsApi";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeView, setActiveView] = useState("dashboard");
   const [user, setUser] = useState<any>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isTestingAws, setIsTestingAws] = useState(false);
+
+  const handleTestAwsConnection = async () => {
+    setIsTestingAws(true);
+    console.log("=== TESTING AWS API GATEWAY CONNECTION ===");
+    console.log("Calling: awsApi.invoke('ecw-get-token', { body: { connectionId: 'test', environment: 'sandbox' } })");
+    
+    try {
+      const { data, error } = await awsApi.invoke('ecw-get-token', { 
+        body: { connectionId: 'test', environment: 'sandbox' } 
+      });
+      
+      console.log("=== AWS API RESPONSE ===");
+      console.log("Data:", data);
+      console.log("Error:", error);
+      console.log("=== END AWS API RESPONSE ===");
+      
+      if (error) {
+        toast({
+          title: "AWS Connection Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "AWS Connection Success!",
+          description: "Check console for full response details",
+        });
+      }
+    } catch (err) {
+      console.error("AWS test failed:", err);
+      toast({
+        title: "AWS Test Failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTestingAws(false);
+    }
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -117,7 +160,20 @@ const Index = () => {
     <div className="flex min-h-screen bg-background">
       <Sidebar activeView={activeView} onViewChange={setActiveView} />
       <main className="flex-1 p-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleTestAwsConnection}
+            disabled={isTestingAws}
+            className="gap-2 border-amber-500 text-amber-600 hover:bg-amber-50"
+          >
+            {isTestingAws ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            {isTestingAws ? "Testing..." : "Test AWS Connection"}
+          </Button>
           <Button 
             variant="outline" 
             onClick={handleSignOut}
