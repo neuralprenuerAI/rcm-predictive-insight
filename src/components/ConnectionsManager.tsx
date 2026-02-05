@@ -525,7 +525,7 @@ export default function ConnectionsManager() {
     
     while (hasMore) {
       try {
-        const { data, error } = await supabase.functions.invoke('ecw-sync-data', {
+        const { data, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
             resource: 'Procedure', 
