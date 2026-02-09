@@ -24,7 +24,7 @@ interface Patient {
   gender: string;
   phone?: string;
   email?: string;
-  address_line1?: string;
+  address?: string;
   address_line2?: string;
   city?: string;
   state?: string;
@@ -215,7 +215,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         mobilePhone,
         email,
         preferredLanguage: fhirData.communication?.[0]?.language?.coding?.[0]?.code || "none",
-        addressLine1: address.line?.[0] || patient.address_line1 || "",
+        addressLine1: address.line?.[0] || patient.address || "",
         addressLine2: address.line?.[1] || patient.address_line2 || "",
         city: address.city || patient.city || "",
         state: address.state || patient.state || "none",

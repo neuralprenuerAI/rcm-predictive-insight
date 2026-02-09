@@ -411,6 +411,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         phone: formData.mobilePhone?.trim() || formData.homePhone?.trim() || null,
         email: formData.email?.trim() || null,
         address: formData.addressLine1?.trim() || null,
+        address_line2: formData.addressLine2?.trim() || null,
         city: formData.city?.trim() || null,
         state: cleanValue(formData.state) || null,
         postal_code: formData.postalCode?.trim() || null,
