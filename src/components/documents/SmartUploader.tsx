@@ -66,7 +66,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
       return { content, filename: file.name, mimeType: file.type || 'application/pdf' };
     }
 
-    console.log(`[SmartUploader] Converting OXPS file via CloudConvert: ${file.name}`);
+    // Converting OXPS file via CloudConvert
     
     const convertResponse = await awsApi.invoke("convert-oxps", {
       body: {
@@ -80,7 +80,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
         (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
     }
 
-    console.log(`[SmartUploader] OXPS converted to PDF successfully`);
+    // OXPS converted to PDF successfully
     
     return {
       content: convertResponse.data.content,

@@ -343,16 +343,14 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         }
       };
 
-      console.log("=== PATIENT CREATE START ===");
-      console.log("Payload:", createPayload);
+      // Patient create started
 
       // Call the edge function
       const { data: response, error } = await awsApi.invoke("ecw-patient-create", {
         body: createPayload
       });
 
-      console.log("ECW Response:", response);
-      console.log("ECW Error:", error);
+      // ECW response received
 
       if (error) {
         throw new Error(error.message || "Failed to create patient in ECW");
@@ -363,7 +361,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       }
 
       // ECW creation successful - now save to local database
-      console.log("ECW create successful, saving to local database...");
+      // ECW create successful, saving to local database
 
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -432,7 +430,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       }, user?.id || "");
       
       const newPatient = result.data;
-      console.log("Patient saved locally:", newPatient);
+      // Patient saved locally
 
       // Log to audit table
       try {
@@ -459,7 +457,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         console.error("Failed to log audit:", auditError);
       }
 
-      console.log("=== PATIENT CREATE COMPLETE ===");
+      // Patient create complete
 
       toast({
         title: "Patient Created",

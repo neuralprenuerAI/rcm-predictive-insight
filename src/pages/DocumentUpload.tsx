@@ -7,7 +7,7 @@ export default function DocumentUpload() {
   const navigate = useNavigate();
 
   const handleComplete = (results: any) => {
-    console.log("Upload complete:", results);
+    // Upload complete
   };
 
   return (

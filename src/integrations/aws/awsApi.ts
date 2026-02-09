@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { registerApiCall, unregisterApiCall } from "@/hooks/useIdleTimeout";
 
 const AWS_API_URL = import.meta.env.VITE_AWS_API_URL;
 
@@ -24,6 +25,7 @@ async function invoke<T = any>(
 ): Promise<InvokeResult<T>> {
   const url = `${AWS_API_URL}/functions/v1/${functionName}`;
 
+  registerApiCall();
   try {
     // Get current user from Supabase auth
     const { data: { session } } = await supabase.auth.getSession();
@@ -78,6 +80,8 @@ async function invoke<T = any>(
       data: null,
       error: err instanceof Error ? err : new Error(String(err)),
     };
+  } finally {
+    unregisterApiCall();
   }
 }
 

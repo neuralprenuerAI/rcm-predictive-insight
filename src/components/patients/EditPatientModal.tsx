@@ -516,7 +516,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
             }
           };
 
-          console.log("Sending patient update to ECW:", updatePayload);
+          // Sending patient update to ECW
 
           const { data: response, error } = await awsApi.invoke("ecw-patient-update", {
             body: updatePayload
