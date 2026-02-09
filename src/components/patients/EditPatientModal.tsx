@@ -482,6 +482,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         try {
           const updatePayload = {
             connectionId: updateConnectionId,
+            externalId: patient.external_id,
             patientExternalId: patient.external_id,
             accountNumber: accountNumber,
             data: {
