@@ -421,16 +421,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       }, user?.id || "");
       
       const newPatient = result.data;
-        console.error("Failed to save patient locally:", insertError);
-        // Don't throw - ECW creation succeeded, just warn about local save
-        toast({
-          title: "Patient Created in ECW",
-          description: "Patient was created in ECW but failed to save locally. Please sync patients to update.",
-          variant: "default"
-        });
-      } else {
-        console.log("Patient saved locally:", newPatient);
-      }
+      console.log("Patient saved locally:", newPatient);
 
       // Log to audit table
       try {
