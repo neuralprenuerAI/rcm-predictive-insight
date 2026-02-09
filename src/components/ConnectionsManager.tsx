@@ -652,15 +652,8 @@ export default function ConnectionsManager() {
         };
       });
       
-      // Upsert patients (update if external_id exists, insert if new)
-      const { error } = await supabase
-        .from('patients')
-        .upsert(patientsToUpsert, {
-          onConflict: 'external_id,source,user_id',
-          ignoreDuplicates: false,
-        });
-      
-      if (error) throw error;
+      // Upsert patients via AWS RDS (maintains write-path consistency)
+      await awsCrud.bulkUpsert('patients', patientsToUpsert, user.id, 'external_id,source,user_id');
       
       return patientsToUpsert.length;
     },
