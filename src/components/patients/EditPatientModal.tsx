@@ -323,15 +323,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       return;
     }
 
-    // Check for missing connection ID
-    if (!patient.source_connection_id) {
-      toast({
-        title: "Cannot Update",
-        description: "This patient is not linked to an ECW connection. Please sync patients first.",
-        variant: "destructive"
-      });
-      return;
-    }
+    // Note: ECW sync will be attempted only if source_connection_id exists
 
     setIsLoading(true);
 
@@ -360,42 +352,6 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         display: LANGUAGE_OPTIONS.find(l => l.code === languageValue)?.display || languageValue
       } : undefined;
 
-      // Build the update payload
-      const updatePayload = {
-        connectionId: patient.source_connection_id,
-        patientExternalId: patient.external_id,
-        accountNumber: accountNumber,
-        data: {
-          prefix: cleanValue(formData.prefix),
-          firstName: formData.firstName,
-          middleName: formData.middleName || undefined,
-          lastName: formData.lastName,
-          suffix: cleanValue(formData.suffix),
-          birthDate: formData.birthDate,
-          gender: formData.gender,
-          active: formData.active,
-          deceased: formData.deceased,
-          maritalStatus: cleanValue(formData.maritalStatus),
-          homePhone: formData.homePhone || undefined,
-          workPhone: formData.workPhone || undefined,
-          mobilePhone: formData.mobilePhone || undefined,
-          email: formData.email || undefined,
-          addressLine1: formData.addressLine1 || undefined,
-          addressLine2: formData.addressLine2 || undefined,
-          city: formData.city || undefined,
-          state: cleanValue(formData.state),
-          postalCode: formData.postalCode || undefined,
-          country: formData.country || "US",
-          race: raceData,
-          ethnicity: ethnicityData,
-          birthSex: cleanValue(formData.birthSex),
-          preferredLanguage: languageData,
-          emergencyContactName: formData.emergencyContactName || undefined,
-          emergencyContactRelationship: cleanValue(formData.emergencyContactRelationship),
-          emergencyContactPhone: formData.emergencyContactPhone || undefined
-        }
-      };
-
       // Store before data for audit log
       const beforeData = {
         firstName: patient.first_name,
@@ -406,22 +362,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         email: patient.email
       };
 
-      console.log("Sending patient update:", updatePayload);
-
-      // Call the edge function
-      const { data: response, error } = await awsApi.invoke("ecw-patient-update", {
-        body: updatePayload
-      });
-
-      if (error) {
-        throw new Error(error.message || "Failed to update patient");
-      }
-
-      if (!response?.success) {
-        throw new Error(response?.error || "Failed to update patient in ECW");
-      }
-
-      // Update succeeded - now update local database with ALL fields
+      // --- STEP 1: Save to local database FIRST ---
       const stateValue = cleanValue(formData.state);
       const prefixValue = cleanValue(formData.prefix);
       const suffixValue = cleanValue(formData.suffix);
@@ -476,8 +417,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       }, { id: patient.id }, currentUser?.id || "");
 
       if (localUpdateResult.error) {
-        console.error("Failed to update local database:", localUpdateResult.error);
-        // Don't throw - ECW update succeeded
+        throw new Error("Failed to save patient to database");
       }
 
       // Log to audit table
@@ -490,7 +430,6 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         email: formData.email
       };
 
-      // Calculate what changed
       const changes: Record<string, { from: any; to: any }> = {};
       Object.keys(afterData).forEach(key => {
         const beforeVal = beforeData[key as keyof typeof beforeData];
@@ -501,23 +440,96 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       });
 
       if (currentUser) {
-        await awsCrud.insert('patient_audit_log', {
-          patient_id: patient.id,
-          patient_external_id: patient.external_id,
-          user_id: currentUser.id,
-          action: "patient_update",
-          changes: changes,
-          before_data: beforeData,
-          after_data: afterData,
-          source: "ecw",
-          status: "success"
-        }, currentUser.id);
+        try {
+          await awsCrud.insert('patient_audit_log', {
+            patient_id: patient.id,
+            patient_external_id: patient.external_id,
+            user_id: currentUser.id,
+            action: "patient_update",
+            changes: changes,
+            before_data: beforeData,
+            after_data: afterData,
+            source: "local",
+            status: "success"
+          }, currentUser.id);
+        } catch (auditErr) {
+          console.error("Failed to log audit:", auditErr);
+        }
       }
 
-      toast({
-        title: "Patient Updated",
-        description: `Successfully updated ${formData.firstName} ${formData.lastName} in eClinicalWorks.`
-      });
+      // --- STEP 2: Attempt ECW sync as secondary step (non-blocking) ---
+      let ecwSyncFailed = false;
+      let ecwErrorMsg = "";
+
+      if (patient.source_connection_id) {
+        try {
+          const updatePayload = {
+            connectionId: patient.source_connection_id,
+            patientExternalId: patient.external_id,
+            accountNumber: accountNumber,
+            data: {
+              prefix: cleanValue(formData.prefix),
+              firstName: formData.firstName,
+              middleName: formData.middleName || undefined,
+              lastName: formData.lastName,
+              suffix: cleanValue(formData.suffix),
+              birthDate: formData.birthDate,
+              gender: formData.gender,
+              active: formData.active,
+              deceased: formData.deceased,
+              maritalStatus: cleanValue(formData.maritalStatus),
+              homePhone: formData.homePhone || undefined,
+              workPhone: formData.workPhone || undefined,
+              mobilePhone: formData.mobilePhone || undefined,
+              email: formData.email || undefined,
+              addressLine1: formData.addressLine1 || undefined,
+              addressLine2: formData.addressLine2 || undefined,
+              city: formData.city || undefined,
+              state: cleanValue(formData.state),
+              postalCode: formData.postalCode || undefined,
+              country: formData.country || "US",
+              race: raceData,
+              ethnicity: ethnicityData,
+              birthSex: cleanValue(formData.birthSex),
+              preferredLanguage: languageData,
+              emergencyContactName: formData.emergencyContactName || undefined,
+              emergencyContactRelationship: cleanValue(formData.emergencyContactRelationship),
+              emergencyContactPhone: formData.emergencyContactPhone || undefined
+            }
+          };
+
+          console.log("Sending patient update to ECW:", updatePayload);
+
+          const { data: response, error } = await awsApi.invoke("ecw-patient-update", {
+            body: updatePayload
+          });
+
+          if (error) {
+            throw new Error(error.message || "ECW sync failed");
+          }
+          if (!response?.success) {
+            throw new Error(response?.error || "ECW sync failed");
+          }
+        } catch (ecwError: unknown) {
+          ecwSyncFailed = true;
+          ecwErrorMsg = ecwError instanceof Error ? ecwError.message : "ECW sync failed";
+          console.error("ECW sync failed (database save succeeded):", ecwErrorMsg);
+        }
+      }
+
+      // --- STEP 3: Show appropriate toast ---
+      if (ecwSyncFailed) {
+        toast({
+          title: "Patient Saved (ECW Sync Warning)",
+          description: `Patient saved to database successfully, but ECW sync failed: ${ecwErrorMsg}`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Patient Updated",
+          description: `Successfully updated ${formData.firstName} ${formData.lastName}.`
+        });
+      }
 
       onSuccess();
       onClose();
@@ -538,7 +550,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
             changes: null,
             before_data: null,
             after_data: null,
-            source: "ecw",
+            source: "local",
             status: "failed",
             error_message: errorMsg
           }, user.id);
