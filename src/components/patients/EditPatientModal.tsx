@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
 import { awsCrud } from "@/lib/awsCrud";
+import { findEcwConnectionByScope } from "@/lib/ecwConnectionResolver";
 
 interface Patient {
   id: string;
@@ -474,10 +475,13 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       let ecwSyncFailed = false;
       let ecwErrorMsg = "";
 
-      if (patient.source_connection_id) {
+      // Auto-resolve the ECW connection with Patient.update scope
+      const updateConnectionId = await findEcwConnectionByScope("Patient.update");
+
+      if (updateConnectionId) {
         try {
           const updatePayload = {
-            connectionId: patient.source_connection_id,
+            connectionId: updateConnectionId,
             patientExternalId: patient.external_id,
             accountNumber: accountNumber,
             data: {
