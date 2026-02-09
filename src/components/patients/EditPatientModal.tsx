@@ -398,8 +398,8 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
 
       const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-      // Update in Supabase (primary data source for the UI list)
-      const supabaseUpdateData = {
+      // Update patient via AWS RDS (single source of truth for writes)
+      const updateData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
         middle_name: formData.middleName || null,
@@ -409,7 +409,9 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         gender: formData.gender,
         phone: formData.mobilePhone || formData.homePhone || null,
         email: formData.email || null,
+        address: formData.addressLine1 || null,
         address_line1: formData.addressLine1 || null,
+        address_line2: formData.addressLine2 || null,
         city: formData.city || null,
         state: stateValue || null,
         postal_code: formData.postalCode || null,
@@ -417,21 +419,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         updated_at: new Date().toISOString()
       };
 
-      const { error: supabaseError } = await supabase
-        .from('patients')
-        .update(supabaseUpdateData)
-        .eq('id', patient.id);
-
-      if (supabaseError) {
-        throw new Error(`Failed to save patient: ${supabaseError.message}`);
-      }
-
-      // Also update in AWS RDS (secondary sync)
-      try {
-        await awsCrud.update('patients', supabaseUpdateData, { id: patient.id }, currentUser?.id || "");
-      } catch (awsErr) {
-        console.warn("AWS RDS sync failed (Supabase save succeeded):", awsErr);
-      }
+      await awsCrud.update('patients', updateData, { id: patient.id }, currentUser?.id || "");
 
       // Log to audit table
       const afterData = {
