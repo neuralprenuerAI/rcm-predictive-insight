@@ -239,7 +239,7 @@ export default function ChargeAuditor() {
       if (!analyzeResponse.data?.success) throw new Error(analyzeResponse.data?.error || "Analysis failed");
 
       const { clinicalNoteId, extractedData } = analyzeResponse.data;
-      console.log("Note analyzed:", clinicalNoteId);
+      // Note analyzed successfully
 
       // Step 2: Predict CPT codes
       setProcessingStep("Predicting CPT codes...");
@@ -256,7 +256,7 @@ export default function ChargeAuditor() {
       if (!predictResponse.data?.success) throw new Error(predictResponse.data?.error || "Prediction failed");
 
       const predictions: PredictedCharge[] = predictResponse.data.predictions;
-      console.log("Predictions:", predictions.length);
+      // Predictions received
 
       // Step 3: Compare charges
       setProcessingStep("Comparing charges...");

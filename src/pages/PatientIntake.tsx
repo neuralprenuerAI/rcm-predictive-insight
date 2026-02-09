@@ -125,9 +125,7 @@ export default function PatientIntake() {
     try {
       const testAccountNumber = `TEST${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
       
-      console.log("🧪 Testing ECW Patient Create...");
-      console.log("📋 Connection ID:", ecwConnectionId);
-      console.log("🔢 Account Number:", testAccountNumber);
+      // Testing ECW Patient Create
       
       const response = await awsApi.invoke("ecw-patient-create", {
         body: {
@@ -156,7 +154,7 @@ export default function PatientIntake() {
         }
       });
 
-      console.log("📨 ECW Response:", response);
+      // ECW response received
       
       if (response.error) {
         console.error("❌ ECW Error:", response.error);
@@ -166,7 +164,7 @@ export default function PatientIntake() {
           variant: "destructive"
         });
       } else if (response.data?.success) {
-        console.log("✅ ECW Success! Patient ID:", response.data.ecwPatientId);
+        // ECW patient created successfully
         toast({
           title: "ECW Test Successful! 🎉",
           description: `Patient created with ECW ID: ${response.data.ecwPatientId || response.data.accountNumber}`,
@@ -219,7 +217,7 @@ export default function PatientIntake() {
 
       // Check if OXPS/XPS file - convert to PDF via CloudConvert
       if (isOxpsFile(file)) {
-        console.log("[PatientIntake] Converting OXPS file to PDF via CloudConvert...");
+        // Converting OXPS file to PDF via CloudConvert
         setProgress(20);
         
         const convertResponse = await awsApi.invoke("convert-oxps", {
@@ -234,7 +232,7 @@ export default function PatientIntake() {
             (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
         }
 
-        console.log(`[PatientIntake] OXPS converted to PDF successfully`);
+        // OXPS converted to PDF successfully
         base64 = convertResponse.data.content;
         mimeType = convertResponse.data.mimeType;  // "application/pdf"
         filename = convertResponse.data.convertedFilename;
@@ -245,19 +243,7 @@ export default function PatientIntake() {
       setStep("ocr");
       setProgress(30);
       
-      // === OCR REQUEST DEBUG ===
-      console.log("=== OCR REQUEST DEBUG ===");
-      console.log("Filename being sent:", filename);
-      console.log("MimeType being sent:", mimeType);
-      console.log("Content length:", base64.length);
-      console.log("First 50 chars:", base64.substring(0, 50));
-      // Check if content looks like valid base64 PDF
-      if (base64.startsWith("JVBERi")) {
-        console.log("✅ Content starts with PDF header (JVBERi = %PDF)");
-      } else {
-        console.log("❌ Content does NOT start with PDF header. First chars:", base64.substring(0, 20));
-      }
-      console.log("=== END DEBUG ===");
+      // OCR request prepared
 
       const ocrResponse = await awsApi.invoke("ocr-document", {
         body: {
