@@ -969,26 +969,23 @@ export default function Patients() {
         }}
         patient={patientForEdit}
         onSuccess={async () => {
-          // Invalidate queries to refetch fresh data
-          await queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
+          // Optimistically update the cached patient list with the edited data
+          // Since writes go to AWS RDS, we update the cache directly instead of refetching from Supabase
+          queryClient.setQueryData(['patients-with-orders'], (oldData: PatientWithOrders[] | undefined) => {
+            if (!oldData || !patientForEdit) return oldData;
+            return oldData.map(p => p.id === patientForEdit.id ? { ...p, ...patientForEdit, updated_at: new Date().toISOString() } : p);
+          });
+
+          // Also invalidate to eventually sync with backend reads
+          queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
           
-          // If viewing a specific patient in dialog, refetch that patient
+          // If viewing a specific patient in dialog, update it locally
           if (selectedPatient && patientForEdit?.id === selectedPatient.id) {
-            const { data: updatedPatient } = await supabase
-              .from('patients')
-              .select('*')
-              .eq('id', selectedPatient.id)
-              .single();
-            
-            if (updatedPatient) {
-              // Update with fresh data including counts
-              setSelectedPatient({
-                ...updatedPatient,
-                lab_count: selectedPatient.lab_count,
-                imaging_count: selectedPatient.imaging_count,
-                procedure_count: selectedPatient.procedure_count
-              } as PatientWithOrders);
-            }
+            setSelectedPatient({
+              ...selectedPatient,
+              ...patientForEdit,
+              updated_at: new Date().toISOString(),
+            } as PatientWithOrders);
           }
           
           // Show success animation on the updated patient row
