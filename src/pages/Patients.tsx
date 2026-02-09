@@ -968,23 +968,20 @@ export default function Patients() {
           setPatientForEdit(null);
         }}
         patient={patientForEdit}
-        onSuccess={async () => {
-          // Optimistically update the cached patient list with the edited data
-          // Since writes go to AWS RDS, we update the cache directly instead of refetching from Supabase
-          queryClient.setQueryData(['patients-with-orders'], (oldData: PatientWithOrders[] | undefined) => {
-            if (!oldData || !patientForEdit) return oldData;
-            return oldData.map(p => p.id === patientForEdit.id ? { ...p, ...patientForEdit, updated_at: new Date().toISOString() } : p);
-          });
+        onSuccess={(updatedFields?: Record<string, any>) => {
+          // Update the cached patient list with the actual saved data
+          if (updatedFields && patientForEdit) {
+            queryClient.setQueryData(['patients-with-orders'], (oldData: PatientWithOrders[] | undefined) => {
+              if (!oldData) return oldData;
+              return oldData.map(p => p.id === patientForEdit.id ? { ...p, ...updatedFields } : p);
+            });
+          }
 
-          // Also invalidate to eventually sync with backend reads
-          queryClient.invalidateQueries({ queryKey: ['patients-with-orders'] });
-          
-          // If viewing a specific patient in dialog, update it locally
-          if (selectedPatient && patientForEdit?.id === selectedPatient.id) {
+          // If viewing a specific patient in dialog, update it with saved data
+          if (selectedPatient && patientForEdit?.id === selectedPatient.id && updatedFields) {
             setSelectedPatient({
               ...selectedPatient,
-              ...patientForEdit,
-              updated_at: new Date().toISOString(),
+              ...updatedFields,
             } as PatientWithOrders);
           }
           
