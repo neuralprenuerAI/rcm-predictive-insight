@@ -409,7 +409,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         gender: formData.gender,
         phone: formData.mobilePhone || formData.homePhone || null,
         email: formData.email || null,
-        address: formData.addressLine1 || null,
+        address_line1: formData.addressLine1 || null,
         city: formData.city || null,
         state: stateValue || null,
         postal_code: formData.postalCode || null,
