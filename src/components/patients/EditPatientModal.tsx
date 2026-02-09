@@ -473,7 +473,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
               middleName: formData.middleName || undefined,
               lastName: formData.lastName,
               suffix: cleanValue(formData.suffix),
-              birthDate: formData.birthDate,
+              dateOfBirth: formData.birthDate,
               gender: formData.gender,
               active: formData.active,
               deceased: formData.deceased,
