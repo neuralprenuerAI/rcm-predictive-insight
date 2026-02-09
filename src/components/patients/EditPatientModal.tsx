@@ -37,7 +37,7 @@ interface EditPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
   patient: Patient | null;
-  onSuccess: () => void;
+  onSuccess: (updatedFields?: Record<string, any>) => void;
 }
 
 // US States for dropdown
@@ -544,7 +544,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         });
       }
 
-      onSuccess();
+      onSuccess(updateData);
       onClose();
 
     } catch (error: unknown) {
