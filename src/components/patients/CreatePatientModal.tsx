@@ -11,12 +11,13 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
 import { awsCrud } from "@/lib/awsCrud";
+import { findEcwConnectionByScope } from "@/lib/ecwConnectionResolver";
 
 interface CreatePatientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  connectionId: string | null;
+  connectionId?: string | null; // Optional — auto-resolves via scope if not provided
 }
 
 // US States for dropdown
@@ -267,10 +268,12 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       return;
     }
 
-    if (!connectionId) {
+    // Auto-resolve the ECW connection with Patient.create scope
+    const resolvedConnectionId = await findEcwConnectionByScope("Patient.create");
+    if (!resolvedConnectionId) {
       toast({
-        title: "No Connection",
-        description: "Please select an ECW connection first.",
+        title: "No ECW Connection",
+        description: "No ECW connection with Patient.create scope found. Please create one in Connections.",
         variant: "destructive"
       });
       return;
@@ -308,7 +311,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
 
       // Build the create payload
       const createPayload = {
-        connectionId: connectionId,
+        connectionId: resolvedConnectionId,
         accountNumber: formData.accountNumber.trim(),
         data: {
           prefix: cleanValue(formData.prefix),
@@ -400,7 +403,7 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
       const result = await awsCrud.insert("patients", {
         external_id: response.externalId || formData.accountNumber,
         source: "ecw",
-        source_connection_id: connectionId,
+        source_connection_id: resolvedConnectionId,
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
         middle_name: formData.middleName?.trim() || null,

@@ -3,6 +3,7 @@ import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
 import { awsCrud } from "@/lib/awsCrud";
+import { findEcwConnectionByScope } from "@/lib/ecwConnectionResolver";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -384,9 +385,17 @@ export default function PatientIntake() {
         setProgress(50);
       }
 
-      if (syncToEcw && ecwConnectionId) {
+      if (syncToEcw) {
         setStep("syncing");
         setProgress(60);
+
+        // Auto-resolve the correct ECW connection based on action
+        const requiredScope = isNewPatient ? "Patient.create" : "Patient.update";
+        const resolvedEcwId = ecwConnectionId || await findEcwConnectionByScope(requiredScope as any);
+        
+        if (!resolvedEcwId) {
+          throw new Error(`No ECW connection found with ${requiredScope} scope. Please create one in Connections.`);
+        }
 
         // Generate a unique account number for ECW patient matching
         const accountNumber = `DOC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
@@ -395,7 +404,7 @@ export default function PatientIntake() {
         
         const ecwResponse = await awsApi.invoke(ecwFunction, {
           body: {
-            connectionId: ecwConnectionId,
+            connectionId: resolvedEcwId,
             accountNumber: accountNumber,
             patientLocalId: localPatientId,
             patientExternalId: isNewPatient ? undefined : localPatientId,
