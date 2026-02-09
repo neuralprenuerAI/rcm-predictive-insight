@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -377,14 +378,8 @@ export default function PatientIntake() {
           }
         };
 
-        const { data, error: insertError } = await supabase
-          .from("patients")
-          .insert(patientRecord)
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        localPatientId = data.id;
+        const result = await awsCrud.insert("patients", patientRecord, user.id);
+        localPatientId = result.data?.id || result.data?.[0]?.id;
 
         setProgress(50);
       }

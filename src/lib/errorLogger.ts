@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import type { Json } from "@/integrations/supabase/types";
 
 interface LogErrorParams {
@@ -24,8 +25,9 @@ export async function logError({
 }: LogErrorParams) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || "anonymous";
 
-    await supabase.from("error_logs").insert([{
+    await awsCrud.insert("error_logs", {
       user_id: user?.id || null,
       user_email: user?.email || null,
       error_type: errorType,
@@ -36,7 +38,7 @@ export async function logError({
       request_data: requestData ?? null,
       response_data: responseData ?? null,
       severity,
-    }]);
+    }, userId);
   } catch (err) {
     console.error("Failed to log error:", err);
   }

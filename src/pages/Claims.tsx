@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -102,12 +103,9 @@ export default function Claims() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (claimId: string) => {
-      const { error } = await supabase
-        .from('claims')
-        .delete()
-        .eq('id', claimId);
-      
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.delete('claims', { id: claimId }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-claims'] });

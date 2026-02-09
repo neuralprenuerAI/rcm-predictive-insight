@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -149,12 +150,9 @@ export function UsersTab() {
     }
 
     try {
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ role: newRole, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("user_roles", { role: newRole, updated_at: new Date().toISOString() }, { user_id: userId }, user.id);
 
       toast({
         title: "Role Updated",

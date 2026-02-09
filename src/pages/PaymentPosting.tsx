@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 import { Plus, DollarSign } from "lucide-react";
 
@@ -62,7 +63,7 @@ export default function PaymentPosting() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from('payments').insert({
+      await awsCrud.insert('payments', {
         user_id: user.id,
         claim_id: formData.claim_id,
         payer: formData.payer,
@@ -70,8 +71,7 @@ export default function PaymentPosting() {
         payment_date: formData.payment_date,
         method: formData.method,
         reference: formData.reference
-      });
-      if (error) throw error;
+      }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });

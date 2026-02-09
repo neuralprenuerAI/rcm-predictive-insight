@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import type { Json } from "@/integrations/supabase/types";
 
 interface LogActivityParams {
@@ -19,14 +20,14 @@ export async function logActivity({
     
     if (!user) return;
 
-    await supabase.from("activity_logs").insert([{
+    await awsCrud.insert("activity_logs", {
       user_id: user.id,
       user_email: user.email,
       action,
       resource_type: resourceType,
       resource_id: resourceId,
       details: details ?? null,
-    }]);
+    }, user.id);
   } catch (error) {
     console.error("Failed to log activity:", error);
   }

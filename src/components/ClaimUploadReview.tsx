@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 
 interface ExtractedData {
@@ -379,15 +380,9 @@ const ClaimUploadReview = () => {
         extracted_claim_data: extracted as any,
       };
 
-      const { data, error } = await supabase
-        .from('claims')
-        .insert(claimData)
-        .select('id')
-        .single();
-
-      if (error) throw error;
-
-      setSavedClaimId(data.id);
+      const result = await awsCrud.insert('claims', claimData, currentUser.id);
+      const savedId = result.data?.id || result.data?.[0]?.id;
+      setSavedClaimId(savedId);
       toast.success(`Claim saved! ${patientName}`);
 
     } catch (error) {

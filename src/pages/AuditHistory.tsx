@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { 
   ArrowLeft,
   Search,
@@ -172,15 +173,12 @@ export default function AuditHistory() {
 
   const updateAuditStatus = async (auditId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
-        .from("charge_audits")
-        .update({ 
-          status: newStatus,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq("id", auditId);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("charge_audits", { 
+        status: newStatus,
+        reviewed_at: new Date().toISOString()
+      }, { id: auditId }, user.id);
 
       setAudits(audits.map(a => 
         a.id === auditId ? { ...a, status: newStatus } : a

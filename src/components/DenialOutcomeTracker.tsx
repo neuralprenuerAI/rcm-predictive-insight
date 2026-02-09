@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { awsCrud } from '@/lib/awsCrud';
 import { CheckCircle, XCircle, AlertCircle, Clock, DollarSign } from 'lucide-react';
 
 interface DenialOutcomeTrackerProps {
@@ -103,33 +104,29 @@ export function DenialOutcomeTracker({ isOpen, onClose, scrubResult, onSaved }: 
           ? (parseFloat(billedAmount) || 0) - (parseFloat(paidAmount) || 0)
           : 0;
 
-      const { error } = await supabase
-        .from('denial_outcomes')
-        .insert({
-          user_id: user.id,
-          scrub_result_id: scrubResult?.id,
-          claim_id: scrubResult?.claim_id,
-          patient_name: scrubResult?.patient_name,
-          payer: scrubResult?.payer,
-          procedure_codes: scrubResult?.procedure_codes,
-          icd_codes: scrubResult?.icd_codes,
-          predicted_risk_score: scrubResult?.risk_score,
-          predicted_risk_level: scrubResult?.risk_level,
-          issues_flagged: scrubResult?.issues_count || 0,
-          outcome,
-          denial_reason_code: denialReasonCode || null,
-          denial_reason_description: denialReasonDescription || null,
-          denial_category: denialCategory || null,
-          billed_amount: parseFloat(billedAmount) || null,
-          paid_amount: parseFloat(paidAmount) || null,
-          denied_amount: deniedAmount || null,
-          date_of_service: dateOfService || null,
-          date_adjudicated: dateAdjudicated || null,
-          was_prediction_correct: wasPredictionCorrect,
-          notes: notes || null
-        });
-
-      if (error) throw error;
+      await awsCrud.insert('denial_outcomes', {
+        user_id: user.id,
+        scrub_result_id: scrubResult?.id,
+        claim_id: scrubResult?.claim_id,
+        patient_name: scrubResult?.patient_name,
+        payer: scrubResult?.payer,
+        procedure_codes: scrubResult?.procedure_codes,
+        icd_codes: scrubResult?.icd_codes,
+        predicted_risk_score: scrubResult?.risk_score,
+        predicted_risk_level: scrubResult?.risk_level,
+        issues_flagged: scrubResult?.issues_count || 0,
+        outcome,
+        denial_reason_code: denialReasonCode || null,
+        denial_reason_description: denialReasonDescription || null,
+        denial_category: denialCategory || null,
+        billed_amount: parseFloat(billedAmount) || null,
+        paid_amount: parseFloat(paidAmount) || null,
+        denied_amount: deniedAmount || null,
+        date_of_service: dateOfService || null,
+        date_adjudicated: dateAdjudicated || null,
+        was_prediction_correct: wasPredictionCorrect,
+        notes: notes || null
+      }, user.id);
 
       toast({ 
         title: 'Outcome recorded!',

@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 import { 
   Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
@@ -215,17 +216,16 @@ export default function ConnectionsManager() {
           }
         : null;
 
-      const { error } = await supabase.from('api_connections').insert({
+      await awsCrud.insert('api_connections', {
         user_id: user.id,
-        name: apiFormData.connection_name, // Use connection_name as the display name
+        name: apiFormData.connection_name,
         connection_name: apiFormData.connection_name,
         connection_type: apiFormData.connection_type,
         api_url: apiFormData.api_url || apiFormData.issuer_url,
         api_key_encrypted: apiFormData.api_key || null,
         credentials: credentials,
         is_active: true
-      });
-      if (error) throw error;
+      }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
@@ -251,7 +251,7 @@ export default function ConnectionsManager() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from('payer_connections').insert({
+      await awsCrud.insert('payer_connections', {
         user_id: user.id,
         payer_name: payerFormData.payer_name,
         portal_url: payerFormData.portal_url,
@@ -260,8 +260,7 @@ export default function ConnectionsManager() {
           password: payerFormData.password
         }),
         is_active: true
-      });
-      if (error) throw error;
+      }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payer-connections'] });
@@ -274,11 +273,9 @@ export default function ConnectionsManager() {
 
   const toggleAPIConnection = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      const { error } = await supabase
-        .from('api_connections')
-        .update({ is_active: isActive })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update('api_connections', { is_active: isActive }, { id }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
@@ -288,11 +285,9 @@ export default function ConnectionsManager() {
 
   const togglePayerConnection = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      const { error } = await supabase
-        .from('payer_connections')
-        .update({ is_active: isActive })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update('payer_connections', { is_active: isActive }, { id }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payer-connections'] });
@@ -302,8 +297,9 @@ export default function ConnectionsManager() {
 
   const deleteAPIConnection = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('api_connections').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.delete('api_connections', { id }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
@@ -314,10 +310,10 @@ export default function ConnectionsManager() {
   // Handler to save connection name inline
   const handleSaveName = async (connectionId: string) => {
     if (editNameValue.trim()) {
-      await supabase
-        .from("api_connections")
-        .update({ name: editNameValue.trim() })
-        .eq("id", connectionId);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await awsCrud.update("api_connections", { name: editNameValue.trim() }, { id: connectionId }, user.id);
+      }
       queryClient.invalidateQueries({ queryKey: ['api-connections'] });
     }
     setEditingNameId(null);
@@ -710,13 +706,7 @@ export default function ConnectionsManager() {
         };
       });
       
-      const { error } = await supabase
-        .from('service_requests')
-        .upsert(serviceRequestsToUpsert, {
-          onConflict: 'external_id,source',
-        });
-      
-      if (error) throw error;
+      await awsCrud.bulkUpsert('service_requests', serviceRequestsToUpsert, user.id, 'external_id,source');
       
       // Link to patients
       await supabase.rpc('link_service_requests_to_patients');
@@ -773,13 +763,7 @@ export default function ConnectionsManager() {
         };
       });
       
-      const { error } = await supabase
-        .from('procedures')
-        .upsert(proceduresToUpsert, {
-          onConflict: 'external_id,source',
-        });
-      
-      if (error) throw error;
+      await awsCrud.bulkUpsert('procedures', proceduresToUpsert, user.id, 'external_id,source');
       
       // Link to patients
       await supabase.rpc('link_procedures_to_patients');
@@ -801,8 +785,9 @@ export default function ConnectionsManager() {
 
   const deletePayerConnection = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('payer_connections').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.delete('payer_connections', { id }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payer-connections'] });

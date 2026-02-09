@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 import { FileText, AlertCircle, Clock, Wand2 } from "lucide-react";
 
@@ -72,14 +73,13 @@ export default function DenialsAppeals() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from('appeals').insert({
+      await awsCrud.insert('appeals', {
         user_id: user.id,
         denial_id: denialId,
         claim_id: selectedDenial?.claim_id,
         content: appealContent,
         status: 'draft'
-      });
-      if (error) throw error;
+      }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appeals'] });
@@ -92,11 +92,9 @@ export default function DenialsAppeals() {
 
   const submitAppeal = useMutation({
     mutationFn: async (appealId: string) => {
-      const { error } = await supabase
-        .from('appeals')
-        .update({ status: 'submitted', submitted_at: new Date().toISOString() })
-        .eq('id', appealId);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update('appeals', { status: 'submitted', submitted_at: new Date().toISOString() }, { id: appealId }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appeals'] });

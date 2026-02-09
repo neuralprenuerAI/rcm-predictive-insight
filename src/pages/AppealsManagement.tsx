@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { 
   ArrowLeft,
   Search,
@@ -174,12 +175,9 @@ export default function AppealsManagement() {
     if (!selectedAppeal) return;
 
     try {
-      const { error } = await supabase
-        .from("appeals")
-        .update({ letter_body: editedLetter })
-        .eq("id", selectedAppeal.id);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("appeals", { letter_body: editedLetter }, { id: selectedAppeal.id }, user.id);
 
       setAppeals(appeals.map(a => 
         a.id === selectedAppeal.id ? { ...a, letter_body: editedLetter } : a
@@ -204,24 +202,18 @@ export default function AppealsManagement() {
     if (!selectedAppeal) return;
 
     try {
-      const { error } = await supabase
-        .from("appeals")
-        .update({
-          status: "submitted",
-          submission_method: submissionMethod,
-          submitted_at: new Date().toISOString(),
-          confirmation_number: confirmationNumber || null,
-        })
-        .eq("id", selectedAppeal.id);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("appeals", {
+        status: "submitted",
+        submission_method: submissionMethod,
+        submitted_at: new Date().toISOString(),
+        confirmation_number: confirmationNumber || null,
+      }, { id: selectedAppeal.id }, user.id);
 
       // Also update denial status
       if (selectedAppeal.denial_queue_id) {
-        await supabase
-          .from("denial_queue")
-          .update({ status: "appealing" })
-          .eq("id", selectedAppeal.denial_queue_id);
+        await awsCrud.update("denial_queue", { status: "appealing" }, { id: selectedAppeal.denial_queue_id }, user.id);
       }
 
       toast({ title: "Appeal Submitted", description: `Confirmation: ${confirmationNumber || "N/A"}` });
@@ -245,30 +237,24 @@ export default function AppealsManagement() {
     if (!selectedAppeal) return;
 
     try {
-      const { error } = await supabase
-        .from("appeals")
-        .update({
-          status: outcomeStatus,
-          response_date: new Date().toISOString().split("T")[0],
-          outcome_amount: outcomeStatus === "won" || outcomeStatus === "partial" ? parseFloat(outcomeAmount) : 0,
-          response_notes: outcomeNotes,
-        })
-        .eq("id", selectedAppeal.id);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("appeals", {
+        status: outcomeStatus,
+        response_date: new Date().toISOString().split("T")[0],
+        outcome_amount: outcomeStatus === "won" || outcomeStatus === "partial" ? parseFloat(outcomeAmount) : 0,
+        response_notes: outcomeNotes,
+      }, { id: selectedAppeal.id }, user.id);
 
       // Update denial status
       if (selectedAppeal.denial_queue_id) {
         const denialStatus = outcomeStatus === "won" ? "resolved" : outcomeStatus === "denied" ? "new" : "reviewing";
-        await supabase
-          .from("denial_queue")
-          .update({ 
-            status: denialStatus,
-            resolution_type: outcomeStatus === "won" ? "appeal_won" : outcomeStatus === "denied" ? "appeal_denied" : null,
-            resolution_amount: outcomeStatus === "won" ? parseFloat(outcomeAmount) : null,
-            resolution_date: new Date().toISOString().split("T")[0],
-          })
-          .eq("id", selectedAppeal.denial_queue_id);
+        await awsCrud.update("denial_queue", { 
+          status: denialStatus,
+          resolution_type: outcomeStatus === "won" ? "appeal_won" : outcomeStatus === "denied" ? "appeal_denied" : null,
+          resolution_amount: outcomeStatus === "won" ? parseFloat(outcomeAmount) : null,
+          resolution_date: new Date().toISOString().split("T")[0],
+        }, { id: selectedAppeal.denial_queue_id }, user.id);
       }
 
       toast({ title: "Outcome Recorded", description: `Appeal marked as ${outcomeStatus}` });
