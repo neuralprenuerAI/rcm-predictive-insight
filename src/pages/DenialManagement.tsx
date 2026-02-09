@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { 
   ArrowLeft,
   Search,
@@ -239,12 +240,9 @@ export default function DenialManagement() {
 
   const updateStatus = async (denialId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
-        .from("denial_queue")
-        .update({ status: newStatus })
-        .eq("id", denialId);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await awsCrud.update("denial_queue", { status: newStatus }, { id: denialId }, user.id);
 
       setDenials(denials.map(d => d.id === denialId ? { ...d, status: newStatus } : d));
       toast({ title: "Status Updated", description: `Denial marked as ${newStatus}` });

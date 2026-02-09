@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 import { Plus, CheckCircle, XCircle, Clock, Wand2, RefreshCw } from "lucide-react";
 
@@ -65,7 +66,7 @@ export default function Authorizations() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from('authorizations').insert({
+      await awsCrud.insert('authorizations', {
         user_id: user.id,
         patient_name: formData.patient_name,
         payer: formData.payer,
@@ -74,8 +75,7 @@ export default function Authorizations() {
         diagnosis_codes: formData.diagnosis_codes.split(',').map(s => s.trim()),
         request_date: new Date().toISOString().split('T')[0],
         status: 'pending'
-      });
-      if (error) throw error;
+      }, user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['authorizations'] });

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 
 export interface SharedDocument {
   id: string;
@@ -153,41 +154,31 @@ export function useUploadDocument() {
       if (uploadError) throw uploadError;
 
       // Create document record
-      const { data: doc, error: docError } = await supabase
-        .from("shared_documents")
-        .insert({
-          title,
-          description: description || null,
-          file_name: file.name,
-          file_path: filePath,
-          file_size: file.size,
-          file_type: file.type,
-          category: category || "general",
-          is_public: isPublic || false,
-          uploaded_by: user.id,
-          uploaded_by_email: user.email,
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
+      const doc = await awsCrud.insert<SharedDocument>('shared_documents', {
+        title,
+        description: description || null,
+        file_name: file.name,
+        file_path: filePath,
+        file_size: file.size,
+        file_type: file.type,
+        category: category || "general",
+        is_public: isPublic || false,
+        uploaded_by: user.id,
+        uploaded_by_email: user.email,
+      }, user.id);
 
       // Create assignments if not public and users specified
-      if (!isPublic && assignedUserIds && assignedUserIds.length > 0) {
+      if (!isPublic && assignedUserIds && assignedUserIds.length > 0 && doc.data) {
         const assignments = assignedUserIds.map(userId => ({
-          document_id: doc.id,
+          document_id: doc.data.id,
           user_id: userId,
           assigned_by: user.id,
         }));
 
-        const { error: assignError } = await supabase
-          .from("shared_document_assignments")
-          .insert(assignments);
-
-        if (assignError) throw assignError;
+        await awsCrud.bulkInsert('shared_document_assignments', assignments, user.id);
       }
 
-      return doc;
+      return doc.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-shared-documents"] });
@@ -217,12 +208,7 @@ export function useDeleteDocument() {
       }
 
       // Delete document (assignments cascade)
-      const { error } = await supabase
-        .from("shared_documents")
-        .delete()
-        .eq("id", documentId);
-
-      if (error) throw error;
+      await awsCrud.delete('shared_documents', { id: documentId }, (await supabase.auth.getUser()).data.user?.id || "");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-shared-documents"] });
@@ -251,11 +237,7 @@ export function useAssignDocument() {
         assigned_by: user?.id,
       }));
 
-      const { error } = await supabase
-        .from("shared_document_assignments")
-        .upsert(assignments, { onConflict: "document_id,user_id" });
-
-      if (error) throw error;
+      await awsCrud.bulkUpsert('shared_document_assignments', assignments, user?.id || "", "document_id,user_id");
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["shared-document-assignments", variables.documentId] });
@@ -275,13 +257,11 @@ export function useRemoveAssignment() {
       documentId: string; 
       userId: string;
     }) => {
-      const { error } = await supabase
-        .from("shared_document_assignments")
-        .delete()
-        .eq("document_id", documentId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      await awsCrud.delete('shared_document_assignments', { 
+        document_id: documentId,
+        user_id: userId 
+      }, user?.id || "");
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["shared-document-assignments", variables.documentId] });

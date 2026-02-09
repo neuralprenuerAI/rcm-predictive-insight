@@ -10,6 +10,7 @@ import { Loader2, User, Phone, MapPin, Heart, Globe, AlertCircle } from "lucide-
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 
 interface Patient {
   id: string;
@@ -454,30 +455,27 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         }]
       };
 
-      const { error: localUpdateError } = await supabase
-        .from("patients")
-        .update({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          middle_name: formData.middleName || null,
-          prefix: prefixValue || null,
-          suffix: suffixValue || null,
-          date_of_birth: formData.birthDate,
-          gender: formData.gender,
-          phone: formData.mobilePhone || formData.homePhone || null,
-          email: formData.email || null,
-          address_line1: formData.addressLine1 || null,
-          address_line2: formData.addressLine2 || null,
-          city: formData.city || null,
-          state: stateValue || null,
-          postal_code: formData.postalCode || null,
-          raw_fhir_data: updatedFhirData,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", patient.id);
+      const localUpdateResult = await awsCrud.update('patients', {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        middle_name: formData.middleName || null,
+        prefix: prefixValue || null,
+        suffix: suffixValue || null,
+        date_of_birth: formData.birthDate,
+        gender: formData.gender,
+        phone: formData.mobilePhone || formData.homePhone || null,
+        email: formData.email || null,
+        address_line1: formData.addressLine1 || null,
+        address_line2: formData.addressLine2 || null,
+        city: formData.city || null,
+        state: stateValue || null,
+        postal_code: formData.postalCode || null,
+        raw_fhir_data: updatedFhirData,
+        updated_at: new Date().toISOString()
+      }, { id: patient.id }, user?.id || "");
 
-      if (localUpdateError) {
-        console.error("Failed to update local database:", localUpdateError);
+      if (localUpdateResult.error) {
+        console.error("Failed to update local database:", localUpdateResult.error);
         // Don't throw - ECW update succeeded
       }
 
@@ -504,7 +502,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       });
 
       if (user) {
-        await supabase.from("patient_audit_log").insert({
+        await awsCrud.insert('patient_audit_log', {
           patient_id: patient.id,
           patient_external_id: patient.external_id,
           user_id: user.id,
@@ -514,7 +512,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
           after_data: afterData,
           source: "ecw",
           status: "success"
-        });
+        }, user.id);
       }
 
       toast({
@@ -533,7 +531,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          await supabase.from("patient_audit_log").insert({
+          await awsCrud.insert('patient_audit_log', {
             patient_id: patient.id,
             patient_external_id: patient.external_id,
             user_id: user.id,
@@ -544,7 +542,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
             source: "ecw",
             status: "failed",
             error_message: errorMsg
-          });
+          }, user.id);
         }
       } catch (auditError) {
         console.error("Failed to log audit:", auditError);

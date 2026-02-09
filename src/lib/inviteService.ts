@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 
 export interface Invite {
   id: string;
@@ -51,23 +52,19 @@ export async function createInvite({ email, role }: CreateInviteParams): Promise
     }
 
     // Create the invite
-    const { data: invite, error } = await supabase
-      .from("pending_invites")
-      .insert({
+    try {
+      const result = await awsCrud.insert("pending_invites", {
         email: email.toLowerCase(),
         role,
         invited_by: user.id,
         invited_by_email: user.email,
-      })
-      .select()
-      .single();
+      }, user.id);
 
-    if (error) {
-      console.error("Error creating invite:", error);
-      return { success: false, error: error.message };
+      return { success: true, invite: result.data as Invite };
+    } catch (err: any) {
+      console.error("Error creating invite:", err);
+      return { success: false, error: err.message };
     }
-
-    return { success: true, invite: invite as Invite };
   } catch (err: any) {
     console.error("Error in createInvite:", err);
     return { success: false, error: err.message };
@@ -108,33 +105,27 @@ export async function checkInvite(email: string): Promise<{ isInvited: boolean; 
 
 // Revoke an invite (super_admin only)
 export async function revokeInvite(inviteId: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
-    .from("pending_invites")
-    .update({ status: "revoked" })
-    .eq("id", inviteId);
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await awsCrud.update("pending_invites", { status: "revoked" }, { id: inviteId }, user?.id || "");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-
-  return { success: true };
 }
 
 // Resend invite (update expiry)
 export async function resendInvite(inviteId: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
-    .from("pending_invites")
-    .update({ 
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await awsCrud.update("pending_invites", { 
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       status: "pending"
-    })
-    .eq("id", inviteId);
-
-  if (error) {
-    return { success: false, error: error.message };
+    }, { id: inviteId }, user?.id || "");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-
-  return { success: true };
 }
 
 // Generate invite link

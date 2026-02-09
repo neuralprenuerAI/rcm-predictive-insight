@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { AdminError } from "@/hooks/useAdminErrors";
 import { useRole } from "@/contexts/RoleContext";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -68,18 +69,14 @@ export function ErrorDetailModal({
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      const { error: updateError } = await supabase
-        .from("error_logs")
-        .update({
-          resolved: true,
-          resolved_at: new Date().toISOString(),
-          resolved_by: user?.id,
-          resolution_notes: resolutionNotes || null,
-        })
-        .eq("id", error.id);
-
-      if (updateError) throw updateError;
+      await awsCrud.update("error_logs", {
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+        resolved_by: user.id,
+        resolution_notes: resolutionNotes || null,
+      }, { id: error.id }, user.id);
 
       toast({
         title: "Error Resolved",

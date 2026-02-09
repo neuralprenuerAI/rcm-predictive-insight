@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
 import { Settings as SettingsIcon, User, Bell, Palette } from "lucide-react";
 import ConnectionsManager from "@/components/ConnectionsManager";
@@ -75,15 +76,12 @@ export default function Settings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          notify_email: settings.notify_email,
-          theme: settings.theme,
-          default_date_range: settings.default_date_range
-        }, { onConflict: 'user_id' });
-      if (error) throw error;
+      await awsCrud.upsert('user_settings', {
+        user_id: user.id,
+        notify_email: settings.notify_email,
+        theme: settings.theme,
+        default_date_range: settings.default_date_range
+      }, user.id, 'user_id');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-settings'] });
