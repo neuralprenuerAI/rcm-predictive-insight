@@ -399,6 +399,10 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       const { data: { user: currentUser } } = await supabase.auth.getUser();
 
       // Update patient via AWS RDS (single source of truth for writes)
+      const maritalStatusValue = cleanValue(formData.maritalStatus);
+      const birthSexValue = cleanValue(formData.birthSex);
+      const emergencyRelValue = cleanValue(formData.emergencyContactRelationship);
+
       const updateData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -415,6 +419,14 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         city: formData.city || null,
         state: stateValue || null,
         postal_code: formData.postalCode || null,
+        marital_status: maritalStatusValue || null,
+        race: raceValue || null,
+        ethnicity: ethnicityValue || null,
+        birth_sex: birthSexValue || null,
+        preferred_language: languageValue || null,
+        emergency_contact_name: formData.emergencyContactName || null,
+        emergency_contact_phone: formData.emergencyContactPhone || null,
+        emergency_contact_relationship: emergencyRelValue || null,
         raw_fhir_data: updatedFhirData,
         updated_at: new Date().toISOString()
       };
