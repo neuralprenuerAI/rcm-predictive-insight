@@ -167,7 +167,7 @@ const Auth = () => {
   const handlePasswordReset = async () => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/settings`,
       });
       if (error) throw error;
       toast.success("Password reset email sent. Check your inbox.");

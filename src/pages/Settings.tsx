@@ -208,7 +208,7 @@ export default function Settings() {
                   return;
                 }
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                  redirectTo: `${window.location.origin}/`,
+                  redirectTo: `${window.location.origin}/settings`,
                 });
                 if (error) {
                   toast.error(error.message);
