@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsCrud } from "@/lib/awsCrud";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, User, Bell, Palette } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Palette, KeyRound, Eye, EyeOff } from "lucide-react";
 import ConnectionsManager from "@/components/ConnectionsManager";
 
 interface UserSettings {
@@ -30,6 +31,11 @@ export default function Settings() {
     theme: "system",
     default_date_range: "30d"
   });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: profile } = useQuery({
@@ -113,6 +119,106 @@ export default function Settings() {
           <div>
             <Label>Email</Label>
             <p className="text-sm text-muted-foreground mt-1">{profile?.email || 'Not set'}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5" />
+            Change Password
+          </CardTitle>
+          <CardDescription>Update your account password</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (newPassword.length < 8) {
+                toast.error("Password must be at least 8 characters");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                toast.error("Passwords do not match");
+                return;
+              }
+              setChangingPassword(true);
+              try {
+                const { error } = await supabase.auth.updateUser({ password: newPassword });
+                if (error) throw error;
+                toast.success("Password updated successfully");
+                setNewPassword("");
+                setConfirmPassword("");
+              } catch (err: any) {
+                toast.error(err.message || "Failed to update password");
+              } finally {
+                setChangingPassword(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  placeholder="Minimum 8 characters"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="Re-enter new password"
+              />
+            </div>
+            <Button type="submit" disabled={changingPassword} className="w-full">
+              {changingPassword ? "Updating..." : "Update Password"}
+            </Button>
+          </form>
+          <div className="mt-4 pt-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={async () => {
+                const email = profile?.email;
+                if (!email) {
+                  toast.error("Email not found");
+                  return;
+                }
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/`,
+                });
+                if (error) {
+                  toast.error(error.message);
+                } else {
+                  toast.success("Password reset link sent to your email");
+                }
+              }}
+            >
+              Send Password Reset Email Instead
+            </Button>
           </div>
         </CardContent>
       </Card>
