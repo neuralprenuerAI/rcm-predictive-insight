@@ -21,6 +21,7 @@ import AuditHistory from "./pages/AuditHistory";
 import DenialManagement from "./pages/DenialManagement";
 import AppealsManagement from "./pages/AppealsManagement";
 import PatientIntake from "./pages/PatientIntake";
+import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
 import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
 
@@ -74,6 +75,7 @@ const App = () => (
             <Route path="/denial-management" element={<DenialManagement />} />
             <Route path="/appeals" element={<AppealsManagement />} />
             <Route path="/patient-intake" element={<PatientIntake />} />
+            <Route path="/settings" element={<Settings />} />
             <Route
               path="/admin"
               element={
