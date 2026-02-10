@@ -1,11 +1,13 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { IdleTimeoutWarning } from "@/components/IdleTimeoutWarning";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -35,6 +37,21 @@ function IdleTimeoutWrapper() {
   );
 }
 
+function PasswordRecoveryHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate("/settings");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <RoleProvider>
@@ -43,6 +60,7 @@ const App = () => (
         <Sonner />
         <IdleTimeoutWrapper />
         <BrowserRouter>
+          <PasswordRecoveryHandler />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
