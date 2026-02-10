@@ -36,6 +36,11 @@ const Auth = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        // Redirect to settings so user can set their new password
+        navigate("/settings");
+        return;
+      }
       if (session) {
         navigate("/");
       }
