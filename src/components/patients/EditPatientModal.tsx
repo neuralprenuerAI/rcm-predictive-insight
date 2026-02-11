@@ -146,6 +146,10 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
     maritalStatus: "",
     race: "",
     ethnicity: "",
+    mrn: "",
+    ssnLast4: "",
+    employer: "",
+    employerStatus: "",
 
     // Contact Information
     homePhone: "",
@@ -211,9 +215,13 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         maritalStatus: fhirData.maritalStatus?.coding?.[0]?.code || "none",
         race: raceExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "none",
         ethnicity: ethnicityExt?.extension?.find((e: any) => e.url === "ombCategory")?.valueCoding?.code || "none",
-        homePhone,
-        workPhone,
-        mobilePhone,
+        mrn: (patient as any).mrn || "",
+        ssnLast4: (patient as any).ssn_last4 || "",
+        employer: (patient as any).employer || "",
+        employerStatus: (patient as any).employer_status || "none",
+        homePhone: (patient as any).home_phone || homePhone,
+        workPhone: (patient as any).work_phone || workPhone,
+        mobilePhone: (patient as any).mobile_phone || mobilePhone,
         email,
         preferredLanguage: fhirData.communication?.[0]?.language?.coding?.[0]?.code || "none",
         addressLine1: address.line?.[0] || patient.address || "",
@@ -222,9 +230,9 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         state: address.state || patient.state || "none",
         postalCode: address.postalCode || patient.postal_code || "",
         country: address.country || "US",
-        emergencyContactName: contactName,
+        emergencyContactName: contactName || (patient as any).emergency_contact_name || "",
         emergencyContactRelationship: contact.relationship?.[0]?.coding?.[0]?.code || "none",
-        emergencyContactPhone: contact.telecom?.[0]?.value || ""
+        emergencyContactPhone: contact.telecom?.[0]?.value || (patient as any).emergency_contact_phone || ""
       });
 
       setErrors({});
@@ -395,6 +403,8 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
       const birthSexValue = cleanValue(formData.birthSex);
       const emergencyRelValue = cleanValue(formData.emergencyContactRelationship);
 
+      const employerStatusValue = cleanValue(formData.employerStatus);
+
       const updateData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -404,6 +414,9 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         date_of_birth: formData.birthDate,
         gender: formData.gender,
         phone: formData.mobilePhone || formData.homePhone || null,
+        home_phone: formData.homePhone || null,
+        work_phone: formData.workPhone || null,
+        mobile_phone: formData.mobilePhone || null,
         email: formData.email || null,
         address: formData.addressLine1 || null,
         address_line1: formData.addressLine1 || null,
@@ -416,6 +429,10 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         ethnicity: ethnicityValue || null,
         birth_sex: birthSexValue || null,
         preferred_language: languageValue || null,
+        mrn: formData.mrn || null,
+        ssn_last4: formData.ssnLast4 || null,
+        employer: formData.employer || null,
+        employer_status: employerStatusValue || null,
         emergency_contact_name: formData.emergencyContactName || null,
         emergency_contact_phone: formData.emergencyContactPhone || null,
         emergency_contact_relationship: emergencyRelValue || null,
@@ -798,6 +815,55 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* MRN, SSN Last 4, Employer */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="mrn">MRN</Label>
+                <Input
+                  id="mrn"
+                  value={formData.mrn}
+                  onChange={(e) => handleChange("mrn", e.target.value)}
+                  placeholder="Medical Record Number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ssnLast4">SSN (Last 4)</Label>
+                <Input
+                  id="ssnLast4"
+                  value={formData.ssnLast4}
+                  onChange={(e) => handleChange("ssnLast4", e.target.value)}
+                  maxLength={4}
+                  placeholder="****"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Employment Status</Label>
+                <Select value={formData.employerStatus} onValueChange={(v) => handleChange("employerStatus", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    <SelectItem value="employed">Employed</SelectItem>
+                    <SelectItem value="unemployed">Unemployed</SelectItem>
+                    <SelectItem value="retired">Retired</SelectItem>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="self-employed">Self-Employed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="employer">Employer</Label>
+              <Input
+                id="employer"
+                value={formData.employer}
+                onChange={(e) => handleChange("employer", e.target.value)}
+                placeholder="Employer name"
+              />
             </div>
 
             <div className="flex items-center gap-8 pt-2">
