@@ -334,24 +334,15 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
 
       // Prepare race data if selected
       const raceValue = cleanValue(formData.race);
-      const raceData = raceValue ? {
-        code: raceValue,
-        display: RACE_OPTIONS.find(r => r.code === raceValue)?.display || raceValue
-      } : undefined;
+      const raceData = raceValue || undefined;
 
       // Prepare ethnicity data if selected
       const ethnicityValue = cleanValue(formData.ethnicity);
-      const ethnicityData = ethnicityValue ? {
-        code: ethnicityValue,
-        display: ETHNICITY_OPTIONS.find(e => e.code === ethnicityValue)?.display || ethnicityValue
-      } : undefined;
+      const ethnicityData = ethnicityValue || undefined;
 
       // Prepare language data if selected
       const languageValue = cleanValue(formData.preferredLanguage);
-      const languageData = languageValue ? {
-        code: languageValue,
-        display: LANGUAGE_OPTIONS.find(l => l.code === languageValue)?.display || languageValue
-      } : undefined;
+      const languageData = languageValue || undefined;
 
       // Store before data for audit log
       const beforeData = {
@@ -495,10 +486,10 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
               gender: formData.gender,
               active: formData.active,
               deceased: formData.deceased,
-              maritalStatus: cleanValue(formData.maritalStatus),
-              homePhone: formData.homePhone || undefined,
-              workPhone: formData.workPhone || undefined,
-              mobilePhone: formData.mobilePhone || undefined,
+               maritalStatus: cleanValue(formData.maritalStatus),
+               phoneHome: formData.homePhone || undefined,
+               phoneWork: formData.workPhone || undefined,
+               phoneMobile: formData.mobilePhone || undefined,
               email: formData.email || undefined,
               addressLine1: formData.addressLine1 || undefined,
               addressLine2: formData.addressLine2 || undefined,

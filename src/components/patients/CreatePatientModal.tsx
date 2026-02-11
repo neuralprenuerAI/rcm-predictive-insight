@@ -290,24 +290,15 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
 
       // Prepare race data if selected
       const raceCode = cleanValue(formData.race);
-      const raceData = raceCode ? {
-        code: raceCode,
-        display: RACE_OPTIONS.find(r => r.code === raceCode)?.display || raceCode
-      } : undefined;
+      const raceData = raceCode || undefined;
 
       // Prepare ethnicity data if selected
       const ethnicityCode = cleanValue(formData.ethnicity);
-      const ethnicityData = ethnicityCode ? {
-        code: ethnicityCode,
-        display: ETHNICITY_OPTIONS.find(e => e.code === ethnicityCode)?.display || ethnicityCode
-      } : undefined;
+      const ethnicityData = ethnicityCode || undefined;
 
       // Prepare language data if selected
       const languageCode = cleanValue(formData.preferredLanguage);
-      const languageData = languageCode ? {
-        code: languageCode,
-        display: LANGUAGE_OPTIONS.find(l => l.code === languageCode)?.display || languageCode
-      } : undefined;
+      const languageData = languageCode || undefined;
 
       // Build the create payload
       const createPayload = {
