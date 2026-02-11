@@ -9,6 +9,18 @@ interface CrudResponse<T = any> {
 }
 
 export const awsCrud = {
+  select: async <T = any>(table: string, userId?: string): Promise<T[]> => {
+    const result = await awsApi.invoke('crud', {
+      body: {
+        action: 'select',
+        table,
+        user_id: userId
+      }
+    });
+    if (result.error) throw result.error;
+    return result.data || [];
+  },
+
   insert: async <T = any>(table: string, data: Record<string, any>, userId: string): Promise<CrudResponse<T>> => {
     const result = await awsApi.invoke('crud', {
       body: {
