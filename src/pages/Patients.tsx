@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import {
@@ -136,27 +137,19 @@ export default function Patients() {
 
   // Helper to open edit modal with full patient data
   const handleEditPatient = async (patientId: string) => {
-    const { data } = await supabase
-      .from('patients')
-      .select('*')
-      .eq('id', patientId)
-      .single();
+    const patients = await awsCrud.select('patients');
+    const data = patients.find(p => p.id === patientId);
     if (data) {
       setPatientForEdit(data);
       setIsEditModalOpen(true);
     }
   };
 
-  // Fetch patients with proper counts from both tables
+  // Fetch patients from AWS RDS with proper counts from both tables
   const { data: patients, isLoading } = useQuery({
     queryKey: ['patients-with-orders'],
     queryFn: async () => {
-      const { data: patientsData, error: patientsError } = await supabase
-        .from('patients')
-        .select('*')
-        .order('last_name', { ascending: true });
-      
-      if (patientsError) throw patientsError;
+      const patientsData = await awsCrud.select('patients');
       
       const { data: serviceRequests, error: srError } = await supabase
         .from('service_requests')
