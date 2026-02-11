@@ -28,6 +28,8 @@ interface ExtractedPatient {
   dateOfBirth: string | null;
   gender: "male" | "female" | "other" | "unknown" | null;
   ssn: string | null;
+  ssnLast4: string | null;
+  mrn: string | null;
   maritalStatus: string | null;
   email: string | null;
   phoneHome: string | null;
@@ -52,6 +54,9 @@ interface ExtractedPatient {
   preferredLanguage: string | null;
   race: string | null;
   ethnicity: string | null;
+  employer: string | null;
+  employerStatus: string | null;
+  accountNumber: string | null;
   confidence: number;
   extractedFields: string[];
   rawText: string;
@@ -348,11 +353,19 @@ export default function PatientIntake() {
           gender: editedData.gender || null,
           email: editedData.email || null,
           phone: editedData.phoneMobile || editedData.phoneHome || null,
+          home_phone: editedData.phoneHome || null,
+          work_phone: editedData.phoneWork || null,
+          mobile_phone: editedData.phoneMobile || null,
           address_line1: editedData.addressLine1 || null,
           address_line2: editedData.addressLine2 || null,
           city: editedData.city || null,
           state: editedData.state || null,
           postal_code: editedData.postalCode || null,
+          mrn: editedData.mrn || null,
+          ssn_last4: editedData.ssnLast4 || editedData.ssn || null,
+          employer: editedData.employer || null,
+          employer_status: editedData.employerStatus || null,
+          account_number: editedData.accountNumber || null,
           source: "document_intake",
           insurance_info: {
             name: editedData.insuranceName,
@@ -752,6 +765,55 @@ export default function PatientIntake() {
                             <SelectItem value="married">Married</SelectItem>
                             <SelectItem value="divorced">Divorced</SelectItem>
                             <SelectItem value="widowed">Widowed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>MRN</Label>
+                        <Input
+                          value={editedData.mrn || ""}
+                          onChange={(e) => handleFieldChange("mrn", e.target.value)}
+                          placeholder="Medical Record Number"
+                          className={patientData.extractedFields.includes("mrn") ? "border-green-500" : ""}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Account Number</Label>
+                        <Input
+                          value={editedData.accountNumber || ""}
+                          onChange={(e) => handleFieldChange("accountNumber", e.target.value)}
+                          placeholder="Account #"
+                          className={patientData.extractedFields.includes("accountNumber") ? "border-green-500" : ""}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Employer</Label>
+                        <Input
+                          value={editedData.employer || ""}
+                          onChange={(e) => handleFieldChange("employer", e.target.value)}
+                          placeholder="Employer name"
+                          className={patientData.extractedFields.includes("employer") ? "border-green-500" : ""}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Employment Status</Label>
+                        <Select
+                          value={editedData.employerStatus || "none"}
+                          onValueChange={(v) => handleFieldChange("employerStatus", v === "none" ? null : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Not specified</SelectItem>
+                            <SelectItem value="employed">Employed</SelectItem>
+                            <SelectItem value="unemployed">Unemployed</SelectItem>
+                            <SelectItem value="retired">Retired</SelectItem>
+                            <SelectItem value="student">Student</SelectItem>
+                            <SelectItem value="self-employed">Self-Employed</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

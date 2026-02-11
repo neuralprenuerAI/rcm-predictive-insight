@@ -133,6 +133,10 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
     maritalStatus: "unspecified",
     race: "unspecified",
     ethnicity: "unspecified",
+    mrn: "",
+    ssnLast4: "",
+    employer: "",
+    employerStatus: "unspecified",
 
     // Contact Information
     homePhone: "",
@@ -172,6 +176,10 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         maritalStatus: "unspecified",
         race: "unspecified",
         ethnicity: "unspecified",
+        mrn: "",
+        ssnLast4: "",
+        employer: "",
+        employerStatus: "unspecified",
         homePhone: "",
         workPhone: "",
         mobilePhone: "",
@@ -401,6 +409,9 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         date_of_birth: formData.birthDate,
         gender: formData.gender,
         phone: formData.mobilePhone?.trim() || formData.homePhone?.trim() || null,
+        home_phone: formData.homePhone?.trim() || null,
+        work_phone: formData.workPhone?.trim() || null,
+        mobile_phone: formData.mobilePhone?.trim() || null,
         email: formData.email?.trim() || null,
         address: formData.addressLine1?.trim() || null,
         address_line2: formData.addressLine2?.trim() || null,
@@ -412,6 +423,11 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
         ethnicity: cleanValue(formData.ethnicity) || null,
         birth_sex: cleanValue(formData.birthSex) || null,
         preferred_language: cleanValue(formData.preferredLanguage) || null,
+        mrn: formData.mrn?.trim() || null,
+        ssn_last4: formData.ssnLast4?.trim() || null,
+        employer: formData.employer?.trim() || null,
+        employer_status: cleanValue(formData.employerStatus) || null,
+        account_number: formData.accountNumber?.trim() || null,
         emergency_contact_name: formData.emergencyContactName?.trim() || null,
         emergency_contact_phone: formData.emergencyContactPhone?.trim() || null,
         emergency_contact_relationship: cleanValue(formData.emergencyContactRelationship) || null,
@@ -744,6 +760,55 @@ export function CreatePatientModal({ isOpen, onClose, onSuccess, connectionId }:
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* MRN, SSN Last 4, Employer */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="mrn">MRN</Label>
+                <Input
+                  id="mrn"
+                  value={formData.mrn}
+                  onChange={(e) => handleChange("mrn", e.target.value)}
+                  placeholder="Medical Record Number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ssnLast4">SSN (Last 4)</Label>
+                <Input
+                  id="ssnLast4"
+                  value={formData.ssnLast4}
+                  onChange={(e) => handleChange("ssnLast4", e.target.value)}
+                  maxLength={4}
+                  placeholder="****"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Employment Status</Label>
+                <Select value={formData.employerStatus} onValueChange={(v) => handleChange("employerStatus", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unspecified">Not specified</SelectItem>
+                    <SelectItem value="employed">Employed</SelectItem>
+                    <SelectItem value="unemployed">Unemployed</SelectItem>
+                    <SelectItem value="retired">Retired</SelectItem>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="self-employed">Self-Employed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="employer">Employer</Label>
+              <Input
+                id="employer"
+                value={formData.employer}
+                onChange={(e) => handleChange("employer", e.target.value)}
+                placeholder="Employer name"
+              />
             </div>
 
             {/* Active Status */}
