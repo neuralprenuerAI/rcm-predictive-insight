@@ -400,12 +400,12 @@ export default function PatientIntake() {
               lastName: editedData.lastName,
               prefix: editedData.prefix,
               suffix: editedData.suffix,
-              birthDate: editedData.dateOfBirth,  // Edge function expects birthDate
+              dateOfBirth: editedData.dateOfBirth,
               gender: editedData.gender || "unknown",
               email: editedData.email,
-              homePhone: editedData.phoneHome,    // Edge function expects homePhone
-              workPhone: editedData.phoneWork,    // Edge function expects workPhone
-              mobilePhone: editedData.phoneMobile, // Edge function expects mobilePhone
+              phoneHome: editedData.phoneHome,
+              phoneWork: editedData.phoneWork,
+              phoneMobile: editedData.phoneMobile,
               addressLine1: editedData.addressLine1,
               addressLine2: editedData.addressLine2,
               city: editedData.city,
