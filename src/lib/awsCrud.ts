@@ -18,7 +18,8 @@ export const awsCrud = {
       }
     });
     if (result.error) throw result.error;
-    return result.data || [];
+    const response = result.data as CrudResponse<T[]>;
+    return response?.data || [];
   },
 
   insert: async <T = any>(table: string, data: Record<string, any>, userId: string): Promise<CrudResponse<T>> => {
