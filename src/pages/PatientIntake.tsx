@@ -264,7 +264,7 @@ export default function PatientIntake() {
       "application/vnd.ms-xpsdocument": [".xps", ".oxps"]
     },
     maxFiles: 1,
-    disabled: step !== "idle" && step !== "error" && step !== "complete"
+    disabled: step === "uploading" || step === "ocr" || step === "extracting" || step === "saving" || step === "syncing"
   });
 
   const handleFieldChange = (field: keyof ExtractedPatient, value: string | null) => {
