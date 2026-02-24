@@ -680,7 +680,7 @@ export default function PatientIntake() {
           )}
 
           {/* Step 1: Upload */}
-          {(step === "idle" || step === "error") && (
+          {(step !== "uploading" && step !== "ocr" && step !== "extracting" && step !== "saving" && step !== "syncing") && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
