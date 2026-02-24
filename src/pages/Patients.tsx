@@ -702,7 +702,6 @@ export default function Patients() {
                     <TableHead>DOB</TableHead>
                     <TableHead>Gender</TableHead>
                     <TableHead>Phone</TableHead>
-                    <TableHead>Phone</TableHead>
                     <TableHead>Coverage</TableHead>
                     <TableHead className="text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -745,19 +744,18 @@ export default function Patients() {
                       </TableCell>
                       <TableCell>{patient.date_of_birth || '-'}</TableCell>
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
-                      <TableCell>{patient.phone || '-'}</TableCell>
                       <TableCell>
                         {(() => {
                           const elig = eligibilityMap[patient.id];
                           switch (elig?.status) {
                             case 'verified':
-                              return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400">✅ Active</Badge>;
+                              return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 text-xs">✓ Active</Badge>;
                             case 'notEligible':
-                              return <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400">❌ Inactive</Badge>;
+                              return <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 text-xs">✗ Inactive</Badge>;
                             case 'needsVerification':
-                              return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400">⚠️ Pending</Badge>;
+                              return <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 text-xs">⚠ Pending</Badge>;
                             default:
-                              return <Badge className="bg-muted text-muted-foreground border-border">— No Ins</Badge>;
+                              return <span className="text-muted-foreground/40">—</span>;
                           }
                         })()}
                       </TableCell>
