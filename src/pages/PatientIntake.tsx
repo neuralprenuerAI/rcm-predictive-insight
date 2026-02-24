@@ -1086,9 +1086,12 @@ export default function PatientIntake() {
                       <div className="space-y-2">
                         <Label>Subscriber DOB</Label>
                         <Input
-                          type="date"
+                          type={editedData.insuranceSubscriberDob ? "date" : "text"}
                           value={editedData.insuranceSubscriberDob || ""}
-                          onChange={(e) => handleFieldChange("insuranceSubscriberDob", e.target.value)}
+                          placeholder="YYYY-MM-DD"
+                          onFocus={(e) => { if (e.target.type === "text") e.target.type = "date"; }}
+                          onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                          onChange={(e) => handleFieldChange("insuranceSubscriberDob", e.target.value || null)}
                         />
                       </div>
                       <div className="space-y-2">
