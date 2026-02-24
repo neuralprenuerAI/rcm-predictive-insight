@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsCrud } from "@/lib/awsCrud";
+import { awsApi } from "@/integrations/aws/awsApi";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -12,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle, UserPlus, AlertCircle } from "lucide-react";
+import { Users, Search, ChevronRight, FlaskConical, Scan, Stethoscope, Activity, Eye, X, Copy, Check, ChevronDown, ChevronUp, Calendar, Hash, FileCode, Pencil, PencilOff, CheckCircle, UserPlus, AlertCircle, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -42,7 +44,28 @@ import { EditPatientModal } from "@/components/patients/EditPatientModal";
 import { CreatePatientModal } from "@/components/patients/CreatePatientModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type FilterType = 'all' | 'procedures' | 'labs' | 'imaging' | 'any';
+type FilterType = 'all' | 'procedures' | 'labs' | 'imaging' | 'any' | 'needsVerification';
+
+interface EligibilityPatient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  reason: string;
+}
+
+interface EligibilityData {
+  summary: {
+    verified: number;
+    needsVerification: number;
+    notEligible: number;
+    noInsurance: number;
+    needsAttention: number;
+  };
+  verified: EligibilityPatient[];
+  notEligible: EligibilityPatient[];
+  needsVerification: EligibilityPatient[];
+  noInsurance: EligibilityPatient[];
+}
 
 interface PatientWithOrders {
   id: string;
@@ -87,9 +110,11 @@ interface ServiceRequest {
 
 export default function Patients() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const urlFilter = searchParams.get('filter');
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<PatientWithOrders | null>(null);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterType>(urlFilter === 'needsVerification' ? 'needsVerification' : 'all');
   const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(null);
   const [rawDataExpanded, setRawDataExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -172,6 +197,31 @@ export default function Patients() {
     }
   });
 
+  // Fetch eligibility data
+  const { data: eligibilityResponse } = useQuery({
+    queryKey: ['dashboard-eligibility'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const result = await awsApi.invoke<EligibilityData>("rcm-dashboard-eligibility", {
+        body: { user_id: user.id },
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+    refetchInterval: 60000,
+  });
+
+  // Build eligibility lookup map
+  const eligibilityMap = useMemo(() => {
+    const map: Record<string, { status: string; data: EligibilityPatient }> = {};
+    eligibilityResponse?.verified?.forEach(p => map[p.id] = { status: 'verified', data: p });
+    eligibilityResponse?.notEligible?.forEach(p => map[p.id] = { status: 'notEligible', data: p });
+    eligibilityResponse?.needsVerification?.forEach(p => map[p.id] = { status: 'needsVerification', data: p });
+    eligibilityResponse?.noInsurance?.forEach(p => map[p.id] = { status: 'noInsurance', data: p });
+    return map;
+  }, [eligibilityResponse]);
+
   // Fetch procedures for selected patient (with raw_fhir_data)
   const { data: patientProcedures } = useQuery({
     queryKey: ['patient-procedures', selectedPatient?.id],
@@ -225,6 +275,10 @@ export default function Patients() {
         return patient.imaging_count > 0;
       case 'any':
         return patient.procedure_count > 0 || patient.lab_count > 0 || patient.imaging_count > 0;
+      case 'needsVerification': {
+        const elig = eligibilityMap[patient.id];
+        return elig?.status === 'needsVerification' || elig?.status === 'notEligible';
+      }
       default:
         return true;
     }
@@ -316,6 +370,7 @@ export default function Patients() {
     withLabs: patients?.filter(p => p.lab_count > 0).length || 0,
     withImaging: patients?.filter(p => p.imaging_count > 0).length || 0,
     withAny: patients?.filter(p => p.procedure_count > 0 || p.lab_count > 0 || p.imaging_count > 0).length || 0,
+    needsVerification: eligibilityResponse?.summary?.needsAttention || 0,
   };
 
   // Procedure detail content
@@ -597,6 +652,17 @@ export default function Patients() {
               With Any Data
               <Badge variant="secondary" className="ml-1">{stats.withAny}</Badge>
             </Button>
+            
+            <Button
+              variant={activeFilter === 'needsVerification' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setActiveFilter('needsVerification')}
+              className={cn("gap-2", activeFilter !== 'needsVerification' && stats.needsVerification > 0 && "border-yellow-500 text-yellow-700 dark:text-yellow-400")}
+            >
+              <Shield className="h-4 w-4" />
+              Needs Verification
+              <Badge variant="secondary" className={cn("ml-1", stats.needsVerification > 0 && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400")}>{stats.needsVerification}</Badge>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -609,6 +675,7 @@ export default function Patients() {
              activeFilter === 'procedures' ? 'Patients with Procedures' :
              activeFilter === 'labs' ? 'Patients with Labs' :
              activeFilter === 'imaging' ? 'Patients with Imaging' :
+             activeFilter === 'needsVerification' ? 'Patients Needing Insurance Verification' :
              'Patients with Clinical Data'}
           </CardTitle>
           <CardDescription>
@@ -635,6 +702,8 @@ export default function Patients() {
                     <TableHead>DOB</TableHead>
                     <TableHead>Gender</TableHead>
                     <TableHead>Phone</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Coverage</TableHead>
                     <TableHead className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <FlaskConical className="h-3.5 w-3.5" />
@@ -677,6 +746,21 @@ export default function Patients() {
                       <TableCell>{patient.date_of_birth || '-'}</TableCell>
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
                       <TableCell>{patient.phone || '-'}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const elig = eligibilityMap[patient.id];
+                          switch (elig?.status) {
+                            case 'verified':
+                              return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400">✅ Active</Badge>;
+                            case 'notEligible':
+                              return <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400">❌ Inactive</Badge>;
+                            case 'needsVerification':
+                              return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400">⚠️ Pending</Badge>;
+                            default:
+                              return <Badge className="bg-muted text-muted-foreground border-border">— No Ins</Badge>;
+                          }
+                        })()}
+                      </TableCell>
                       <TableCell className="text-center">
                         <CountBadge count={patient.lab_count} />
                       </TableCell>
