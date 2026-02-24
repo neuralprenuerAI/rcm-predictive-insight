@@ -132,7 +132,7 @@ export function InsuranceVerificationCard() {
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      navigate(`/patient-intake?patientId=${patient.id}&tab=insurance`)
+                      navigate(`/patients/${patient.id}?tab=insurance`)
                     }
                   >
                     Verify →
@@ -156,7 +156,7 @@ export function InsuranceVerificationCard() {
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      navigate(`/patient-intake?patientId=${patient.id}&tab=insurance`)
+                      navigate(`/patients/${patient.id}?tab=insurance`)
                     }
                   >
                     Review →
