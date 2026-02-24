@@ -13,7 +13,7 @@ import Settings from "./Settings";
 import Patients from "./Patients";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { NotificationFeed, ActionAlerts, ScrubberActivityCard, ChargeAuditorCard, DenialManagementCard } from "@/components/dashboard";
+import { NotificationFeed, ActionAlerts, ScrubberActivityCard, ChargeAuditorCard, DenialManagementCard, InsuranceVerificationCard } from "@/components/dashboard";
 import { LogOut, Loader2 } from "lucide-react";
 
 
@@ -92,6 +92,9 @@ const Index = () => {
               <ChargeAuditorCard />
               <DenialManagementCard />
             </div>
+            
+            {/* Insurance Verification */}
+            <InsuranceVerificationCard />
           </div>
         );
       case "patients":

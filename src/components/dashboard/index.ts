@@ -6,3 +6,4 @@ export { ActionAlerts } from './ActionAlerts';
 export { ScrubberActivityCard } from './ScrubberActivityCard';
 export { ChargeAuditorCard } from './ChargeAuditorCard';
 export { DenialManagementCard } from './DenialManagementCard';
+export { InsuranceVerificationCard } from './InsuranceVerificationCard';
