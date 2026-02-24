@@ -255,7 +255,9 @@ export default function PatientIntake() {
     }
   }, [documentType, toast]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const isDropzoneDisabled = step === "uploading" || step === "ocr" || step === "extracting" || step === "saving" || step === "syncing";
+
+  const { getRootProps, getInputProps, isDragActive, open: openFileDialog } = useDropzone({
     onDrop,
     accept: {
       "application/pdf": [".pdf"],
@@ -264,7 +266,9 @@ export default function PatientIntake() {
       "application/vnd.ms-xpsdocument": [".xps", ".oxps"]
     },
     maxFiles: 1,
-    disabled: step === "uploading" || step === "ocr" || step === "extracting" || step === "saving" || step === "syncing"
+    disabled: isDropzoneDisabled,
+    noClick: false,
+    noKeyboard: false,
   });
 
   const handleFieldChange = (field: keyof ExtractedPatient, value: string | null) => {
@@ -711,6 +715,7 @@ export default function PatientIntake() {
                 <div
                   {...getRootProps()}
                   className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+                    isDropzoneDisabled ? "opacity-50 cursor-not-allowed" :
                     isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
                   }`}
                 >
@@ -722,7 +727,20 @@ export default function PatientIntake() {
                     <div>
                       <p className="text-lg mb-1">Drag & drop a file here</p>
                       <p className="text-muted-foreground">or click to select</p>
-                      <p className="text-xs text-muted-foreground mt-2">Supports: PDF, PNG, JPG, TIFF</p>
+                      <p className="text-xs text-muted-foreground mt-2">Supports: PDF, PNG, JPG, TIFF, OXPS</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-4"
+                        disabled={isDropzoneDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFileDialog();
+                        }}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Browse Files
+                      </Button>
                     </div>
                   )}
                 </div>
