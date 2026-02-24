@@ -88,22 +88,22 @@ export function InsuranceVerificationCard() {
       </CardHeader>
       <CardContent>
         {/* Summary Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{summary.verified}</div>
-            <div className="text-sm text-muted-foreground">Verified</div>
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded">
+            <div className="text-xl font-bold text-green-600">{summary.verified}</div>
+            <div className="text-xs text-green-600">Verified</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-600">{summary.needsVerification}</div>
-            <div className="text-sm text-muted-foreground">Pending</div>
+          <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded">
+            <div className="text-xl font-bold text-yellow-600">{summary.needsVerification}</div>
+            <div className="text-xs text-yellow-600">Pending</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-600">{summary.notEligible}</div>
-            <div className="text-sm text-muted-foreground">Not Eligible</div>
+          <div className="text-center p-2 bg-red-50 dark:bg-red-950/20 rounded">
+            <div className="text-xl font-bold text-red-600">{summary.notEligible}</div>
+            <div className="text-xs text-red-600">Inactive</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-muted-foreground">{summary.noInsurance}</div>
-            <div className="text-sm text-muted-foreground">No Insurance</div>
+          <div className="text-center p-2 bg-muted rounded">
+            <div className="text-xl font-bold text-muted-foreground">{summary.noInsurance}</div>
+            <div className="text-xs text-muted-foreground">No Insurance</div>
           </div>
         </div>
 
@@ -111,11 +111,11 @@ export function InsuranceVerificationCard() {
         {((eligibilityData?.needsVerification?.length ?? 0) > 0 ||
           (eligibilityData?.notEligible?.length ?? 0) > 0) && (
           <div className="border-t pt-4">
-            <h4 className="font-medium text-yellow-700 mb-2">
+            <h4 className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-2">
               ⚠️ Needs Attention ({summary.needsAttention})
             </h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {eligibilityData?.needsVerification?.map((patient) => (
+              {eligibilityData?.needsVerification?.slice(0, 5).map((patient) => (
                 <div
                   key={patient.id}
                   className="flex justify-between items-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded"
@@ -125,12 +125,12 @@ export function InsuranceVerificationCard() {
                       {patient.firstName} {patient.lastName}
                     </span>
                     <span className="text-sm text-muted-foreground ml-2">
-                      - {patient.reason}
+                      - Pending verification
                     </span>
                   </div>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() =>
                       navigate(`/patient-intake?patientId=${patient.id}&tab=insurance`)
                     }
@@ -139,7 +139,7 @@ export function InsuranceVerificationCard() {
                   </Button>
                 </div>
               ))}
-              {eligibilityData?.notEligible?.map((patient) => (
+              {eligibilityData?.notEligible?.slice(0, 5).map((patient) => (
                 <div
                   key={patient.id}
                   className="flex justify-between items-center p-2 bg-red-50 dark:bg-red-950/20 rounded"
@@ -154,7 +154,7 @@ export function InsuranceVerificationCard() {
                   </div>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() =>
                       navigate(`/patient-intake?patientId=${patient.id}&tab=insurance`)
                     }
@@ -164,6 +164,11 @@ export function InsuranceVerificationCard() {
                 </div>
               ))}
             </div>
+            {summary.needsAttention > 5 && (
+              <Button variant="link" className="mt-2 w-full" onClick={() => navigate('/patients?filter=needsVerification')}>
+                View all {summary.needsAttention} patients →
+              </Button>
+            )}
           </div>
         )}
 
