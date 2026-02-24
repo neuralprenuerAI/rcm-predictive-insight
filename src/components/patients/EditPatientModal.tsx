@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, User, Phone, MapPin, Heart, Globe, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, User, Phone, MapPin, Heart, Globe, AlertCircle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
@@ -39,6 +40,7 @@ interface EditPatientModalProps {
   onClose: () => void;
   patient: Patient | null;
   onSuccess: (updatedFields?: Record<string, any>) => void;
+  initialTab?: string;
 }
 
 // US States for dropdown
@@ -124,11 +126,14 @@ const PREFIX_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Prof."];
 // Name suffix options  
 const SUFFIX_OPTIONS = ["Jr.", "Sr.", "II", "III", "IV", "MD", "PhD", "RN", "Esq."];
 
-export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPatientModalProps) {
+export function EditPatientModal({ isOpen, onClose, patient, onSuccess, initialTab }: EditPatientModalProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [eligibilityStatus, setEligibilityStatus] = useState<string | null>(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -169,7 +174,16 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
     // Emergency Contact
     emergencyContactName: "",
     emergencyContactRelationship: "",
-    emergencyContactPhone: ""
+    emergencyContactPhone: "",
+
+    // Insurance
+    insuranceName: "",
+    policyNumber: "",
+    groupNumber: "",
+    subscriberId: "",
+    subscriberName: "",
+    subscriberDob: "",
+    subscriberRelationship: "Self",
   });
 
   // Load patient data when modal opens
@@ -200,6 +214,9 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
 
       // Extract name parts
       const fhirName = fhirData.name?.[0] || {};
+
+      // Extract insurance info
+      const insuranceInfo = (patient as any).insurance_info || {};
 
       setFormData({
         prefix: fhirName.prefix?.[0] || patient.prefix || "none",
@@ -232,11 +249,19 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         country: address.country || "US",
         emergencyContactName: contactName || (patient as any).emergency_contact_name || "",
         emergencyContactRelationship: contact.relationship?.[0]?.coding?.[0]?.code || "none",
-        emergencyContactPhone: contact.telecom?.[0]?.value || (patient as any).emergency_contact_phone || ""
+        emergencyContactPhone: contact.telecom?.[0]?.value || (patient as any).emergency_contact_phone || "",
+        insuranceName: insuranceInfo.insuranceName || insuranceInfo.insurance_name || "",
+        policyNumber: insuranceInfo.policyNumber || insuranceInfo.policy_number || "",
+        groupNumber: insuranceInfo.groupNumber || insuranceInfo.group_number || "",
+        subscriberId: insuranceInfo.subscriberId || insuranceInfo.subscriber_id || insuranceInfo.memberId || "",
+        subscriberName: insuranceInfo.subscriberName || insuranceInfo.subscriber_name || "",
+        subscriberDob: insuranceInfo.subscriberDob || insuranceInfo.subscriber_dob || "",
+        subscriberRelationship: insuranceInfo.subscriberRelationship || insuranceInfo.subscriber_relationship || "Self",
       });
 
+      setEligibilityStatus(insuranceInfo.eligibilityStatus || null);
       setErrors({});
-      setActiveTab("basic");
+      setActiveTab(initialTab || "basic");
     }
   }, [patient, isOpen]);
 
@@ -436,6 +461,16 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         emergency_contact_name: formData.emergencyContactName || null,
         emergency_contact_phone: formData.emergencyContactPhone || null,
         emergency_contact_relationship: emergencyRelValue || null,
+        insurance_info: {
+          insuranceName: formData.insuranceName || null,
+          policyNumber: formData.policyNumber || null,
+          groupNumber: formData.groupNumber || null,
+          subscriberId: formData.subscriberId || null,
+          subscriberName: formData.subscriberName || null,
+          subscriberDob: formData.subscriberDob || null,
+          subscriberRelationship: formData.subscriberRelationship || null,
+          eligibilityStatus: eligibilityStatus || null,
+        },
         raw_fhir_data: updatedFhirData,
         updated_at: new Date().toISOString()
       };
@@ -628,7 +663,7 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-4 w-full">
+          <TabsList className="grid grid-cols-5 w-full">
             <TabsTrigger value="basic" className="flex items-center gap-1">
               <User className="h-4 w-4" />
               Basic
@@ -640,6 +675,10 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
             <TabsTrigger value="address" className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
               Address
+            </TabsTrigger>
+            <TabsTrigger value="insurance" className="flex items-center gap-1">
+              <Shield className="h-4 w-4" />
+              Insurance
             </TabsTrigger>
             <TabsTrigger value="other" className="flex items-center gap-1">
               <Heart className="h-4 w-4" />
@@ -1032,6 +1071,152 @@ export function EditPatientModal({ isOpen, onClose, patient, onSuccess }: EditPa
                   {errors.postalCode && <p className="text-sm text-destructive">{errors.postalCode}</p>}
                 </div>
               </div>
+            </div>
+          </TabsContent>
+
+          {/* Insurance Tab */}
+          <TabsContent value="insurance" className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="insuranceName">Insurance Name</Label>
+                <Input
+                  id="insuranceName"
+                  placeholder="e.g. BCBS of Texas"
+                  value={formData.insuranceName}
+                  onChange={(e) => handleChange("insuranceName", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="policyNumber">Policy Number</Label>
+                <Input
+                  id="policyNumber"
+                  placeholder="Policy #"
+                  value={formData.policyNumber}
+                  onChange={(e) => handleChange("policyNumber", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="groupNumber">Group Number</Label>
+                <Input
+                  id="groupNumber"
+                  placeholder="Group #"
+                  value={formData.groupNumber}
+                  onChange={(e) => handleChange("groupNumber", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriberId">Subscriber ID</Label>
+                <Input
+                  id="subscriberId"
+                  placeholder="Member / Subscriber ID"
+                  value={formData.subscriberId}
+                  onChange={(e) => handleChange("subscriberId", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriberName">Subscriber Name</Label>
+                <Input
+                  id="subscriberName"
+                  placeholder="Full name"
+                  value={formData.subscriberName}
+                  onChange={(e) => handleChange("subscriberName", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriberDob">Subscriber DOB</Label>
+                <Input
+                  id="subscriberDob"
+                  type={formData.subscriberDob ? "date" : "text"}
+                  placeholder="YYYY-MM-DD"
+                  value={formData.subscriberDob}
+                  onFocus={(e) => { if (e.target.type === "text") e.target.type = "date"; }}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                  onChange={(e) => handleChange("subscriberDob", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriberRelationship">Relationship to Subscriber</Label>
+                <Select value={formData.subscriberRelationship} onValueChange={(v) => handleChange("subscriberRelationship", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Self">Self</SelectItem>
+                    <SelectItem value="Spouse">Spouse</SelectItem>
+                    <SelectItem value="Child">Child</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Eligibility Status Section */}
+            <div className="border-t pt-4 mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Insurance Eligibility
+                </h4>
+                <div>
+                  {eligibilityStatus === 'verified' && (
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">✅ Verified - Active</Badge>
+                  )}
+                  {eligibilityStatus === 'needsVerification' && (
+                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">⚠️ Pending</Badge>
+                  )}
+                  {eligibilityStatus === 'notEligible' && (
+                    <Badge className="bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400">❌ Inactive</Badge>
+                  )}
+                  {!eligibilityStatus && (
+                    <span className="text-sm text-muted-foreground">Not checked</span>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isCheckingEligibility || !formData.subscriberId}
+                onClick={async () => {
+                  setIsCheckingEligibility(true);
+                  try {
+                    const result = await awsApi.invoke("rcm-availity-eligibility", {
+                      body: {
+                        action: "check_eligibility",
+                        memberId: formData.subscriberId,
+                        patientFirstName: formData.firstName,
+                        patientLastName: formData.lastName,
+                        patientBirthDate: formData.birthDate,
+                        payerId: "BCBSTX",
+                        use_demo: true,
+                      },
+                    });
+                    if (result.error) throw result.error;
+                    const status = (result.data as any)?.eligibilityStatus || (result.data as any)?.status;
+                    setEligibilityStatus(status === "active" ? "verified" : status === "inactive" ? "notEligible" : "needsVerification");
+                    toast({
+                      title: "Eligibility Checked",
+                      description: `Status: ${status || "unknown"}`,
+                    });
+                  } catch (err: any) {
+                    toast({
+                      title: "Eligibility Check Failed",
+                      description: err?.message || "Could not verify eligibility",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsCheckingEligibility(false);
+                  }
+                }}
+              >
+                {isCheckingEligibility ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  "Re-check Eligibility"
+                )}
+              </Button>
             </div>
           </TabsContent>
 

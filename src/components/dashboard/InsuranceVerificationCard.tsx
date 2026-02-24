@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield } from "lucide-react";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { awsCrud } from "@/lib/awsCrud";
 import { supabase } from "@/integrations/supabase/client";
+import { EditPatientModal } from "@/components/patients/EditPatientModal";
 
 interface EligibilityPatient {
   id: string;
@@ -32,6 +35,9 @@ interface EligibilityData {
 
 export function InsuranceVerificationCard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [patientForEdit, setPatientForEdit] = useState<any>(null);
 
   const { data: eligibilityData, isLoading } = useQuery<EligibilityData>({
     queryKey: ["dashboard-eligibility"],
@@ -46,6 +52,19 @@ export function InsuranceVerificationCard() {
     },
     refetchInterval: 60000,
   });
+
+  const handleOpenPatient = async (patientId: string) => {
+    try {
+      const patients = await awsCrud.select('patients');
+      const data = patients.find((p: any) => p.id === patientId);
+      if (data) {
+        setPatientForEdit(data);
+        setIsEditModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Failed to load patient for edit:", err);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -79,106 +98,118 @@ export function InsuranceVerificationCard() {
   };
 
   return (
-    <Card className="border-border shadow-[var(--shadow-card)]">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Shield className="h-5 w-5" />
-          Insurance Verification
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Summary Stats */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded">
-            <div className="text-xl font-bold text-green-600">{summary.verified}</div>
-            <div className="text-xs text-green-600">Verified</div>
-          </div>
-          <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded">
-            <div className="text-xl font-bold text-yellow-600">{summary.needsVerification}</div>
-            <div className="text-xs text-yellow-600">Pending</div>
-          </div>
-          <div className="text-center p-2 bg-red-50 dark:bg-red-950/20 rounded">
-            <div className="text-xl font-bold text-red-600">{summary.notEligible}</div>
-            <div className="text-xs text-red-600">Inactive</div>
-          </div>
-          <div className="text-center p-2 bg-muted rounded">
-            <div className="text-xl font-bold text-muted-foreground">{summary.noInsurance}</div>
-            <div className="text-xs text-muted-foreground">No Insurance</div>
-          </div>
-        </div>
-
-        {/* Needs Attention List */}
-        {((eligibilityData?.needsVerification?.length ?? 0) > 0 ||
-          (eligibilityData?.notEligible?.length ?? 0) > 0) && (
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-2">
-              ⚠️ Needs Attention ({summary.needsAttention})
-            </h4>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {eligibilityData?.needsVerification?.slice(0, 5).map((patient) => (
-                <div
-                  key={patient.id}
-                  className="flex justify-between items-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded"
-                >
-                  <div>
-                    <span className="font-medium">
-                      {patient.firstName} {patient.lastName}
-                    </span>
-                    <span className="text-sm text-muted-foreground ml-2">
-                      - Pending verification
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      navigate(`/patients/${patient.id}?tab=insurance`)
-                    }
-                  >
-                    Verify →
-                  </Button>
-                </div>
-              ))}
-              {eligibilityData?.notEligible?.slice(0, 5).map((patient) => (
-                <div
-                  key={patient.id}
-                  className="flex justify-between items-center p-2 bg-red-50 dark:bg-red-950/20 rounded"
-                >
-                  <div>
-                    <span className="font-medium">
-                      {patient.firstName} {patient.lastName}
-                    </span>
-                    <span className="text-sm text-muted-foreground ml-2">
-                      - {patient.reason}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      navigate(`/patients/${patient.id}?tab=insurance`)
-                    }
-                  >
-                    Review →
-                  </Button>
-                </div>
-              ))}
+    <>
+      <Card className="border-border shadow-[var(--shadow-card)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Shield className="h-5 w-5" />
+            Insurance Verification
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded">
+              <div className="text-xl font-bold text-green-600">{summary.verified}</div>
+              <div className="text-xs text-green-600">Verified</div>
             </div>
-            {summary.needsAttention > 5 && (
-              <Button variant="link" className="mt-2 w-full" onClick={() => navigate('/patients?filter=needsVerification')}>
-                View all {summary.needsAttention} patients →
-              </Button>
-            )}
+            <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded">
+              <div className="text-xl font-bold text-yellow-600">{summary.needsVerification}</div>
+              <div className="text-xs text-yellow-600">Pending</div>
+            </div>
+            <div className="text-center p-2 bg-red-50 dark:bg-red-950/20 rounded">
+              <div className="text-xl font-bold text-red-600">{summary.notEligible}</div>
+              <div className="text-xs text-red-600">Inactive</div>
+            </div>
+            <div className="text-center p-2 bg-muted rounded">
+              <div className="text-xl font-bold text-muted-foreground">{summary.noInsurance}</div>
+              <div className="text-xs text-muted-foreground">No Insurance</div>
+            </div>
           </div>
-        )}
 
-        {/* All Good Message */}
-        {summary.needsAttention === 0 && (
-          <div className="text-center text-green-600 py-4">
-            ✅ All patients with insurance are verified!
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {/* Needs Attention List */}
+          {((eligibilityData?.needsVerification?.length ?? 0) > 0 ||
+            (eligibilityData?.notEligible?.length ?? 0) > 0) && (
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-2">
+                ⚠️ Needs Attention ({summary.needsAttention})
+              </h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {eligibilityData?.needsVerification?.slice(0, 5).map((patient) => (
+                  <div
+                    key={patient.id}
+                    className="flex justify-between items-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded"
+                  >
+                    <div>
+                      <span className="font-medium">
+                        {patient.firstName} {patient.lastName}
+                      </span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        - Pending verification
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenPatient(patient.id)}
+                    >
+                      Verify →
+                    </Button>
+                  </div>
+                ))}
+                {eligibilityData?.notEligible?.slice(0, 5).map((patient) => (
+                  <div
+                    key={patient.id}
+                    className="flex justify-between items-center p-2 bg-red-50 dark:bg-red-950/20 rounded"
+                  >
+                    <div>
+                      <span className="font-medium">
+                        {patient.firstName} {patient.lastName}
+                      </span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        - {patient.reason}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenPatient(patient.id)}
+                    >
+                      Review →
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {summary.needsAttention > 5 && (
+                <Button variant="link" className="mt-2 w-full" onClick={() => navigate('/patients?filter=needsVerification')}>
+                  View all {summary.needsAttention} patients →
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* All Good Message */}
+          {summary.needsAttention === 0 && (
+            <div className="text-center text-green-600 py-4">
+              ✅ All patients with insurance are verified!
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <EditPatientModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setPatientForEdit(null);
+        }}
+        patient={patientForEdit}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-eligibility"] });
+          queryClient.invalidateQueries({ queryKey: ["patients-with-orders"] });
+        }}
+        initialTab="insurance"
+      />
+    </>
   );
 }
