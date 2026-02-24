@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, ArrowLeft, FlaskConical } from "lucide-react";
+import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, ArrowLeft, FlaskConical, ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,6 +62,19 @@ interface ExtractedPatient {
   rawText: string;
 }
 
+interface EligibilityData {
+  checked: boolean;
+  eligible?: boolean;
+  status?: string;
+  statusCode?: string;
+  payerId?: string;
+  payerName?: string;
+  payerMatch?: { confidence: string };
+  memberIdUsed?: string;
+  checkedAt?: string;
+  reason?: string;
+}
+
 interface EcwConnection {
   id: string;
   name: string | null;
@@ -92,12 +105,15 @@ export default function PatientIntake() {
   const [ecwConnections, setEcwConnections] = useState<EcwConnection[]>([]);
   const [isTestingEcw, setIsTestingEcw] = useState(false);
 
+  // Eligibility state
+  const [eligibilityData, setEligibilityData] = useState<EligibilityData | null>(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+
   useEffect(() => {
     loadEcwConnections();
   }, []);
 
   async function loadEcwConnections() {
-    // Get current user first
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
@@ -105,7 +121,7 @@ export default function PatientIntake() {
       .from("api_connections")
       .select("id, name, connection_name")
       .eq("connection_type", "ecw")
-      .eq("user_id", user.id)  // Only load current user's connections
+      .eq("user_id", user.id)
       .eq("is_active", true);
     
     if (data && data.length > 0) {
@@ -114,95 +130,50 @@ export default function PatientIntake() {
     }
   }
 
-  // Test function for ECW Patient Create
   async function testEcwCreate() {
     if (!ecwConnectionId) {
-      toast({
-        title: "No ECW Connection",
-        description: "Please configure an ECW connection first",
-        variant: "destructive"
-      });
+      toast({ title: "No ECW Connection", description: "Please configure an ECW connection first", variant: "destructive" });
       return;
     }
 
     setIsTestingEcw(true);
-    
     try {
       const testAccountNumber = `TEST${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      
-      // Testing ECW Patient Create
-      
       const response = await awsApi.invoke("ecw-patient-create", {
         body: {
           connectionId: ecwConnectionId,
           accountNumber: testAccountNumber,
           data: {
-            firstName: "Test",
-            middleName: "ECW",
-            lastName: "Integration",
-            birthDate: "1990-05-15",
-            gender: "male",
-            homePhone: "5551234567",
-            mobilePhone: "5559876543",
-            email: "test.integration@example.com",
-            addressLine1: "123 Test Street",
-            addressLine2: "Suite 100",
-            city: "Houston",
-            state: "TX",
-            postalCode: "77001",
-            country: "US",
-            maritalStatus: "single",
-            preferredLanguage: "en",
-            emergencyContactName: "Emergency Contact",
-            emergencyContactPhone: "5551112222"
+            firstName: "Test", middleName: "ECW", lastName: "Integration",
+            birthDate: "1990-05-15", gender: "male", homePhone: "5551234567",
+            mobilePhone: "5559876543", email: "test.integration@example.com",
+            addressLine1: "123 Test Street", addressLine2: "Suite 100",
+            city: "Houston", state: "TX", postalCode: "77001", country: "US",
+            maritalStatus: "single", preferredLanguage: "en",
+            emergencyContactName: "Emergency Contact", emergencyContactPhone: "5551112222"
           }
         }
       });
 
-      // ECW response received
-      
       if (response.error) {
-        console.error("❌ ECW Error:", response.error);
-        toast({
-          title: "ECW Test Failed",
-          description: response.error.message || JSON.stringify(response.error),
-          variant: "destructive"
-        });
+        toast({ title: "ECW Test Failed", description: response.error.message || JSON.stringify(response.error), variant: "destructive" });
       } else if (response.data?.success) {
-        // ECW patient created successfully
-        toast({
-          title: "ECW Test Successful! 🎉",
-          description: `Patient created with ECW ID: ${response.data.ecwPatientId || response.data.accountNumber}`,
-        });
+        toast({ title: "ECW Test Successful! 🎉", description: `Patient created with ECW ID: ${response.data.ecwPatientId || response.data.accountNumber}` });
       } else {
-        console.warn("⚠️ ECW Response:", response.data);
-        toast({
-          title: "ECW Test Result",
-          description: response.data?.error || JSON.stringify(response.data),
-          variant: "destructive"
-        });
+        toast({ title: "ECW Test Result", description: response.data?.error || JSON.stringify(response.data), variant: "destructive" });
       }
-      
       return response;
     } catch (err: unknown) {
-      console.error("❌ ECW Test Error:", err);
-      toast({
-        title: "ECW Test Error",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive"
-      });
+      toast({ title: "ECW Test Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
     } finally {
       setIsTestingEcw(false);
     }
   }
 
-  // Helper to detect OXPS/XPS files
   const isOxpsFile = (file: File): boolean => {
     const filename = file.name.toLowerCase();
-    return filename.endsWith('.oxps') || 
-           filename.endsWith('.xps') ||
-           file.type === 'application/oxps' ||
-           file.type === 'application/vnd.ms-xpsdocument';
+    return filename.endsWith('.oxps') || filename.endsWith('.xps') ||
+           file.type === 'application/oxps' || file.type === 'application/vnd.ms-xpsdocument';
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -213,6 +184,7 @@ export default function PatientIntake() {
     setError(null);
     setStep("uploading");
     setProgress(10);
+    setEligibilityData(null);
 
     try {
       let base64 = await fileToBase64(file);
@@ -220,43 +192,25 @@ export default function PatientIntake() {
       let filename = file.name;
       setProgress(15);
 
-      // Check if OXPS/XPS file - convert to PDF via CloudConvert
       if (isOxpsFile(file)) {
-        // Converting OXPS file to PDF via CloudConvert
         setProgress(20);
-        
         const convertResponse = await awsApi.invoke("convert-oxps", {
-          body: {
-            content: base64,
-            filename: file.name
-          }
+          body: { content: base64, filename: file.name }
         });
-
         if (convertResponse.error || !convertResponse.data?.success) {
-          throw new Error("Failed to convert OXPS file: " + 
-            (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
+          throw new Error("Failed to convert OXPS file: " + (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
         }
-
-        // OXPS converted to PDF successfully
         base64 = convertResponse.data.content;
-        mimeType = convertResponse.data.mimeType;  // "application/pdf"
+        mimeType = convertResponse.data.mimeType;
         filename = convertResponse.data.convertedFilename;
       }
 
       setProgress(25);
-
       setStep("ocr");
       setProgress(30);
-      
-      // OCR request prepared
 
       const ocrResponse = await awsApi.invoke("ocr-document", {
-        body: {
-          content: base64,
-          filename: filename,
-          mimeType: mimeType,
-          provider: "aws"
-        }
+        body: { content: base64, filename, mimeType, provider: "aws" }
       });
 
       if (ocrResponse.error || !ocrResponse.data?.success) {
@@ -266,15 +220,11 @@ export default function PatientIntake() {
       const extractedText = ocrResponse.data.ocr.text;
       setOcrText(extractedText);
       setProgress(50);
-
       setStep("extracting");
       setProgress(60);
 
       const extractResponse = await awsApi.invoke("extract-patient-from-document", {
-        body: {
-          ocrText: extractedText,
-          documentType: documentType
-        }
+        body: { ocrText: extractedText, documentType }
       });
 
       if (extractResponse.error || !extractResponse.data?.success) {
@@ -283,6 +233,12 @@ export default function PatientIntake() {
 
       setPatientData(extractResponse.data.patient);
       setEditedData(extractResponse.data.patient);
+
+      // Capture eligibility data from response
+      if (extractResponse.data.eligibility) {
+        setEligibilityData(extractResponse.data.eligibility);
+      }
+
       setProgress(100);
       setStep("review");
 
@@ -292,15 +248,10 @@ export default function PatientIntake() {
       });
 
     } catch (err: unknown) {
-      console.error("Processing error:", err);
       const message = err instanceof Error ? err.message : "Failed to process document";
       setError(message);
       setStep("error");
-      toast({
-        title: "Processing Failed",
-        description: message,
-        variant: "destructive"
-      });
+      toast({ title: "Processing Failed", description: message, variant: "destructive" });
     }
   }, [documentType, toast]);
 
@@ -320,13 +271,46 @@ export default function PatientIntake() {
     setEditedData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Eligibility check handler
+  async function handleCheckEligibility() {
+    setIsCheckingEligibility(true);
+    try {
+      const response = await awsApi.invoke("rcm-availity-eligibility", {
+        body: {
+          action: "check_eligibility",
+          memberId: editedData.insuranceSubscriberId || editedData.insurancePolicyNumber,
+          patientFirstName: editedData.firstName,
+          patientLastName: editedData.lastName,
+          patientBirthDate: editedData.dateOfBirth,
+          payerId: eligibilityData?.payerId || "BCBSTX",
+          use_demo: true
+        }
+      });
+
+      if (response.error) {
+        toast({ title: "Eligibility Check Failed", description: response.error.message, variant: "destructive" });
+        return;
+      }
+
+      if (response.data?.eligibility) {
+        setEligibilityData(response.data.eligibility);
+        toast({
+          title: response.data.eligibility.eligible ? "Coverage Verified ✅" : "Coverage Issue ❌",
+          description: response.data.eligibility.status || "Check complete",
+        });
+      } else {
+        toast({ title: "Eligibility Check", description: "No eligibility data returned", variant: "destructive" });
+      }
+    } catch (err: unknown) {
+      toast({ title: "Eligibility Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setIsCheckingEligibility(false);
+    }
+  }
+
   async function handleSave() {
     if (!editedData.firstName || !editedData.lastName) {
-      toast({
-        title: "Required Fields Missing",
-        description: "First name and last name are required",
-        variant: "destructive"
-      });
+      toast({ title: "Required Fields Missing", description: "First name and last name are required", variant: "destructive" });
       return;
     }
 
@@ -335,9 +319,7 @@ export default function PatientIntake() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("You must be logged in to save patients");
-      }
+      if (!user) throw new Error("You must be logged in to save patients");
 
       let localPatientId: string | null = null;
 
@@ -380,15 +362,30 @@ export default function PatientIntake() {
 
         const result = await awsCrud.insert("patients", patientRecord, user.id);
         localPatientId = result.data?.id || result.data?.[0]?.id;
-
         setProgress(50);
+
+        // Save eligibility check result
+        if (localPatientId && eligibilityData?.checked && eligibilityData?.eligible !== undefined) {
+          try {
+            await awsCrud.insert("eligibility_checks", {
+              patient_id: localPatientId,
+              payer_id: eligibilityData.payerId || null,
+              payer_name: eligibilityData.payerName || editedData.insuranceName || null,
+              member_id: eligibilityData.memberIdUsed || null,
+              status: eligibilityData.status || null,
+              status_code: eligibilityData.statusCode || null,
+              eligible: eligibilityData.eligible,
+            }, user.id);
+          } catch (eligErr) {
+            console.warn("Failed to save eligibility check:", eligErr);
+          }
+        }
       }
 
       if (syncToEcw) {
         setStep("syncing");
         setProgress(60);
 
-        // Auto-resolve the correct ECW connection based on action
         const requiredScope = isNewPatient ? "Patient.create" : "Patient.update";
         const resolvedEcwId = ecwConnectionId || await findEcwConnectionByScope(requiredScope as any);
         
@@ -396,36 +393,25 @@ export default function PatientIntake() {
           throw new Error(`No ECW connection found with ${requiredScope} scope. Please create one in Connections.`);
         }
 
-        // Generate a unique account number for ECW patient matching
         const accountNumber = `DOC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-        
         const ecwFunction = isNewPatient ? "ecw-patient-create" : "ecw-patient-update";
         
         const ecwResponse = await awsApi.invoke(ecwFunction, {
           body: {
             connectionId: resolvedEcwId,
-            accountNumber: accountNumber,
+            accountNumber,
             patientLocalId: localPatientId,
             patientExternalId: isNewPatient ? undefined : localPatientId,
             data: {
-              firstName: editedData.firstName,
-              middleName: editedData.middleName,
-              lastName: editedData.lastName,
-              prefix: editedData.prefix,
-              suffix: editedData.suffix,
-              dateOfBirth: editedData.dateOfBirth,
-              gender: editedData.gender || "unknown",
-              email: editedData.email,
-              phoneHome: editedData.phoneHome,
-              phoneWork: editedData.phoneWork,
-              phoneMobile: editedData.phoneMobile,
-              addressLine1: editedData.addressLine1,
-              addressLine2: editedData.addressLine2,
-              city: editedData.city,
-              state: editedData.state,
-              postalCode: editedData.postalCode,
-              country: editedData.country || "US",
-              maritalStatus: editedData.maritalStatus,
+              firstName: editedData.firstName, middleName: editedData.middleName,
+              lastName: editedData.lastName, prefix: editedData.prefix,
+              suffix: editedData.suffix, dateOfBirth: editedData.dateOfBirth,
+              gender: editedData.gender || "unknown", email: editedData.email,
+              phoneHome: editedData.phoneHome, phoneWork: editedData.phoneWork,
+              phoneMobile: editedData.phoneMobile, addressLine1: editedData.addressLine1,
+              addressLine2: editedData.addressLine2, city: editedData.city,
+              state: editedData.state, postalCode: editedData.postalCode,
+              country: editedData.country || "US", maritalStatus: editedData.maritalStatus,
               emergencyContactName: editedData.emergencyContactName,
               emergencyContactPhone: editedData.emergencyContactPhone,
               emergencyContactRelationship: editedData.emergencyContactRelationship
@@ -434,38 +420,21 @@ export default function PatientIntake() {
         });
 
         if (ecwResponse.error || !ecwResponse.data?.success) {
-          console.warn("ECW sync failed:", ecwResponse.data?.error);
-          toast({
-            title: "ECW Sync Warning",
-            description: ecwResponse.data?.error || "Failed to sync to ECW, but local save succeeded",
-            variant: "destructive"
-          });
+          toast({ title: "ECW Sync Warning", description: ecwResponse.data?.error || "Failed to sync to ECW, but local save succeeded", variant: "destructive" });
         } else {
-          toast({
-            title: "Synced to ECW",
-            description: `Patient ${isNewPatient ? "created" : "updated"} in eClinicalWorks`,
-          });
+          toast({ title: "Synced to ECW", description: `Patient ${isNewPatient ? "created" : "updated"} in eClinicalWorks` });
         }
       }
 
       setProgress(100);
       setStep("complete");
-
-      toast({
-        title: isNewPatient ? "Patient Created" : "Patient Updated",
-        description: `${editedData.firstName} ${editedData.lastName} has been saved`,
-      });
+      toast({ title: isNewPatient ? "Patient Created" : "Patient Updated", description: `${editedData.firstName} ${editedData.lastName} has been saved` });
 
     } catch (err: unknown) {
-      console.error("Save error:", err);
       const message = err instanceof Error ? err.message : "Failed to save patient";
       setError(message);
       setStep("error");
-      toast({
-        title: "Save Failed",
-        description: message,
-        variant: "destructive"
-      });
+      toast({ title: "Save Failed", description: message, variant: "destructive" });
     }
   }
 
@@ -477,6 +446,7 @@ export default function PatientIntake() {
     setOcrText("");
     setPatientData(null);
     setEditedData({});
+    setEligibilityData(null);
   }
 
   function fileToBase64(file: File): Promise<string> {
@@ -484,13 +454,18 @@ export default function PatientIntake() {
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result as string;
-        const base64 = result.split(",")[1];
-        resolve(base64);
+        resolve(result.split(",")[1]);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   }
+
+  // Check if insurance card was uploaded without DOB
+  const showDobAlert = documentType === "insurance_card" && 
+    eligibilityData?.checked === false && 
+    eligibilityData?.reason?.toLowerCase().includes("dateofbirth") || 
+    (documentType === "insurance_card" && eligibilityData?.checked === false && eligibilityData?.reason?.toLowerCase().includes("birth"));
 
   function renderProgress() {
     const steps = [
@@ -510,13 +485,138 @@ export default function PatientIntake() {
         <Progress value={progress} className="h-2 mb-2" />
         <div className="flex justify-between text-xs text-muted-foreground">
           {steps.map((s, idx) => (
-            <span
-              key={s.key}
-              className={idx <= currentIndex ? "text-primary font-medium" : ""}
-            >
+            <span key={s.key} className={idx <= currentIndex ? "text-primary font-medium" : ""}>
               {s.label}
             </span>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderEligibilitySection() {
+    if (!eligibilityData) return null;
+
+    if (eligibilityData.checked && eligibilityData.eligible) {
+      return (
+        <div className="border-t pt-4 mt-4 space-y-3">
+          <h4 className="font-medium flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-green-600" />
+            Insurance Eligibility
+          </h4>
+          <div className="rounded-lg border border-green-500/30 bg-green-50 dark:bg-green-950/20 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge className="bg-green-600 hover:bg-green-700 text-white">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Coverage Verified – Active
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium">Status:</span> {eligibilityData.status}
+            </p>
+            {eligibilityData.payerName && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Payer:</span> {eligibilityData.payerName}
+              </p>
+            )}
+            {eligibilityData.memberIdUsed && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Member ID:</span> {eligibilityData.memberIdUsed}
+              </p>
+            )}
+            {eligibilityData.checkedAt && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Verified on:</span>{" "}
+                {new Date(eligibilityData.checkedAt).toLocaleString()}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCheckEligibility}
+              disabled={isCheckingEligibility}
+              className="mt-2"
+            >
+              {isCheckingEligibility ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+              Re-check Eligibility
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (eligibilityData.checked && !eligibilityData.eligible) {
+      return (
+        <div className="border-t pt-4 mt-4 space-y-3">
+          <h4 className="font-medium flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-destructive" />
+            Insurance Eligibility
+          </h4>
+          <div className="rounded-lg border border-destructive/30 bg-red-50 dark:bg-red-950/20 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="destructive">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Coverage Not Active
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium">Status:</span> {eligibilityData.status}
+            </p>
+            {eligibilityData.checkedAt && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Checked on:</span>{" "}
+                {new Date(eligibilityData.checkedAt).toLocaleString()}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCheckEligibility}
+              disabled={isCheckingEligibility}
+              className="mt-2"
+            >
+              {isCheckingEligibility ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+              Re-check Eligibility
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // eligibility.checked === false
+    return (
+      <div className="border-t pt-4 mt-4 space-y-3">
+        <h4 className="font-medium flex items-center gap-2">
+          <ShieldQuestion className="h-4 w-4 text-yellow-600" />
+          Insurance Eligibility
+        </h4>
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              Eligibility Not Verified
+            </Badge>
+          </div>
+          {eligibilityData.reason && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium">Reason:</span> {eligibilityData.reason}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCheckEligibility}
+            disabled={isCheckingEligibility || !editedData.dateOfBirth}
+            className="mt-2"
+          >
+            {isCheckingEligibility ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+            Verify Coverage
+          </Button>
+          {!editedData.dateOfBirth && (
+            <p className="text-xs text-yellow-700 dark:text-yellow-400">
+              Enter Date of Birth on the Demographics tab to verify coverage.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -552,11 +652,7 @@ export default function PatientIntake() {
                   disabled={isTestingEcw}
                   className="bg-accent/50 border-primary/30 hover:bg-accent"
                 >
-                  {isTestingEcw ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FlaskConical className="h-4 w-4 mr-2" />
-                  )}
+                  {isTestingEcw ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FlaskConical className="h-4 w-4 mr-2" />}
                   Test ECW Create
                 </Button>
               )}
@@ -626,9 +722,7 @@ export default function PatientIntake() {
                     <div>
                       <p className="text-lg mb-1">Drag & drop a file here</p>
                       <p className="text-muted-foreground">or click to select</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Supports: PDF, PNG, JPG, TIFF
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">Supports: PDF, PNG, JPG, TIFF</p>
                     </div>
                   )}
                 </div>
@@ -648,9 +742,7 @@ export default function PatientIntake() {
                       {step === "ocr" && "Extracting text with AWS Textract..."}
                       {step === "extracting" && "Analyzing document with AI..."}
                     </p>
-                    <p className="text-muted-foreground">
-                      {uploadedFile?.name}
-                    </p>
+                    <p className="text-muted-foreground">{uploadedFile?.name}</p>
                   </div>
                 </div>
               </CardContent>
@@ -685,6 +777,16 @@ export default function PatientIntake() {
 
                   {/* Demographics Tab */}
                   <TabsContent value="demographics" className="space-y-4">
+                    {/* DOB alert for insurance card uploads */}
+                    {showDobAlert && (
+                      <div className="rounded-lg border border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 p-3 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
+                        <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                          Please enter Date of Birth to verify insurance coverage
+                        </p>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>First Name *</Label>
@@ -718,6 +820,7 @@ export default function PatientIntake() {
                           type="date"
                           value={editedData.dateOfBirth || ""}
                           onChange={(e) => handleFieldChange("dateOfBirth", e.target.value)}
+                          className={showDobAlert ? "border-yellow-500 ring-1 ring-yellow-500" : ""}
                         />
                       </div>
                       <div className="space-y-2">
@@ -1007,6 +1110,9 @@ export default function PatientIntake() {
                         </Select>
                       </div>
                     </div>
+
+                    {/* Eligibility Section */}
+                    {renderEligibilitySection()}
                   </TabsContent>
 
                   {/* Other Tab */}
@@ -1036,7 +1142,6 @@ export default function PatientIntake() {
                       </div>
                     </div>
 
-                    {/* Raw OCR Text */}
                     <div className="space-y-2">
                       <Label>Raw OCR Text (Reference)</Label>
                       <Textarea
