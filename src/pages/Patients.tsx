@@ -744,6 +744,7 @@ export default function Patients() {
                       </TableCell>
                       <TableCell>{patient.date_of_birth || '-'}</TableCell>
                       <TableCell className="capitalize">{patient.gender || '-'}</TableCell>
+                      <TableCell>{patient.phone || '—'}</TableCell>
                       <TableCell>
                         {(() => {
                           const elig = eligibilityMap[patient.id];
