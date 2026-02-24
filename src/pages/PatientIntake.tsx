@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
+import { isOxpsFile, convertOxpsIfNeeded } from "@/lib/oxpsConverter";
 import { awsCrud } from "@/lib/awsCrud";
 import { findEcwConnectionByScope } from "@/lib/ecwConnectionResolver";
 import { Button } from "@/components/ui/button";
@@ -170,11 +171,7 @@ export default function PatientIntake() {
     }
   }
 
-  const isOxpsFile = (file: File): boolean => {
-    const filename = file.name.toLowerCase();
-    return filename.endsWith('.oxps') || filename.endsWith('.xps') ||
-           file.type === 'application/oxps' || file.type === 'application/vnd.ms-xpsdocument';
-  };
+  // isOxpsFile and convertOxpsIfNeeded imported from shared lib
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -194,15 +191,13 @@ export default function PatientIntake() {
 
       if (isOxpsFile(file)) {
         setProgress(20);
-        const convertResponse = await awsApi.invoke("convert-oxps", {
-          body: { content: base64, filename: file.name }
+        const converted = await convertOxpsIfNeeded(file, base64, (msg) => {
+          // Show converting status to user
+          setError(null);
         });
-        if (convertResponse.error || !convertResponse.data?.success) {
-          throw new Error("Failed to convert OXPS file: " + (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
-        }
-        base64 = convertResponse.data.content;
-        mimeType = convertResponse.data.mimeType;
-        filename = convertResponse.data.convertedFilename;
+        base64 = converted.content;
+        mimeType = converted.mimeType;
+        filename = converted.filename;
       }
 
       setProgress(25);

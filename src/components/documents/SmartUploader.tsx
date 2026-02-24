@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { AIRiskBadge } from "@/components/claims/AIRiskBadge";
+import { isOxpsFile, convertOxpsIfNeeded } from "@/lib/oxpsConverter";
 
 interface UploadedFile {
   file: File;
@@ -51,43 +52,7 @@ export function SmartUploader({ onComplete }: SmartUploaderProps) {
     });
   };
 
-  // Helper to detect OXPS/XPS files
-  const isOxpsFile = (file: File): boolean => {
-    const filename = file.name.toLowerCase();
-    return filename.endsWith('.oxps') || 
-           filename.endsWith('.xps') ||
-           file.type === 'application/oxps' ||
-           file.type === 'application/vnd.ms-xpsdocument';
-  };
-
-  // Convert OXPS to PDF via CloudConvert
-  const convertOxpsIfNeeded = async (file: File, content: string): Promise<{ content: string; filename: string; mimeType: string }> => {
-    if (!isOxpsFile(file)) {
-      return { content, filename: file.name, mimeType: file.type || 'application/pdf' };
-    }
-
-    // Converting OXPS file via CloudConvert
-    
-    const convertResponse = await awsApi.invoke("convert-oxps", {
-      body: {
-        content,
-        filename: file.name
-      }
-    });
-
-    if (convertResponse.error || !convertResponse.data?.success) {
-      throw new Error("Failed to convert OXPS file: " + 
-        (convertResponse.data?.error || convertResponse.error?.message || "Unknown error"));
-    }
-
-    // OXPS converted to PDF successfully
-    
-    return {
-      content: convertResponse.data.content,
-      filename: convertResponse.data.convertedFilename,
-      mimeType: convertResponse.data.mimeType  // "application/pdf"
-    };
-  };
+  // isOxpsFile and convertOxpsIfNeeded imported from shared lib
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newFiles: UploadedFile[] = [];
