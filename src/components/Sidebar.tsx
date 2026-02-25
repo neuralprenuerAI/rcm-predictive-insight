@@ -46,7 +46,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
   ];
 
   return (
-    <div className="w-64 min-h-screen bg-sidebar-background border-r border-sidebar-border">
+    <div className="w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       <div className="p-6">
         <h1 className="text-xl font-bold text-sidebar-foreground mb-1">
           AI RCM Platform
