@@ -154,48 +154,13 @@ export default function DenialManagement() {
   const fetchDenials = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("denial_queue")
-        .select(`
-          *,
-          patient:patients(first_name, last_name),
-          claim:claims(claim_id)
-        `)
-        .order("denial_date", { ascending: false });
-
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
-      }
-      if (categoryFilter !== "all") {
-        query = query.eq("classified_category", categoryFilter);
-      }
-      if (priorityFilter !== "all") {
-        query = query.eq("priority", priorityFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setDenials((data as DenialRecord[]) || []);
-
-      // Calculate stats
-      const all = (data as DenialRecord[]) || [];
-      const newCount = all.filter(d => d.status === "new").length;
-      const appealingCount = all.filter(d => d.status === "appealing").length;
-      const totalDeniedAmount = all.reduce((sum, d) => sum + (d.denied_amount || 0), 0);
-      const urgentCount = all.filter(d => d.days_until_deadline !== null && d.days_until_deadline <= 7 && d.status !== "resolved").length;
-
-      setStats({
-        total: all.length,
-        newCount,
-        appealingCount,
-        totalDeniedAmount,
-        urgentCount,
-      });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const result = await awsCrud.select('denial_queue', user.id);
+      setDenials((result || []) as DenialRecord[]);
     } catch (error) {
-      console.error("Error fetching denials:", error);
-      toast({ title: "Error", description: "Failed to load denials", variant: "destructive" });
+      console.error('Error fetching denials:', error);
+      toast({ title: 'Error', description: 'Failed to load denials', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -209,22 +174,24 @@ export default function DenialManagement() {
 
     setSubmitting(true);
     try {
-      const response = await awsApi.invoke("classify-denial", {
-        body: {
-          payerName: manualEntry.payerName,
-          reasonCode: manualEntry.reasonCode,
-          reasonDescription: manualEntry.reasonDescription,
-          billedAmount: parseFloat(manualEntry.billedAmount) || parseFloat(manualEntry.deniedAmount),
-          deniedAmount: parseFloat(manualEntry.deniedAmount),
-          cptCode: manualEntry.cptCode,
-          serviceDate: manualEntry.serviceDate || null,
-          denialDate: manualEntry.denialDate,
-        },
-      });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (response.error) throw response.error;
+      const denialData = {
+        payer_name: manualEntry.payerName,
+        reason_code: manualEntry.reasonCode,
+        reason_description: manualEntry.reasonDescription,
+        billed_amount: parseFloat(manualEntry.billedAmount) || parseFloat(manualEntry.deniedAmount),
+        denied_amount: parseFloat(manualEntry.deniedAmount),
+        cpt_code: manualEntry.cptCode,
+        service_date: manualEntry.serviceDate || null,
+        denial_date: manualEntry.denialDate,
+        status: 'new',
+      };
 
-      toast({ title: "Success", description: "Denial added and classified" });
+      await awsCrud.insert('denial_queue', { ...denialData, user_id: user.id }, user.id);
+
+      toast({ title: "Success", description: "Denial added successfully" });
       setShowManualEntry(false);
       setManualEntry({
         payerName: "",
@@ -248,14 +215,12 @@ export default function DenialManagement() {
   const updateStatus = async (denialId: string, newStatus: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-      await awsCrud.update("denial_queue", { status: newStatus }, { id: denialId }, user.id);
-
+      if (!user) return;
+      await awsCrud.update('denial_queue', { status: newStatus }, { id: denialId }, user.id);
       setDenials(denials.map(d => d.id === denialId ? { ...d, status: newStatus } : d));
-      toast({ title: "Status Updated", description: `Denial marked as ${newStatus}` });
     } catch (error) {
-      console.error("Error updating status:", error);
-      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+      console.error('Error updating status:', error);
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
     }
   };
 
