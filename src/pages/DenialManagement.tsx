@@ -174,24 +174,22 @@ export default function DenialManagement() {
 
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const response = await awsApi.invoke("classify-denial", {
+        body: {
+          payerName: manualEntry.payerName,
+          reasonCode: manualEntry.reasonCode,
+          reasonDescription: manualEntry.reasonDescription,
+          billedAmount: parseFloat(manualEntry.billedAmount) || parseFloat(manualEntry.deniedAmount),
+          deniedAmount: parseFloat(manualEntry.deniedAmount),
+          cptCode: manualEntry.cptCode,
+          serviceDate: manualEntry.serviceDate || null,
+          denialDate: manualEntry.denialDate,
+        },
+      });
 
-      const denialData = {
-        payer_name: manualEntry.payerName,
-        reason_code: manualEntry.reasonCode,
-        reason_description: manualEntry.reasonDescription,
-        billed_amount: parseFloat(manualEntry.billedAmount) || parseFloat(manualEntry.deniedAmount),
-        denied_amount: parseFloat(manualEntry.deniedAmount),
-        cpt_code: manualEntry.cptCode,
-        service_date: manualEntry.serviceDate || null,
-        denial_date: manualEntry.denialDate,
-        status: 'new',
-      };
+      if (response.error) throw response.error;
 
-      await awsCrud.insert('denial_queue', { ...denialData, user_id: user.id }, user.id);
-
-      toast({ title: "Success", description: "Denial added successfully" });
+      toast({ title: "Success", description: "Denial added and classified" });
       setShowManualEntry(false);
       setManualEntry({
         payerName: "",
