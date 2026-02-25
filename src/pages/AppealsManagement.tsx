@@ -127,38 +127,27 @@ export default function AppealsManagement() {
   const fetchAppeals = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("appeals")
-        .select(`
-          *,
-          denial:denial_queue(reason_code, cpt_code, classified_category),
-          patient:patients(first_name, last_name)
-        `)
-        .order("appeal_date", { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
-      }
+      const result = await awsCrud.select('appeals',
+        statusFilter !== 'all' ? { status: statusFilter } : {},
+        user.id
+      );
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setAppeals((data as AppealRecord[]) || []);
-
-      // Calculate stats
-      const all = (data as AppealRecord[]) || [];
+      const all = result || [];
+      setAppeals(all as AppealRecord[]);
       setStats({
         total: all.length,
-        drafts: all.filter(a => a.status === "draft").length,
-        submitted: all.filter(a => ["submitted", "in_review", "acknowledged"].includes(a.status)).length,
-        won: all.filter(a => a.status === "won").length,
-        denied: all.filter(a => a.status === "denied").length,
-        totalRecovered: all.filter(a => a.status === "won").reduce((sum, a) => sum + (a.outcome_amount || 0), 0),
+        drafts: all.filter((a: any) => a.status === 'draft').length,
+        submitted: all.filter((a: any) => ['submitted','in_review','acknowledged'].includes(a.status)).length,
+        won: all.filter((a: any) => a.status === 'won').length,
+        denied: all.filter((a: any) => a.status === 'denied').length,
+        totalRecovered: all.filter((a: any) => a.status === 'won').reduce((sum: number, a: any) => sum + (a.outcome_amount || 0), 0),
       });
     } catch (error) {
-      console.error("Error fetching appeals:", error);
-      toast({ title: "Error", description: "Failed to load appeals", variant: "destructive" });
+      console.error('Error fetching appeals:', error);
+      toast({ title: 'Error', description: 'Failed to load appeals', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
