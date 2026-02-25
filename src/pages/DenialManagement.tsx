@@ -317,7 +317,11 @@ export default function DenialManagement() {
           body: { pdf_content: base64, document_type: '835_remittance' }
         });
         if (ocrRes.error) throw ocrRes.error;
-        remittanceData = ocrRes.data;
+        const ocrData = ocrRes.data;
+        if (!ocrData?.claims && !ocrData?.claimPayments && !ocrData?.serviceLines) {
+          throw new Error('PDF processed but no claim data could be extracted. Make sure this is an 835 remittance or EOB document.');
+        }
+        remittanceData = ocrData;
 
       } else if (['csv', 'xlsx'].includes(ext || '')) {
         const base64 = await new Promise<string>((resolve, reject) => {
