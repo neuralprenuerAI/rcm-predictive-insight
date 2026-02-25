@@ -313,7 +313,7 @@ export default function DenialManagement() {
           reader.onerror = reject;
           reader.readAsDataURL(importFile);
         });
-        const ocrRes = await awsApi.invoke('rcm-process-document', {
+        const ocrRes = await awsApi.invoke('process-document', {
           body: {
             content: base64,
             filename: importFile.name,
