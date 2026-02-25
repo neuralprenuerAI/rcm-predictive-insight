@@ -307,26 +307,7 @@ export default function DenialManagement() {
         remittanceData = parseRes.data;
 
       } else if (ext === 'pdf') {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(importFile);
-        });
-        const ocrRes = await awsApi.invoke('process-document', {
-          body: {
-            content: base64,
-            filename: importFile.name,
-            mimeType: 'application/pdf',
-            document_type: '835_remittance'
-          }
-        });
-        if (ocrRes.error) throw ocrRes.error;
-        const ocrData = ocrRes.data;
-        if (!ocrData?.claims && !ocrData?.claimPayments && !ocrData?.serviceLines) {
-          throw new Error('PDF processed but no claim data could be extracted. Make sure this is an 835 remittance or EOB document.');
-        }
-        remittanceData = ocrData;
+        throw new Error('PDF import is processing upgrade. Please export as 835 JSON or X12 EDI file from your clearinghouse.');
 
       } else if (['csv', 'xlsx'].includes(ext || '')) {
         const base64 = await new Promise<string>((resolve, reject) => {
