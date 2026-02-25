@@ -15,6 +15,7 @@ import { awsApi } from "@/integrations/aws/awsApi";
 import { awsCrud } from "@/lib/awsCrud";
 import { 
   ArrowLeft,
+  ArrowRight,
   Search,
   Filter,
   RefreshCw,
@@ -29,7 +30,8 @@ import {
   ChevronUp,
   Plus,
   Loader2,
-  Upload
+  Upload,
+  Sparkles
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -129,6 +131,10 @@ export default function DenialManagement() {
 
   // Appeal generation
   const [generatingAppeal, setGeneratingAppeal] = useState<string | null>(null);
+
+  // Fix instructions
+  const [fixInstructions, setFixInstructions] = useState<Record<string, any>>({});
+  const [loadingFix, setLoadingFix] = useState<string | null>(null);
 
   // 835 Import
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -342,6 +348,31 @@ export default function DenialManagement() {
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const getFixInstructions = async (denial: DenialRecord) => {
+    setLoadingFix(denial.id);
+    try {
+      const { data, error } = await awsApi.invoke('scrub-claim', {
+        body: {
+          era_denial_codes: [denial.reason_code],
+          save_results: false,
+          claim_data: {
+            procedures: [{ cpt_code: denial.cpt_code || '99214', units: 1, modifiers: [] }],
+            icd_codes: denial.icd_codes || [],
+            payer: denial.payer_name,
+            patient_name: denial.patient ? `${denial.patient.first_name} ${denial.patient.last_name}` : '',
+            billed_amount: denial.billed_amount,
+          }
+        }
+      });
+      if (error) throw error;
+      setFixInstructions(prev => ({ ...prev, [denial.id]: data }));
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to get fix instructions', variant: 'destructive' });
+    } finally {
+      setLoadingFix(null);
     }
   };
 
@@ -759,6 +790,14 @@ export default function DenialManagement() {
                                   </Button>
                                 </>
                               )}
+                              <Button size="sm" variant="outline" onClick={() => getFixInstructions(denial)} disabled={loadingFix === denial.id}>
+                                {loadingFix === denial.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                                Get Fix Instructions
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => navigate('/claim-scrubber')}>
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                Send to Scrubber
+                              </Button>
                               {denial.status === "appealing" && (
                                 <>
                                   <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updateStatus(denial.id, "resolved")}>
@@ -772,6 +811,32 @@ export default function DenialManagement() {
                                 </>
                               )}
                             </div>
+
+                            {fixInstructions[denial.id] && (
+                              <div className="mt-4 space-y-3">
+                                {fixInstructions[denial.id].era_denial_analysis?.map((era: any, i: number) => (
+                                  <div key={i} className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge className="bg-amber-600 text-white text-xs">{era.denial_code}</Badge>
+                                      <span className="font-medium">{era.description}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mb-1"><span className="font-medium">Root cause:</span> {era.root_cause}</p>
+                                    <p className="text-xs text-amber-800"><span className="font-medium">Fix:</span> {era.fix}</p>
+                                  </div>
+                                ))}
+                                {fixInstructions[denial.id].ai_corrections?.map((fix: any, i: number) => (
+                                  <div key={i} className="border border-green-200 bg-green-50 rounded-lg p-3 text-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge className="bg-green-600 text-white text-xs">Step {i + 1}</Badge>
+                                      <span className="font-medium">{fix.target_code} — {fix.action}</span>
+                                    </div>
+                                    {fix.step_by_step && <p className="text-xs text-muted-foreground mb-1">{fix.step_by_step}</p>}
+                                    {fix.expected_outcome && <p className="text-xs text-green-700">✓ {fix.expected_outcome}</p>}
+                                    {fix.revenue_impact && <p className="text-xs font-medium text-green-800">💰 {fix.revenue_impact}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )}
