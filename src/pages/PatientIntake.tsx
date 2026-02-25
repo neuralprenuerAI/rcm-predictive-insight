@@ -623,7 +623,7 @@ export default function PatientIntake() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar activeView="patient-intake" onViewChange={() => {}} />
+      <Sidebar activeView="patient-intake" onViewChange={(view) => navigate(`/?view=${view}`)} />
       
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto space-y-6">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import DashboardMetrics from "@/components/DashboardMetrics";
 import ClaimUploadReview from "@/components/ClaimUploadReview";
@@ -19,8 +19,9 @@ import { LogOut, Loader2 } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState(() => searchParams.get("view") || "dashboard");
   const [user, setUser] = useState<any>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
