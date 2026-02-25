@@ -262,19 +262,24 @@ export default function DenialManagement() {
   const generateAppeal = async (denial: DenialRecord) => {
     setGeneratingAppeal(denial.id);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const response = await awsApi.invoke("generate-appeal", {
         body: {
+          user_id: user.id,
           denialQueueId: denial.id,
         },
       });
 
       if (response.error) throw response.error;
+      if (!response.data?.success) throw new Error(response.data?.error || "Failed");
 
-      toast({ 
-        title: "Appeal Generated", 
-        description: `Appeal ${response.data.appealNumber} created successfully` 
+      toast({
+        title: "Appeal Generated",
+        description: `Appeal ${response.data.appealNumber} created successfully`
       });
-      
+
       fetchDenials();
     } catch (error) {
       console.error("Error generating appeal:", error);
