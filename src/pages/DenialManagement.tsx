@@ -314,7 +314,12 @@ export default function DenialManagement() {
           reader.readAsDataURL(importFile);
         });
         const ocrRes = await awsApi.invoke('rcm-process-document', {
-          body: { pdf_content: base64, document_type: '835_remittance' }
+          body: {
+            content: base64,
+            filename: importFile.name,
+            mimeType: 'application/pdf',
+            document_type: '835_remittance'
+          }
         });
         if (ocrRes.error) throw ocrRes.error;
         const ocrData = ocrRes.data;
