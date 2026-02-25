@@ -10,22 +10,21 @@ interface CrudResponse<T = any> {
 
 export const awsCrud = {
   select: async <T = any>(table: string, filterOrUserId?: Record<string, any> | string, userId?: string): Promise<T[]> => {
-    let resolvedFilter: Record<string, any> | undefined;
-    let resolvedUserId: string | undefined;
+    let filters: Record<string, any> = {};
+    let uid = userId;
 
     if (typeof filterOrUserId === 'string') {
-      resolvedUserId = filterOrUserId;
-    } else {
-      resolvedFilter = filterOrUserId;
-      resolvedUserId = userId;
+      uid = filterOrUserId;
+    } else if (filterOrUserId && typeof filterOrUserId === 'object') {
+      filters = filterOrUserId;
     }
 
     const result = await awsApi.invoke('crud', {
       body: {
         action: 'select',
         table,
-        filter: resolvedFilter,
-        user_id: resolvedUserId
+        user_id: uid,
+        where: uid ? { user_id: uid, ...filters } : filters
       }
     });
     if (result.error) throw result.error;
