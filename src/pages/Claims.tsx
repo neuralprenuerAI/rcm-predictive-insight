@@ -136,7 +136,7 @@ export default function Claims() {
     setIsGeneratingLetter(claim.id);
     
     try {
-      const { data, error } = await awsApi.invoke('generate-appeal-letter', {
+      const { data, error } = await awsApi.invoke('generate-appeal', {
         body: {
           claimId: claim.id,
           patientName: claim.patient_name,

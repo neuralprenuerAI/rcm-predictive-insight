@@ -104,7 +104,7 @@ export default function DenialsAppeals() {
 
   const generateAppealLetter = useMutation({
     mutationFn: async (denialId: string) => {
-      const { data, error } = await awsApi.invoke('generate-appeal-letter', {
+      const { data, error } = await awsApi.invoke('generate-appeal', {
         body: { denialId }
       });
       if (error) throw error;
