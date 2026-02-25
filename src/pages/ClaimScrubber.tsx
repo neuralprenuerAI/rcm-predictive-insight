@@ -84,6 +84,18 @@ interface ScrubResult {
   total_issues: number;
   claim_info?: any;
   message?: string;
+  ai_corrections?: any[];
+  era_denial_analysis?: any[];
+  mutex_issues?: any[];
+  companion_modifier_issues?: any[];
+  scrub_layers?: {
+    rules_engine_issues: number;
+    mutually_exclusive_issues: number;
+    companion_modifier_issues: number;
+    component_code_issues: number;
+    payer_specific_issues: number;
+    ai_corrections_generated: number;
+  };
 }
 
 interface Procedure {
@@ -96,9 +108,11 @@ const COMMON_PAYERS = [
   "Medicare",
   "Medicaid", 
   "BCBS",
+  "BCBS OF TEXAS PPO",
   "UnitedHealthcare",
   "Aetna",
   "Cigna",
+  "CIGNA",
   "Humana",
   "Other"
 ];
@@ -121,6 +135,7 @@ export default function ClaimScrubber() {
   const [icdCodes, setIcdCodes] = useState('');
   const [payer, setPayer] = useState('');
   const [patientName, setPatientName] = useState('');
+  const [eraInput, setEraInput] = useState('');
 
   // Batch scrub state
   const [selectedClaims, setSelectedClaims] = useState<string[]>([]);
@@ -200,6 +215,8 @@ export default function ClaimScrubber() {
       } else {
         throw new Error("Please upload a file or enter claim data");
       }
+
+      body.era_denial_codes = eraInput.split(',').map(s => s.trim()).filter(Boolean);
 
       const { data, error } = await awsApi.invoke('scrub-claim', { body });
 
@@ -331,6 +348,8 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
    Value: ${c.new_value || c.value || 'N/A'}
    ${c.compliance_note ? `Note: ${c.compliance_note}` : ''}
 `).join('\n')}
+${result.era_denial_analysis?.length ? `\nERA DENIAL ANALYSIS\n-------------------\n${result.era_denial_analysis.map((e: any) => `${e.denial_code}: ${e.fix}`).join('\n')}` : ''}
+${result.ai_corrections?.length ? `\nAI CORRECTIONS\n--------------\n${result.ai_corrections.map((c: any, i: number) => `${i+1}. ${c.target_code}: ${c.step_by_step}`).join('\n')}` : ''}
     `.trim();
 
     const blob = new Blob([report], { type: 'text/plain' });
@@ -531,6 +550,16 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
                     </div>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label>ERA/EOB Denial Codes (optional)</Label>
+                  <Input
+                    placeholder="CO-236, N519, CO-45"
+                    value={eraInput}
+                    onChange={(e) => setEraInput(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Paste denial codes from your EOB to get specific fix instructions</p>
+                </div>
               </TabsContent>
 
               {/* Manual Entry Tab */}
@@ -619,6 +648,16 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>ERA/EOB Denial Codes (optional)</Label>
+                  <Input
+                    placeholder="CO-236, N519, CO-45"
+                    value={eraInput}
+                    onChange={(e) => setEraInput(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Paste denial codes from your EOB to get specific fix instructions</p>
                 </div>
               </TabsContent>
 
@@ -937,6 +976,66 @@ ${i + 1}. ${c.explanation || c.reason || c.type}
                     <p className="text-sm text-green-600">Claim is ready to submit</p>
                   </div>
 
+                )}
+
+                {/* Scrub Layers */}
+                {result.scrub_layers && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">SCRUB LAYERS</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'Rules', count: result.scrub_layers.rules_engine_issues },
+                        { label: 'Mutex', count: result.scrub_layers.mutually_exclusive_issues },
+                        { label: 'Modifiers', count: result.scrub_layers.companion_modifier_issues },
+                        { label: 'Component', count: result.scrub_layers.component_code_issues },
+                        { label: 'Payer', count: result.scrub_layers.payer_specific_issues },
+                        { label: 'AI Fixes', count: result.scrub_layers.ai_corrections_generated },
+                      ].map(layer => (
+                        <Badge key={layer.label} variant={layer.count > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                          {layer.label}: {layer.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Step-by-Step Corrections */}
+                {result.ai_corrections && result.ai_corrections.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">AI STEP-BY-STEP CORRECTIONS</p>
+                    <div className="space-y-2">
+                      {result.ai_corrections.map((fix: any, i: number) => (
+                        <div key={i} className="border border-green-200 bg-green-50 rounded-lg p-3 text-sm">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge className="bg-green-600 text-white text-xs">#{fix.priority || i + 1}</Badge>
+                            <span className="font-medium">{fix.target_code} — {fix.action}</span>
+                          </div>
+                          {fix.step_by_step && <p className="text-xs text-muted-foreground mb-1">{fix.step_by_step}</p>}
+                          {fix.expected_outcome && <p className="text-xs text-green-700">✓ {fix.expected_outcome}</p>}
+                          {fix.revenue_impact && <p className="text-xs font-medium text-green-800">💰 {fix.revenue_impact}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ERA Denial Analysis */}
+                {result.era_denial_analysis && result.era_denial_analysis.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">ERA DENIAL CODE ANALYSIS</p>
+                    <div className="space-y-2">
+                      {result.era_denial_analysis.map((era: any, i: number) => (
+                        <div key={i} className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge className="bg-amber-600 text-white text-xs">{era.denial_code}</Badge>
+                            <span className="font-medium">{era.description}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-1"><span className="font-medium">Root cause:</span> {era.root_cause}</p>
+                          <p className="text-xs text-amber-800"><span className="font-medium">Fix:</span> {era.fix}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* Action Buttons */}
