@@ -145,6 +145,7 @@ export default function DenialManagement() {
     skipped: number;
     errors: string[];
   } | null>(null);
+  const [detectedType, setDetectedType] = useState<string>('');
 
   useEffect(() => {
     fetchDenials();
@@ -285,40 +286,64 @@ export default function DenialManagement() {
 
   const handleImport835 = async () => {
     if (!importFile) {
-      toast({ title: "Error", description: "Please select a file", variant: "destructive" });
+      toast({ title: 'Error', description: 'Please select a file', variant: 'destructive' });
       return;
     }
-
     setImporting(true);
     setImportResult(null);
-
     try {
-      // Read file content
-      const fileContent = await importFile.text();
-      
-      // Try to parse as JSON (if it's already parsed 835 data)
-      let remittanceData;
-      
-      try {
-        remittanceData = JSON.parse(fileContent);
-      } catch {
-        // If not JSON, it might be raw X12 835
-        toast({ 
-          title: "Format Note", 
-          description: "Please upload parsed 835 JSON data. Raw X12 support coming soon.",
-          variant: "destructive"
+      const ext = importFile.name.split('.').pop()?.toLowerCase();
+      let remittanceData: any = null;
+
+      if (['json', 'txt'].includes(ext || '')) {
+        const text = await importFile.text();
+        try { remittanceData = JSON.parse(text); }
+        catch { throw new Error('Invalid JSON format. Please upload a valid 835 JSON file.'); }
+
+      } else if (['835', 'x12', 'edi'].includes(ext || '')) {
+        const text = await importFile.text();
+        const parseRes = await awsApi.invoke('parse-835', { body: { raw_content: text } });
+        if (parseRes.error) throw parseRes.error;
+        remittanceData = parseRes.data;
+
+      } else if (ext === 'pdf') {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(importFile);
         });
-        setImporting(false);
-        return;
+        const ocrRes = await awsApi.invoke('rcm-process-document', {
+          body: { pdf_content: base64, document_type: '835_remittance' }
+        });
+        if (ocrRes.error) throw ocrRes.error;
+        remittanceData = ocrRes.data;
+
+      } else if (['csv', 'xlsx'].includes(ext || '')) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(importFile);
+        });
+        const parseRes = await awsApi.invoke('rcm-parse-spreadsheet', {
+          body: { file_content: base64, file_name: importFile.name }
+        });
+        if (parseRes.error) throw parseRes.error;
+        remittanceData = parseRes.data;
+
+      } else {
+        throw new Error('Unsupported file type. Please upload a JSON, X12 835, PDF, CSV, or XLSX file.');
       }
 
-      const response = await awsApi.invoke("import-denials-from-835", {
-        body: {
-          remittanceData,
-          autoClassify: true,
-        },
-      });
+      // Guard against empty parsed data
+      if (!remittanceData || (typeof remittanceData === 'object' && Object.keys(remittanceData).length === 0)) {
+        throw new Error('Could not extract remittance data from file');
+      }
 
+      const response = await awsApi.invoke('import-denials-from-835', {
+        body: { remittanceData, autoClassify: true },
+      });
       if (response.error) throw response.error;
 
       setImportResult({
@@ -326,26 +351,15 @@ export default function DenialManagement() {
         skipped: response.data.skipped || 0,
         errors: response.data.errors || [],
       });
-
       if (response.data.imported > 0) {
-        toast({
-          title: "Import Successful",
-          description: `Imported ${response.data.imported} denials`,
-        });
+        toast({ title: 'Import Successful', description: `Imported ${response.data.imported} denials` });
         fetchDenials();
       } else {
-        toast({
-          title: "No Denials Found",
-          description: "No new denials were found in the file",
-        });
+        toast({ title: 'No Denials Found', description: 'No new denials were found in the file' });
       }
     } catch (error) {
-      console.error("Import error:", error);
-      toast({
-        title: "Import Failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
+      console.error('Import error:', error);
+      toast({ title: 'Import Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     } finally {
       setImporting(false);
     }
@@ -849,30 +863,44 @@ export default function DenialManagement() {
         </Card>
       </div>
 
-      {/* Import 835 Dialog */}
+      {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import Denials from 835</DialogTitle>
+            <DialogTitle>Import Denials</DialogTitle>
             <DialogDescription>
-              Upload a parsed 835 remittance file to automatically import and classify denials.
+              Upload an 835 remittance, EOB PDF, X12 EDI file, or CSV spreadsheet to automatically import and classify denials.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <Label>835 File (JSON format)</Label>
+              <Label>Remittance / Denial File</Label>
               <Input
                 type="file"
-                accept=".json,.txt"
+                accept=".json,.txt,.835,.x12,.edi,.pdf,.csv,.xlsx"
                 onChange={(e) => {
-                  setImportFile(e.target.files?.[0] || null);
+                  const file = e.target.files?.[0] || null;
+                  setImportFile(file);
                   setImportResult(null);
+                  if (file) {
+                    const ext = file.name.split('.').pop()?.toLowerCase();
+                    if (['json','txt'].includes(ext || '')) setDetectedType('835 JSON Remittance');
+                    else if (['835','x12','edi'].includes(ext || '')) setDetectedType('X12 EDI 835');
+                    else if (ext === 'pdf') setDetectedType('PDF Remittance/EOB');
+                    else if (['csv','xlsx'].includes(ext || '')) setDetectedType('Spreadsheet');
+                    else setDetectedType('Unknown format');
+                  } else {
+                    setDetectedType('');
+                  }
                 }}
                 className="mt-2"
               />
+              {detectedType && (
+                <p className="text-xs text-primary font-medium mt-1">Detected: {detectedType}</p>
+              )}
               <p className="text-xs text-muted-foreground mt-1">
-                Upload the JSON output from parse-835 or a compatible remittance file.
+                Supports JSON, X12 835, PDF EOB, CSV, and XLSX files.
               </p>
             </div>
 
@@ -905,6 +933,7 @@ export default function DenialManagement() {
               setShowImportDialog(false);
               setImportFile(null);
               setImportResult(null);
+              setDetectedType('');
             }}>
               Close
             </Button>
@@ -917,7 +946,7 @@ export default function DenialManagement() {
               ) : (
                 <>
                   <Upload className="h-4 w-4 mr-2" />
-                  Import Denials
+                  Import {detectedType || 'File'}
                 </>
               )}
             </Button>
