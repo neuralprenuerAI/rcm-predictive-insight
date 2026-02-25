@@ -97,11 +97,11 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
         )}
       </nav>
 
-      <div className="absolute bottom-0 w-64 p-4 border-t border-sidebar-border bg-sidebar-accent/50">
-        <p className="text-xs text-sidebar-foreground/60">
+      <div className="absolute bottom-0 w-64 p-4 border-t border-sidebar-border bg-sidebar">
+        <p className="text-xs text-muted-foreground">
           © 2025 AI RCM Platform
         </p>
-        <p className="text-xs text-sidebar-foreground/40 mt-1">
+        <p className="text-xs text-muted-foreground/70 mt-1">
           HIPAA Compliant | v2.1.3
         </p>
       </div>
