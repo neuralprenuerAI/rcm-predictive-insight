@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 
 /**
  * Finds the ECW connection that has the required scope for a given action.
@@ -34,14 +35,12 @@ export async function findEcwConnectionByScope(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: connections } = await supabase
-    .from("api_connections")
-    .select("id, name, connection_name, credentials")
-    .eq("connection_type", "ecw")
-    .eq("user_id", user.id)
-    .eq("is_active", true);
+  const allConnections = await awsCrud.select('api_connections', user.id);
+  const connections = (allConnections || []).filter((c: any) =>
+    c.connection_type === 'ecw' && c.is_active === true
+  );
 
-  if (!connections || connections.length === 0) return null;
+  if (connections.length === 0) return null;
 
   const fullScope = `system/${requiredScope}`;
 
@@ -63,12 +62,8 @@ export async function getAllEcwConnections(): Promise<EcwConnection[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data } = await supabase
-    .from("api_connections")
-    .select("id, name, connection_name, credentials")
-    .eq("connection_type", "ecw")
-    .eq("user_id", user.id)
-    .eq("is_active", true);
-
-  return (data || []) as EcwConnection[];
+  const allConnections = await awsCrud.select('api_connections', user.id);
+  return (allConnections || []).filter((c: any) =>
+    c.connection_type === 'ecw' && c.is_active === true
+  ) as EcwConnection[];
 }
