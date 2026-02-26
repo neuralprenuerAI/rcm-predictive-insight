@@ -701,9 +701,6 @@ export default function ConnectionsManager() {
       
       await awsCrud.bulkUpsert('service_requests', serviceRequestsToUpsert, user.id, 'external_id,source');
       
-      // Link to patients
-      await supabase.rpc('link_service_requests_to_patients');
-      
       return serviceRequestsToUpsert.length;
     },
     onSuccess: (count) => {
@@ -757,9 +754,6 @@ export default function ConnectionsManager() {
       });
       
       await awsCrud.bulkUpsert('procedures', proceduresToUpsert, user.id, 'external_id,source');
-      
-      // Link to patients
-      await supabase.rpc('link_procedures_to_patients');
       
       return proceduresToUpsert.length;
     },
