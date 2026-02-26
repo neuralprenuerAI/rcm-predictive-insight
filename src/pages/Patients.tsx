@@ -128,13 +128,11 @@ export default function Patients() {
   const { data: ecwConnections } = useQuery({
     queryKey: ['ecw-connections'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('api_connections')
-        .select('id, connection_name, name, is_active')
-        .eq('connection_type', 'ecw')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data || [];
+      const user = (await supabase.auth.getUser()).data.user;
+      const allConnections = await awsCrud.select('api_connections', user?.id);
+      return (allConnections || []).filter((c: any) =>
+        c.connection_type === 'ecw' && c.is_active === true
+      );
     }
   });
 

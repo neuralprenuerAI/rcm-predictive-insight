@@ -118,14 +118,12 @@ export default function PatientIntake() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    const { data } = await supabase
-      .from("api_connections")
-      .select("id, name, connection_name")
-      .eq("connection_type", "ecw")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
+    const allConnections = await awsCrud.select('api_connections', user.id);
+    const data = (allConnections || []).filter((c: any) =>
+      c.connection_type === 'ecw' && c.is_active === true
+    );
     
-    if (data && data.length > 0) {
+    if (data.length > 0) {
       setEcwConnections(data);
       setEcwConnectionId(data[0].id);
     }

@@ -178,24 +178,24 @@ export default function ConnectionsManager() {
   const { data: apiConnections = [] } = useQuery({
     queryKey: ['api-connections'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('api_connections')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return [];
+      const data = await awsCrud.select('api_connections', user.id);
+      return (data || []).sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
   });
 
   const { data: payerConnections = [] } = useQuery({
     queryKey: ['payer-connections'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payer_connections')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return [];
+      const data = await awsCrud.select('payer_connections', user.id);
+      return (data || []).sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
   });
 
