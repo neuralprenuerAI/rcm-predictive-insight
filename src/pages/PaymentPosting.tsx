@@ -37,24 +37,19 @@ export default function PaymentPosting() {
   const { data: payments = [] } = useQuery({
     queryKey: ['payments'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .order('payment_date', { ascending: false });
-      if (error) throw error;
-      return data as Payment[];
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error("Not authenticated");
+      const data = await awsCrud.select('payments', user.id);
+      return (data || []) as Payment[];
     }
   });
 
   const { data: claims = [] } = useQuery({
     queryKey: ['claims-for-payment'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('claims')
-        .select('id, claim_id, patient_name')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      const user = (await supabase.auth.getUser()).data.user;
+      const data = await awsCrud.select('claims', user?.id);
+      return (data || []);
     }
   });
 
