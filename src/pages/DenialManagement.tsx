@@ -284,7 +284,7 @@ export default function DenialManagement() {
           reader.onerror = reject;
           reader.readAsDataURL(importFile);
         });
-        const parseRes = await awsApi.invoke('rcm-parse-spreadsheet', {
+        const parseRes = await awsApi.invoke('parse-spreadsheet', {
           body: { file_content: base64, file_name: importFile.name }
         });
         if (parseRes.error) throw parseRes.error;
