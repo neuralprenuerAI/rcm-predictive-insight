@@ -89,14 +89,8 @@ export default function Claims() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase
-        .from('claims')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('ai_reviewed_at', { ascending: false, nullsFirst: false });
-      
-      if (error) throw error;
-      return data as Claim[];
+      const data = await awsCrud.select('claims', user.id);
+      return (data || []) as Claim[];
     },
   });
 
