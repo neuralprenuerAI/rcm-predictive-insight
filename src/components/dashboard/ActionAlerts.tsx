@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { awsCrud } from '@/lib/awsCrud';
 import { 
   AlertTriangle, 
   Clock, 
@@ -59,17 +60,25 @@ export function ActionAlerts() {
     try {
       const alertsList: ActionAlert[] = [];
 
-      // 1. Fetch critical risk scrubs (last 7 days)
-      const { data: criticalScrubs } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('denial_risk_score', 70)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        .order('denial_risk_score', { ascending: false })
-        .limit(5);
+      const [allScrubs, allOutcomes] = await Promise.all([
+        awsCrud.select('claim_scrub_results', userId),
+        awsCrud.select('denial_outcomes', userId),
+      ]);
 
-      criticalScrubs?.forEach(scrub => {
+      const now = Date.now();
+      const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const recentScrubs = (allScrubs || []).filter(s => s.created_at >= sevenDaysAgo);
+
+      // 1. Critical risk scrubs (score >= 70, last 7 days)
+      const criticalScrubs = recentScrubs
+        .filter(s => (s.denial_risk_score || 0) >= 70)
+        .sort((a, b) => (b.denial_risk_score || 0) - (a.denial_risk_score || 0))
+        .slice(0, 5);
+
+      criticalScrubs.forEach(scrub => {
         const claimInfo = scrub.claim_info as any;
         alertsList.push({
           id: `critical-${scrub.id}`,
@@ -85,19 +94,14 @@ export function ActionAlerts() {
         });
       });
 
-      // 2. Fetch high risk scrubs needing correction
-      const { data: highRiskScrubs } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('denial_risk_score', 50)
-        .lt('denial_risk_score', 70)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // 2. High risk scrubs needing correction (score 50-70, last 7 days)
+      const highRiskScrubs = recentScrubs
+        .filter(s => (s.denial_risk_score || 0) >= 50 && (s.denial_risk_score || 0) < 70)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5);
 
-      highRiskScrubs?.forEach(scrub => {
-        const issueCount = (scrub.critical_count || 0) + (scrub.high_count || 0) + 
+      highRiskScrubs.forEach(scrub => {
+        const issueCount = (scrub.critical_count || 0) + (scrub.high_count || 0) +
                           (scrub.medium_count || 0) + (scrub.low_count || 0);
         if (issueCount > 0) {
           const claimInfo = scrub.claim_info as any;
@@ -116,26 +120,14 @@ export function ActionAlerts() {
         }
       });
 
-      // 3. Fetch older scrubs that might need outcome tracking (14-30 days old)
-      const { data: olderScrubs } = await supabase
-        .from('claim_scrub_results')
-        .select('id, claim_info, created_at, denial_risk_score')
-        .eq('user_id', userId)
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .lte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // 3. Older scrubs needing outcome tracking (14-30 days old)
+      const olderScrubs = (allScrubs || [])
+        .filter(s => s.created_at >= thirtyDaysAgo && s.created_at <= fourteenDaysAgo)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 10);
 
-      if (olderScrubs && olderScrubs.length > 0) {
-        // Check which ones have outcomes recorded
-        const scrubIds = olderScrubs.map(s => s.id);
-        const { data: existingOutcomes } = await supabase
-          .from('denial_outcomes')
-          .select('scrub_result_id')
-          .in('scrub_result_id', scrubIds);
-
-        const outcomeIds = new Set(existingOutcomes?.map(o => o.scrub_result_id) || []);
-        
+      if (olderScrubs.length > 0) {
+        const outcomeIds = new Set((allOutcomes || []).map((o: any) => o.scrub_result_id));
         olderScrubs.filter(s => !outcomeIds.has(s.id)).slice(0, 3).forEach(scrub => {
           const claimInfo = scrub.claim_info as any;
           alertsList.push({
@@ -143,21 +135,20 @@ export function ActionAlerts() {
             type: 'pending_outcome',
             priority: 'medium',
             title: 'Record Outcome',
-            description: `Claim from ${formatDistanceToNow(new Date(scrub.created_at || ''))} ago - what happened?`,
+            description: 'Claim submitted 14-30 days ago - record the payer outcome',
             patient_name: claimInfo?.patient_name,
             payer: claimInfo?.payer,
+            risk_score: scrub.denial_risk_score || 0,
             created_at: scrub.created_at || '',
             scrub_id: scrub.id
           });
         });
       }
 
-      // Sort by priority
-      const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2 };
-      alertsList.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-
-      setAlerts(alertsList);
-
+      setAlerts(alertsList.sort((a, b) => {
+        const priority = { urgent: 0, high: 1, medium: 2, low: 3 };
+        return (priority[a.priority] || 3) - (priority[b.priority] || 3);
+      }));
     } catch (error) {
       console.error('Error fetching alerts:', error);
     } finally {
