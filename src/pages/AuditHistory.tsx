@@ -46,7 +46,7 @@ interface AuditRecord {
   confirmed_revenue: number;
   overall_confidence: number;
   reviewer_notes: string | null;
-  clinical_note: ClinicalNote | null;
+  clinical_note?: any;
 }
 
 interface Discrepancy {
@@ -87,41 +87,18 @@ export default function AuditHistory() {
   const fetchAudits = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("charge_audits")
-        .select(`
-          *,
-          clinical_note:clinical_notes(
-            patient_name,
-            encounter_date,
-            provider_name,
-            note_type
-          )
-        `)
-        .order("audit_date", { ascending: false });
-
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+      let data = await awsCrud.select('charge_audits', user.id);
       if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+        data = (data || []).filter((a: any) => a.status === statusFilter);
       }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Handle the clinical_note array from Supabase join
-      const formattedData: AuditRecord[] = (data || []).map((item: any) => ({
-        ...item,
-        clinical_note: Array.isArray(item.clinical_note) ? item.clinical_note[0] || null : item.clinical_note
-      }));
-
+      const formattedData = (data || []) as AuditRecord[];
       setAudits(formattedData);
-
-      // Calculate stats
-      if (formattedData && formattedData.length > 0) {
+      if (formattedData.length > 0) {
         const totalRevenue = formattedData.reduce((sum, a) => sum + (a.potential_revenue || 0), 0);
         const totalMissing = formattedData.reduce((sum, a) => sum + (a.missing_count || 0), 0);
         const avgConf = formattedData.reduce((sum, a) => sum + (a.overall_confidence || 0), 0) / formattedData.length;
-        
         setStats({
           totalAudits: formattedData.length,
           totalPotentialRevenue: totalRevenue,
@@ -131,11 +108,7 @@ export default function AuditHistory() {
       }
     } catch (error) {
       console.error("Error fetching audits:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load audit history",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to load audit history", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -143,20 +116,11 @@ export default function AuditHistory() {
 
   const fetchDiscrepancies = async (auditId: string) => {
     if (discrepancies[auditId]) return;
-
     try {
-      const { data, error } = await supabase
-        .from("audit_discrepancies")
-        .select("*")
-        .eq("audit_id", auditId)
-        .order("severity", { ascending: true });
-
-      if (error) throw error;
-
-      setDiscrepancies(prev => ({
-        ...prev,
-        [auditId]: data || []
-      }));
+      const user = (await supabase.auth.getUser()).data.user;
+      const data = await awsCrud.select('audit_discrepancies', user?.id);
+      const filtered = (data || []).filter((d: any) => d.audit_id === auditId);
+      setDiscrepancies(prev => ({ ...prev, [auditId]: filtered }));
     } catch (error) {
       console.error("Error fetching discrepancies:", error);
     }
