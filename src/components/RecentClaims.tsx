@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -57,16 +58,8 @@ export default function RecentClaims() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-
-      const { data, error } = await supabase
-        .from('claims')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('ai_reviewed_at', { ascending: false, nullsFirst: false })
-        .limit(5);
-      
-      if (error) throw error;
-      return (data || []) as Claim[];
+      const data = await awsCrud.select('claims', user.id);
+      return ((data || []) as Claim[]).slice(0, 5);
     }
   });
 
