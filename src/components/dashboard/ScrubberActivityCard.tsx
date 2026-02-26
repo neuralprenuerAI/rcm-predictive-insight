@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
+import { awsCrud } from '@/lib/awsCrud';
 import { 
   Shield, 
   AlertTriangle, 
@@ -59,15 +60,11 @@ export function ScrubberActivityCard() {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const { data: scrubs, error } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', user?.id)
-        .gte('created_at', thirtyDaysAgo.toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
+      const allData = await awsCrud.select('claim_scrub_results', user?.id);
+      const scrubs = (allData || [])
+        .filter((s: any) => new Date(s.created_at) >= thirtyDaysAgo)
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 10);
 
       const totalScrubbed = scrubs?.length || 0;
       let issuesFound = 0;

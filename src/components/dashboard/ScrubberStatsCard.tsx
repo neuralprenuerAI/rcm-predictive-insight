@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -23,19 +24,12 @@ export function ScrubberStatsCard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const { data, error } = await supabase
-        .from('claim_scrub_results')
-        .select('denial_risk_score, risk_level, critical_count, high_count, total_issues, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      
-      if (error) {
-        console.error('Stats fetch error:', error);
-        return null;
-      }
+      const rawData = await awsCrud.select('claim_scrub_results', user.id);
+      const data = (rawData || [])
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 50);
 
-      if (!data || data.length === 0) {
+      if (data.length === 0) {
         return {
           total: 0,
           highRisk: 0,

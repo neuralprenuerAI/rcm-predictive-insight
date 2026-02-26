@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,18 +64,10 @@ export function RecentScrubsCard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      if (error) {
-        console.error('Scrubs fetch error:', error);
-        return [];
-      }
-      return (data || []) as ScrubResult[];
+      const data = await awsCrud.select('claim_scrub_results', user.id);
+      return ((data || []).sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ).slice(0, 10)) as ScrubResult[];
     },
   });
 
