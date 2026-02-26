@@ -766,7 +766,7 @@ export default function DenialManagement() {
                                 {loadingFix === denial.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
                                 Get Fix Instructions
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => navigate('/claim-scrubber')}>
+                              <Button size="sm" variant="outline" onClick={() => navigate('/scrubber')}>
                                 <ArrowRight className="h-4 w-4 mr-2" />
                                 Send to Scrubber
                               </Button>
