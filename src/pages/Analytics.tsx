@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -82,28 +83,19 @@ export default function Analytics() {
       if (!user) return [];
 
       const daysAgo = parseInt(timeRange);
-      const startDate = subDays(new Date(), daysAgo).toISOString();
-
-      const { data, error } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', startDate)
-        .order('created_at', { ascending: true });
-      
-      if (error) {
-        console.error('Analytics fetch error:', error);
-        return [];
-      }
-      return (data || []).map(item => ({
-        ...item,
-        claim_info: item.claim_info as ClaimInfo | null,
-        mue_issues: (item.mue_issues || []) as any[],
-        ncci_issues: (item.ncci_issues || []) as any[],
-        modifier_issues: (item.modifier_issues || []) as any[],
-        necessity_issues: (item.necessity_issues || []) as any[],
-        payer_issues: (item.payer_issues || []) as any[],
-      })) as ScrubResult[];
+      const data = await awsCrud.select('claim_scrub_results', user.id);
+      const startDate = subDays(new Date(), daysAgo);
+      return (data || [])
+        .filter(item => new Date(item.created_at) >= startDate)
+        .map(item => ({
+          ...item,
+          claim_info: item.claim_info as ClaimInfo | null,
+          mue_issues: (item.mue_issues || []) as any[],
+          ncci_issues: (item.ncci_issues || []) as any[],
+          modifier_issues: (item.modifier_issues || []) as any[],
+          necessity_issues: (item.necessity_issues || []) as any[],
+          payer_issues: (item.payer_issues || []) as any[],
+        })) as ScrubResult[];
     },
   });
 
