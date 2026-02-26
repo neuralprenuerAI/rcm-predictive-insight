@@ -39,25 +39,19 @@ export default function Authorizations() {
   const { data: authorizations = [] } = useQuery({
     queryKey: ['authorizations'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('authorizations')
-        .select('*')
-        .order('request_date', { ascending: false });
-      if (error) throw error;
-      return data as Authorization[];
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error("Not authenticated");
+      const data = await awsCrud.select('authorizations', user.id);
+      return (data || []) as Authorization[];
     }
   });
 
   const { data: apiConnections = [] } = useQuery({
     queryKey: ['api-connections'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('api_connections')
-        .select('*')
-        .eq('connection_type', 'ehr')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
+      const user = (await supabase.auth.getUser()).data.user;
+      const data = await awsCrud.select('api_connections', user?.id);
+      return (data || []).filter((c: any) => c.connection_type === 'ehr' && c.is_active);
     }
   });
 

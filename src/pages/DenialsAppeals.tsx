@@ -47,24 +47,19 @@ export default function DenialsAppeals() {
   const { data: denials = [] } = useQuery({
     queryKey: ['denials'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('denials')
-        .select('*')
-        .order('denial_date', { ascending: false });
-      if (error) throw error;
-      return data as Denial[];
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error("Not authenticated");
+      const data = await awsCrud.select('denial_queue', user.id);
+      return (data || []) as Denial[];
     }
   });
 
   const { data: appeals = [] } = useQuery({
     queryKey: ['appeals'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('appeals')
-        .select('id, denial_queue_id, claim_id, status, submitted_at, appeal_date, outcome_amount')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Appeal[];
+      const user = (await supabase.auth.getUser()).data.user;
+      const data = await awsCrud.select('appeals', user?.id);
+      return (data || []) as Appeal[];
     }
   });
 
