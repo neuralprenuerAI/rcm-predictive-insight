@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { awsCrud } from '@/lib/awsCrud';
 import { 
   Calendar, 
   AlertTriangle, 
@@ -78,24 +79,14 @@ export function DailyDigest() {
         previousEndDate = endOfDay(subDays(now, 7));
       }
 
-      // Fetch current period scrubs
-      const { data: scrubs, error } = await supabase
-        .from('claim_scrub_results')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString())
-        .order('denial_risk_score', { ascending: false });
-
-      if (error) throw error;
-
-      // Fetch previous period for comparison
-      const { data: previousScrubs } = await supabase
-        .from('claim_scrub_results')
-        .select('id, denial_risk_score')
-        .eq('user_id', userId)
-        .gte('created_at', previousStartDate.toISOString())
-        .lte('created_at', previousEndDate.toISOString());
+      // Fetch all scrubs once and filter in JS
+      const allScrubs = await awsCrud.select('claim_scrub_results', userId);
+      const scrubs = (allScrubs || []).filter((s: any) =>
+        new Date(s.created_at) >= startDate && new Date(s.created_at) <= endDate
+      );
+      const previousScrubs = (allScrubs || []).filter((s: any) =>
+        new Date(s.created_at) >= previousStartDate && new Date(s.created_at) <= previousEndDate
+      );
 
       // Calculate stats
       const totalScrubbed = scrubs?.length || 0;

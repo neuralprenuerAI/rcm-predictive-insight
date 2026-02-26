@@ -6,24 +6,20 @@ import { FileText, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DenialsList() {
   const { data: denials = [], isLoading } = useQuery({
     queryKey: ['recent-denials'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase
-        .from('denials')
-        .select('id, claim_id, denied_amount, denial_date, denial_code, denial_reason, appeal_status, payer')
-        .eq('user_id', user.id)
-        .order('denial_date', { ascending: false })
-        .limit(5);
-      
-      if (error) throw error;
-      return data || [];
+      const data = await awsCrud.select('denial_queue', user.id);
+      return ((data || []).sort((a: any, b: any) =>
+        new Date(b.denial_date).getTime() - new Date(a.denial_date).getTime()
+      ).slice(0, 5));
     }
   });
 

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { FileSearch, DollarSign, AlertTriangle, ArrowRight } from "lucide-react";
 
 interface AuditStats {
@@ -28,11 +29,8 @@ export function ChargeAuditorCard() {
 
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabase
-        .from("charge_audits")
-        .select("potential_revenue, missing_count, status");
-
-      if (error) throw error;
+      const user = (await supabase.auth.getUser()).data.user;
+      const data = await awsCrud.select('charge_audits', user?.id);
 
       if (data) {
         const totalRevenue = data.reduce((sum, a) => sum + (a.potential_revenue || 0), 0);
