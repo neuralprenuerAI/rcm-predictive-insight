@@ -28,19 +28,8 @@ export function NotificationFeed() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_dismissed', false)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      if (error) {
-        console.error('Notification fetch error:', error);
-        return [];
-      }
-      return data || [];
+      const data = await awsCrud.select('notifications', user.id);
+      return (data || []).filter((n: any) => !n.is_dismissed).slice(0, 10);
     },
     refetchInterval: 30000,
   });

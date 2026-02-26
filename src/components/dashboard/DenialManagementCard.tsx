@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { AlertTriangle, ArrowRight, Clock, DollarSign, Send, CheckCircle } from "lucide-react";
 
 interface DenialStats {
@@ -35,19 +36,13 @@ export function DenialManagementCard() {
 
   const fetchStats = async () => {
     try {
-      // Fetch denial queue stats
-      const { data: denials, error: denialError } = await supabase
-        .from("denial_queue")
-        .select("status, denied_amount, days_until_deadline");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      if (denialError) throw denialError;
-
-      // Fetch appeal stats
-      const { data: appeals, error: appealError } = await supabase
-        .from("appeals")
-        .select("status, outcome_amount");
-
-      if (appealError) throw appealError;
+      const [denials, appeals] = await Promise.all([
+        awsCrud.select('denial_queue', user.id),
+        awsCrud.select('appeals', user.id),
+      ]);
 
       const denialList = denials || [];
       const appealList = appeals || [];

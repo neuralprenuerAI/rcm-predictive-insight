@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { awsCrud } from "@/lib/awsCrud";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -11,30 +12,16 @@ export default function DashboardMetrics() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: claims } = await supabase
-        .from('claims')
-        .select('id, billed_amount, status, date_of_service')
-        .eq('user_id', user.id);
+      const [claims, denials, payments, patients, authorizations] = await Promise.all([
+        awsCrud.select('claims', user.id),
+        awsCrud.select('denial_queue', user.id),
+        awsCrud.select('payments', user.id),
+        awsCrud.select('patients', user.id),
+        awsCrud.select('authorizations', user.id),
+      ]);
 
-      const { data: denials } = await supabase
-        .from('denials')
-        .select('id, denied_amount, appeal_status')
-        .eq('user_id', user.id);
-
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('id, amount')
-        .eq('user_id', user.id);
-
-      const { count: patientCount } = await supabase
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      const { count: authorizationCount } = await supabase
-        .from('authorizations')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      const patientCount = patients?.length || 0;
+      const authorizationCount = authorizations?.length || 0;
 
       const totalClaims = claims?.length || 0;
       const totalBilled = claims?.reduce((sum, c) => sum + (Number(c.billed_amount) || 0), 0) || 0;
