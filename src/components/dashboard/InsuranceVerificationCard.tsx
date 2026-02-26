@@ -181,7 +181,7 @@ export function InsuranceVerificationCard() {
                 ))}
               </div>
               {summary.needsAttention > 5 && (
-                <Button variant="link" className="mt-2 w-full" onClick={() => navigate('/patients?filter=needsVerification')}>
+                <Button variant="link" className="mt-2 w-full" onClick={() => navigate('/?view=patients')}>
                   View all {summary.needsAttention} patients →
                 </Button>
               )}
