@@ -21,7 +21,7 @@ interface EcwConnection {
   id: string;
   name: string | null;
   connection_name: string;
-  credentials: { scope?: string; selected_scopes?: string[] } | null;
+  credentials: { scope?: string; selected_scopes?: string[]; environment?: string } | null;
 }
 
 /**
@@ -35,16 +35,17 @@ export async function findEcwConnectionByScope(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const allConnections = await awsCrud.select('api_connections', user.id);
-  const connections = (allConnections || []).filter((c: any) =>
-    c.connection_type === 'ecw' && c.is_active === true
-  );
+  const connections = await awsCrud.select('api_connections', {
+    connection_type: 'ecw',
+    user_id: user.id,
+    is_active: true,
+  });
 
-  if (connections.length === 0) return null;
+  if (!connections || connections.length === 0) return null;
 
   const fullScope = `system/${requiredScope}`;
 
-  for (const conn of connections) {
+  for (const conn of connections as any[]) {
     const creds = conn.credentials as EcwConnection["credentials"];
     const scopeStr = creds?.scope || "";
     if (scopeStr.includes(fullScope)) {
@@ -62,8 +63,11 @@ export async function getAllEcwConnections(): Promise<EcwConnection[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const allConnections = await awsCrud.select('api_connections', user.id);
-  return (allConnections || []).filter((c: any) =>
-    c.connection_type === 'ecw' && c.is_active === true
-  ) as EcwConnection[];
+  const connections = await awsCrud.select('api_connections', {
+    connection_type: 'ecw',
+    user_id: user.id,
+    is_active: true,
+  });
+
+  return (connections || []) as EcwConnection[];
 }

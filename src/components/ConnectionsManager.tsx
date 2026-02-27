@@ -29,11 +29,18 @@ import {
 import ECWTokenDisplay from "./ECWTokenDisplay";
 import { KeyPairGenerator } from "./KeyPairGenerator";
 
-// ECW Sandbox defaults
-const ECW_SANDBOX_DEFAULTS = {
-  client_id: "2NsNtk5kW9GOcS3XY8dUr_nW6Nm-m2y9Yyha_FllZjs",
-  issuer_url: "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD",
-  kid: "neuralprenuer-key-1",
+// ECW environment defaults
+const ECW_DEFAULTS = {
+  sandbox: {
+    client_id: "2NsNtk5kW9GOcS3XY8dUr_nW6Nm-m2y9Yyha_FllZjs",
+    issuer_url: "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD",
+    kid: "neuralprenuer-key-1",
+  },
+  production: {
+    client_id: "uuhNBScqfAF2FwKt5OOB3q5C91Jin4mLLzk7CSgan6Y",
+    issuer_url: "",
+    kid: "neuralprenuer-key-1",
+  }
 };
 
 // ECW Scope options with icons and descriptions
@@ -163,17 +170,18 @@ export default function ConnectionsManager() {
     );
   };
 
-  // Pre-fill ECW sandbox values when connection type changes to ecw
+  // Pre-fill ECW values when connection type or environment changes
   useEffect(() => {
     if (apiFormData.connection_type === "ecw") {
+      const defaults = ECW_DEFAULTS[environment];
       setApiFormData(prev => ({
         ...prev,
-        client_id: prev.client_id || ECW_SANDBOX_DEFAULTS.client_id,
-        issuer_url: prev.issuer_url || ECW_SANDBOX_DEFAULTS.issuer_url,
-        kid: prev.kid || ECW_SANDBOX_DEFAULTS.kid,
+        client_id: defaults.client_id,
+        issuer_url: prev.issuer_url || defaults.issuer_url,
+        kid: prev.kid || defaults.kid,
       }));
     }
-  }, [apiFormData.connection_type]);
+  }, [apiFormData.connection_type, environment]);
 
   const { data: apiConnections = [] } = useQuery({
     queryKey: ['api-connections'],
@@ -210,9 +218,10 @@ export default function ConnectionsManager() {
             client_id: apiFormData.client_id,
             private_key: apiFormData.private_key,
             issuer_url: apiFormData.issuer_url,
-            kid: apiFormData.kid || ECW_SANDBOX_DEFAULTS.kid,
+            kid: apiFormData.kid || ECW_DEFAULTS[environment].kid,
             scope: getScopeString(),
             selected_scopes: selectedScopes,
+            environment: environment,
           }
         : null;
 
@@ -321,8 +330,9 @@ export default function ConnectionsManager() {
 
   const testECWToken = useMutation({
     mutationFn: async (connectionId: string) => {
+      const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
       const { data, error } = await awsApi.invoke('ecw-get-token', {
-        body: { connectionId, environment }
+        body: { connectionId, environment: connEnvironment }
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -362,8 +372,9 @@ export default function ConnectionsManager() {
       fetchAll?: boolean;
       dateRange?: string | null;
     }) => {
+      const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
       const { data, error } = await awsApi.invoke('ecw-sync-data', {
-        body: { connectionId, resource, category, fetchAll, dateRange }
+        body: { connectionId, resource, category, fetchAll, dateRange, environment: connEnvironment }
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -404,6 +415,7 @@ export default function ConnectionsManager() {
     
     while (hasMore) {
       try {
+        const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
         const { data, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
@@ -411,6 +423,7 @@ export default function ConnectionsManager() {
             fetchAll: true,
             category,
             dateRange,
+            environment: connEnvironment,
             searchParams: { startIndex: startIndex.toString() }
           }
         });
@@ -521,12 +534,14 @@ export default function ConnectionsManager() {
     
     while (hasMore) {
       try {
+        const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
         const { data, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
             resource: 'Procedure', 
             fetchAll: true,
             dateRange,
+            environment: connEnvironment,
             searchParams: { startIndex: startIndex.toString() }
           }
         });
@@ -882,8 +897,13 @@ export default function ConnectionsManager() {
                           <Input
                             value={apiFormData.issuer_url}
                             onChange={(e) => setApiFormData({ ...apiFormData, issuer_url: e.target.value })}
-                            placeholder="https://fhir.eclinicalworks.com/..."
+                            placeholder={environment === 'production' ? "https://fhir.eclinicalworks.com/fhir/r4/XXXXX" : "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD"}
                           />
+                          {environment === 'production' && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter the clinic's unique FHIR URL from eClinicalWorks (e.g. https://fhir.eclinicalworks.com/fhir/r4/XXXXX). Each clinic has a different URL.
+                            </p>
+                          )}
                         </div>
                         <div>
                           <Label>Key ID (kid)</Label>
