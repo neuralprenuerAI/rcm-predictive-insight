@@ -317,6 +317,7 @@ export default function DenialManagement() {
     }
     setImporting(true);
     setImportResult(null);
+    let handedOffToPolling = false;
     try {
       const ext = importFile.name.split('.').pop()?.toLowerCase();
       let remittanceData: any = null;
@@ -346,6 +347,8 @@ export default function DenialManagement() {
         if (parseRes.error) throw parseRes.error;
         if (parseRes.data?.async && parseRes.data?.job_id) {
           setEobJobId(parseRes.data.job_id);
+          // Keep importing=true; pollEobJob/finishEobImport will reset it
+          handedOffToPolling = true;
           pollEobJob(parseRes.data.job_id);
           return;
         }
@@ -407,7 +410,7 @@ export default function DenialManagement() {
       console.error('Import error:', error);
       toast({ title: 'Import Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     } finally {
-      setImporting(false);
+      if (!handedOffToPolling) setImporting(false);
     }
   };
 
