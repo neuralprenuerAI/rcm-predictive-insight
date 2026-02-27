@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ECWTokenDisplay from "./ECWTokenDisplay";
 import { KeyPairGenerator } from "./KeyPairGenerator";
+import { searchPractices, type EcwPractice } from "@/data/ecwPractices";
 
 // ECW environment defaults
 const ECW_DEFAULTS = {
@@ -129,6 +130,10 @@ export default function ConnectionsManager() {
     fetchAll?: boolean;
   } | null>(null);
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['patient']);
+  const [practiceSearch, setPracticeSearch] = useState("");
+  const [practiceResults, setPracticeResults] = useState<EcwPractice[]>([]);
+  const [practiceDropdownOpen, setPracticeDropdownOpen] = useState(false);
+  const [isSearchingPractices, setIsSearchingPractices] = useState(false);
   const [isChunkedSyncing, setIsChunkedSyncing] = useState(false);
   const [chunkProgress, setChunkProgress] = useState<{
     current: number;
@@ -182,6 +187,32 @@ export default function ConnectionsManager() {
       }));
     }
   }, [apiFormData.connection_type, environment]);
+
+  // Debounced practice search
+  useEffect(() => {
+    if (practiceSearch.length < 2) {
+      setPracticeResults([]);
+      return;
+    }
+    setIsSearchingPractices(true);
+    const timer = setTimeout(async () => {
+      const results = await searchPractices(practiceSearch, 20);
+      setPracticeResults(results);
+      setPracticeDropdownOpen(results.length > 0);
+      setIsSearchingPractices(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [practiceSearch]);
+
+  const handleSelectPractice = (practice: EcwPractice) => {
+    setApiFormData(prev => ({
+      ...prev,
+      issuer_url: practice.fhir_url,
+      connection_name: prev.connection_name || practice.name,
+    }));
+    setPracticeSearch(practice.name);
+    setPracticeDropdownOpen(false);
+  };
 
   const { data: apiConnections = [] } = useQuery({
     queryKey: ['api-connections'],
@@ -251,6 +282,9 @@ export default function ConnectionsManager() {
         kid: "",
       });
       setSelectedScopes(['patient']);
+      setPracticeSearch("");
+      setPracticeResults([]);
+      setPracticeDropdownOpen(false);
     },
     onError: (error: any) => toast.error(error?.message || "Failed to create connection")
   });
@@ -892,18 +926,44 @@ export default function ConnectionsManager() {
                             placeholder="Your app's client ID"
                           />
                         </div>
+                        <div className="relative">
+                          <Label>Search Practice</Label>
+                          <Input
+                            value={practiceSearch}
+                            onChange={(e) => {
+                              setPracticeSearch(e.target.value);
+                              if (e.target.value.length < 2) setPracticeDropdownOpen(false);
+                            }}
+                            placeholder="Type practice name or city (min 2 chars)..."
+                          />
+                          {isSearchingPractices && (
+                            <Loader2 className="absolute right-3 top-8 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                          {practiceDropdownOpen && practiceResults.length > 0 && (
+                            <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                              {practiceResults.map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
+                                  onClick={() => handleSelectPractice(p)}
+                                >
+                                  <span className="font-medium">{p.name}</span>
+                                  <span className="text-muted-foreground ml-2 text-xs">
+                                    {p.city}, {p.state}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <div>
-                          <Label>FHIR Base URL (Issuer)</Label>
+                          <Label className="text-muted-foreground text-xs">Or enter FHIR URL manually</Label>
                           <Input
                             value={apiFormData.issuer_url}
                             onChange={(e) => setApiFormData({ ...apiFormData, issuer_url: e.target.value })}
                             placeholder={environment === 'production' ? "https://fhir.eclinicalworks.com/fhir/r4/XXXXX" : "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD"}
                           />
-                          {environment === 'production' && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Enter the clinic's unique FHIR URL from eClinicalWorks (e.g. https://fhir.eclinicalworks.com/fhir/r4/XXXXX). Each clinic has a different URL.
-                            </p>
-                          )}
                         </div>
                         <div>
                           <Label>Key ID (kid)</Label>
