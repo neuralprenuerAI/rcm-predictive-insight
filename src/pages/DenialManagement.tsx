@@ -146,6 +146,8 @@ export default function DenialManagement() {
     errors: string[];
   } | null>(null);
   const [detectedType, setDetectedType] = useState<string>('');
+  const [eobJobId, setEobJobId] = useState<string | null>(null);
+  const [eobPolling, setEobPolling] = useState(false);
 
   useEffect(() => {
     fetchDenials();
@@ -252,6 +254,62 @@ export default function DenialManagement() {
     }
   };
 
+  const pollEobJob = async (jobId: string) => {
+    setEobPolling(true);
+    const maxAttempts = 40;
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const { data, error } = await awsApi.invoke('parse-eob', {
+        body: { job_id: jobId }
+      });
+      if (error) {
+        toast({ title: 'Processing Failed', description: error.message, variant: 'destructive' });
+        setEobPolling(false);
+        setImporting(false);
+        return;
+      }
+      if (data?.status === 'complete' && data?.result) {
+        setEobPolling(false);
+        await finishEobImport(data.result);
+        return;
+      }
+      if (data?.status === 'error') {
+        toast({ title: 'Processing Failed', description: data.error || 'Unknown error', variant: 'destructive' });
+        setEobPolling(false);
+        setImporting(false);
+        return;
+      }
+    }
+    toast({ title: 'Timeout', description: 'Document processing timed out. Please try again.', variant: 'destructive' });
+    setEobPolling(false);
+    setImporting(false);
+  };
+
+  const finishEobImport = async (result: any) => {
+    const remittanceData = result.data || result;
+    try {
+      const response = await awsApi.invoke('import-denials-from-835', {
+        body: { remittanceData, autoClassify: true }
+      });
+      if (response.error) throw response.error;
+      setImportResult({
+        imported: response.data.imported || 0,
+        skipped: response.data.skipped || 0,
+        errors: response.data.errors || [],
+      });
+      if (response.data.imported > 0) {
+        toast({ title: 'Import Successful', description: `Imported ${response.data.imported} denials` });
+        fetchDenials();
+      } else {
+        toast({ title: 'No Denials Found', description: 'No new denials were found in the file' });
+      }
+    } catch (error) {
+      toast({ title: 'Import Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleImport835 = async () => {
     if (!importFile) {
       toast({ title: 'Error', description: 'Please select a file', variant: 'destructive' });
@@ -274,10 +332,40 @@ export default function DenialManagement() {
         if (parseRes.error) throw parseRes.error;
         remittanceData = parseRes.data;
 
-      } else if (ext === 'pdf') {
-        throw new Error('PDF import is processing upgrade. Please export as 835 JSON or X12 EDI file from your clearinghouse.');
+      } else if (ext === 'pdf' || ['tiff','tif','png','jpg','jpeg'].includes(ext || '')) {
+        // Route to parse-eob for OCR-based processing
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(importFile);
+        });
+        const parseRes = await awsApi.invoke('parse-eob', {
+          body: { file_content: base64, file_name: importFile.name }
+        });
+        if (parseRes.error) throw parseRes.error;
+        if (parseRes.data?.async && parseRes.data?.job_id) {
+          setEobJobId(parseRes.data.job_id);
+          pollEobJob(parseRes.data.job_id);
+          return;
+        }
+        remittanceData = parseRes.data;
 
-      } else if (['csv', 'xlsx'].includes(ext || '')) {
+      } else if (['xlsx', 'xls'].includes(ext || '')) {
+        // Route XLSX to parse-eob
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(importFile);
+        });
+        const parseRes = await awsApi.invoke('parse-eob', {
+          body: { file_content: base64, file_name: importFile.name }
+        });
+        if (parseRes.error) throw parseRes.error;
+        remittanceData = parseRes.data;
+
+      } else if (['csv'].includes(ext || '')) {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -291,7 +379,7 @@ export default function DenialManagement() {
         remittanceData = parseRes.data;
 
       } else {
-        throw new Error('Unsupported file type. Please upload a JSON, X12 835, PDF, CSV, or XLSX file.');
+        throw new Error('Unsupported file type. Please upload a JSON, X12 835, PDF, CSV, XLSX, or image file.');
       }
 
       // Guard against empty parsed data
@@ -409,7 +497,7 @@ export default function DenialManagement() {
             </Button>
             <Button variant="outline" onClick={() => setShowImportDialog(true)}>
               <Upload className="h-4 w-4 mr-2" />
-              Import 835
+              Import Denials
             </Button>
             <Dialog open={showManualEntry} onOpenChange={setShowManualEntry}>
               <DialogTrigger asChild>
@@ -827,7 +915,7 @@ export default function DenialManagement() {
           <DialogHeader>
             <DialogTitle>Import Denials</DialogTitle>
             <DialogDescription>
-              Upload an 835 remittance, EOB PDF, X12 EDI file, or CSV spreadsheet to automatically import and classify denials.
+              Upload an 835 remittance, EOB PDF, Excel, image, X12 EDI file, or CSV to automatically import and classify denials.
             </DialogDescription>
           </DialogHeader>
           
@@ -836,7 +924,7 @@ export default function DenialManagement() {
               <Label>Remittance / Denial File</Label>
               <Input
                 type="file"
-                accept=".json,.txt,.835,.x12,.edi,.pdf,.csv,.xlsx"
+                accept=".json,.txt,.835,.x12,.edi,.pdf,.csv,.xlsx,.xls,.tiff,.tif,.png,.jpg,.jpeg"
                 onChange={(e) => {
                   const file = e.target.files?.[0] || null;
                   setImportFile(file);
@@ -845,8 +933,10 @@ export default function DenialManagement() {
                     const ext = file.name.split('.').pop()?.toLowerCase();
                     if (['json','txt'].includes(ext || '')) setDetectedType('835 JSON Remittance');
                     else if (['835','x12','edi'].includes(ext || '')) setDetectedType('X12 EDI 835');
-                    else if (ext === 'pdf') setDetectedType('PDF Remittance/EOB');
-                    else if (['csv','xlsx'].includes(ext || '')) setDetectedType('Spreadsheet');
+                    else if (ext === 'pdf') setDetectedType('PDF EOB/Remittance (AI extraction)');
+                    else if (['xlsx','xls'].includes(ext || '')) setDetectedType('Excel Spreadsheet');
+                    else if (['csv'].includes(ext || '')) setDetectedType('Spreadsheet');
+                    else if (['tiff','tif','png','jpg','jpeg'].includes(ext || '')) setDetectedType('Image EOB (AI extraction)');
                     else setDetectedType('Unknown format');
                   } else {
                     setDetectedType('');
@@ -857,8 +947,13 @@ export default function DenialManagement() {
               {detectedType && (
                 <p className="text-xs text-primary font-medium mt-1">Detected: {detectedType}</p>
               )}
+              {eobPolling && (
+                <p className="text-sm text-primary animate-pulse mt-2">
+                  Processing document with AI... this may take up to 60 seconds for multi-page PDFs.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-1">
-                Supports JSON, X12 835, PDF EOB, CSV, and XLSX files.
+                Supports JSON, X12 835, PDF EOB, CSV, XLSX, and image files (TIFF, PNG, JPG).
               </p>
             </div>
 
@@ -895,7 +990,7 @@ export default function DenialManagement() {
             }}>
               Close
             </Button>
-            <Button onClick={handleImport835} disabled={!importFile || importing}>
+            <Button onClick={handleImport835} disabled={!importFile || importing || eobPolling}>
               {importing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
