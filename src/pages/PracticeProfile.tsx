@@ -69,7 +69,26 @@ export default function PracticeProfile() {
     try {
       const res = await awsApi.invoke("practice-profile", { body: { action: "get" } });
       if (res.data && !res.error) {
-        setProfile((prev) => ({ ...prev, ...res.data }));
+        const p = res.data.profile || res.data;
+        setProfile((prev) => ({
+          ...prev,
+          practiceName: p.practice_name || "",
+          practiceStreet: p.practice_address || "",
+          practiceCity: p.practice_city || "",
+          practiceState: p.practice_state || "",
+          practiceZip: p.practice_zip || "",
+          practicePhone: p.practice_phone || "",
+          practiceFax: p.practice_fax || "",
+          practiceTin: p.practice_tin || "",
+          providerName: p.provider_name || "",
+          providerNpi: p.provider_npi || "",
+          providerSpecialty: p.provider_specialty || "",
+          providerCredentials: p.provider_credentials || "",
+          placeOfService: p.place_of_service || "",
+          billingContactName: p.billing_contact_name || "",
+          billingContactPhone: p.billing_contact_phone || "",
+          billingContactEmail: p.billing_contact_email || "",
+        }));
       }
     } catch {
       // No profile yet — that's fine
@@ -80,10 +99,28 @@ export default function PracticeProfile() {
 
   const saveProfile = async () => {
     setSaving(true);
+    const requestBody = {
+      action: "save",
+      practice_name: profile.practiceName,
+      practice_address: profile.practiceStreet,
+      practice_city: profile.practiceCity,
+      practice_state: profile.practiceState,
+      practice_zip: profile.practiceZip,
+      practice_phone: profile.practicePhone,
+      practice_fax: profile.practiceFax,
+      practice_tin: profile.practiceTin,
+      provider_name: profile.providerName,
+      provider_npi: profile.providerNpi,
+      provider_specialty: profile.providerSpecialty,
+      provider_credentials: profile.providerCredentials,
+      place_of_service: profile.placeOfService,
+      billing_contact_name: profile.billingContactName,
+      billing_contact_phone: profile.billingContactPhone,
+      billing_contact_email: profile.billingContactEmail,
+    };
+    console.log("Saving practice profile with body:", requestBody);
     try {
-      const res = await awsApi.invoke("practice-profile", {
-        body: { action: "save", ...profile },
-      });
+      const res = await awsApi.invoke("practice-profile", { body: requestBody });
       if (res.error) throw res.error;
       toast.success("Practice profile saved successfully");
     } catch {
