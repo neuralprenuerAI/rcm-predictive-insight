@@ -47,15 +47,15 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
   ];
 
   return (
-    <div className="w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-      <div className="p-6">
+    <div className="w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col">
+      <div className="p-6 shrink-0">
         <h1 className="text-xl font-bold text-sidebar-foreground mb-1">
           AI RCM Platform
         </h1>
         <p className="text-xs text-sidebar-foreground/60">Revenue Cycle Management</p>
       </div>
       
-      <nav className="px-3 space-y-1">
+      <nav className="px-3 space-y-1 flex-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -88,6 +88,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
             variant="ghost"
             className={cn(
               "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-[var(--transition-smooth)]",
+              activeView === "admin" && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
               "border-t border-sidebar-border mt-2 pt-3"
             )}
             onClick={() => navigate("/admin")}
@@ -98,7 +99,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
         )}
       </nav>
 
-      <div className="absolute bottom-0 w-64 p-4 border-t border-sidebar-border bg-sidebar">
+      <div className="shrink-0 p-4 border-t border-sidebar-border">
         <p className="text-xs text-muted-foreground">
           © 2025 AI RCM Platform
         </p>
