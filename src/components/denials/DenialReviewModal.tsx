@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { awsApi } from "@/integrations/aws/awsApi";
+import FixInstructionsModal from "@/components/denials/FixInstructionsModal";
 
 import {
   Loader2,
@@ -123,6 +124,7 @@ export default function DenialReviewModal({
 
   // Trigger analysis when modal opens with a new denialId
   const [lastAnalyzedId, setLastAnalyzedId] = useState<string | null>(null);
+  const [showFixModal, setShowFixModal] = useState(false);
 
   if (open && denialId && denialId !== lastAnalyzedId && !loading) {
     setLastAnalyzedId(denialId);
@@ -558,9 +560,7 @@ export default function DenialReviewModal({
               <Button variant="outline" onClick={onClose}>Close</Button>
               <Button
                 variant="outline"
-                onClick={() => {
-                  // Placeholder for future fix instructions flow
-                }}
+                onClick={() => setShowFixModal(true)}
               >
                 <Sparkles className="h-4 w-4 mr-2" />
                 Get Fix Instructions
@@ -578,6 +578,17 @@ export default function DenialReviewModal({
           </>
         )}
       </DialogContent>
+
+      <FixInstructionsModal
+        denialId={denialId}
+        open={showFixModal}
+        onClose={() => setShowFixModal(false)}
+        onGenerateAppeal={() => {
+          setShowFixModal(false);
+          if (denial) onGenerateAppeal(denial);
+          onClose();
+        }}
+      />
     </Dialog>
   );
 }
