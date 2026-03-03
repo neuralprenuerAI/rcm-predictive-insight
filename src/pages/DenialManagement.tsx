@@ -36,7 +36,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
-import AppealLetterModal from "@/components/denials/AppealLetterModal";
 
 interface DenialRecord {
   id: string;
@@ -155,15 +154,10 @@ export default function DenialManagement() {
 
   // Review modal
   const [reviewDenial, setReviewDenial] = useState<DenialRecord | null>(null);
+  const [reviewInitialView, setReviewInitialView] = useState<"analysis" | "letter" | "fix" | null>(null);
 
-  // Appeal letter modal
-  const [appealLetterData, setAppealLetterData] = useState<{
-    subjectLine: string;
-    letterBody: string;
-    appealNumber?: string;
-    payerName?: string;
-    appealDate?: string;
-  } | null>(null);
+  // Track generated content per denial (cached state)
+  const [generatedContent, setGeneratedContent] = useState<Record<string, { analysis?: boolean; letter?: { subjectLine: string; letterBody: string; appealNumber?: string; payerName?: string; appealDate?: string }; fix?: boolean }>>({});
 
   useEffect(() => {
     fetchDenials();
@@ -285,14 +279,18 @@ export default function DenialManagement() {
       if (response.error) throw response.error;
       if (!response.data?.success) throw new Error(response.data?.error || "Failed");
 
-      // Show the generated appeal letter in a modal
-      setAppealLetterData({
+      // Cache the letter data and open in review modal
+      const letterData = {
         subjectLine: response.data.subjectLine || response.data.subject_line || `Appeal for Claim - ${denial.claim?.claim_id || ""}`,
         letterBody: response.data.letterBody || response.data.letter_body || "",
         appealNumber: response.data.appealNumber || response.data.appeal_number,
         payerName: denial.payer_name,
         appealDate: response.data.appealDate || response.data.appeal_date || new Date().toISOString(),
-      });
+      };
+      setGeneratedContent(prev => ({ ...prev, [denial.id]: { ...prev[denial.id], letter: letterData } }));
+      // Open review modal to show the letter
+      setReviewDenial(denial);
+      setReviewInitialView("letter");
 
       toast({
         title: "Appeal Generated",
@@ -859,7 +857,7 @@ export default function DenialManagement() {
                     <TableHead className="text-right">Denied</TableHead>
                     <TableHead>Priority</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Actions / Content</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -900,19 +898,45 @@ export default function DenialManagement() {
                         <TableCell>{getPriorityBadge(denial.priority)}</TableCell>
                         <TableCell>{getStatusBadge(denial.status)}</TableCell>
                         <TableCell>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            {denial.status === "new" && (
+                          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 flex-wrap">
+                            {/* Status badges for generated content */}
+                            {generatedContent[denial.id]?.analysis && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 cursor-pointer bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                onClick={() => { setReviewDenial(denial); setReviewInitialView("analysis"); }}
+                              >
+                                🔍 Analysis
+                              </Badge>
+                            )}
+                            {generatedContent[denial.id]?.letter && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 cursor-pointer bg-green-50 text-green-700 border-green-200 hover:bg-green-100 gap-0.5"
+                                onClick={() => { setReviewDenial(denial); setReviewInitialView("letter"); }}
+                              >
+                                📄 Letter
+                              </Badge>
+                            )}
+                            {generatedContent[denial.id]?.fix && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 cursor-pointer bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 gap-0.5"
+                                onClick={() => { setReviewDenial(denial); setReviewInitialView("fix"); }}
+                              >
+                                🔧 Fix Steps
+                              </Badge>
+                            )}
+                            {/* Start Review button when no analysis yet */}
+                            {!generatedContent[denial.id]?.analysis && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => generateAppeal(denial)}
-                                disabled={generatingAppeal === denial.id}
+                                className="h-7 text-xs"
+                                onClick={() => { setReviewDenial(denial); setReviewInitialView("analysis"); }}
                               >
-                                {generatingAppeal === denial.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Send className="h-4 w-4" />
-                                )}
+                                <Microscope className="h-3.5 w-3.5 mr-1" />
+                                Review
                               </Button>
                             )}
                           </div>
@@ -956,7 +980,7 @@ export default function DenialManagement() {
                             <div className="flex gap-2">
                               {denial.status !== "resolved" && denial.status !== "written_off" && (
                                 <>
-                                  <Button size="sm" variant="outline" onClick={() => setReviewDenial(denial)}>
+                                  <Button size="sm" variant="outline" onClick={() => { setReviewDenial(denial); setReviewInitialView("analysis"); }}>
                                     <Microscope className="h-4 w-4 mr-2" />
                                     Start Review
                                   </Button>
@@ -1134,19 +1158,19 @@ export default function DenialManagement() {
         denialId={reviewDenial?.id || null}
         denial={reviewDenial}
         open={!!reviewDenial}
-        onClose={() => setReviewDenial(null)}
+        onClose={() => { setReviewDenial(null); setReviewInitialView(null); }}
         onGenerateAppeal={generateAppeal}
-      />
-
-      {/* Appeal Letter Modal */}
-      <AppealLetterModal
-        open={!!appealLetterData}
-        onClose={() => setAppealLetterData(null)}
-        subjectLine={appealLetterData?.subjectLine || ""}
-        letterBody={appealLetterData?.letterBody || ""}
-        appealNumber={appealLetterData?.appealNumber}
-        payerName={appealLetterData?.payerName}
-        appealDate={appealLetterData?.appealDate}
+        initialView={reviewInitialView}
+        cachedLetter={reviewDenial ? generatedContent[reviewDenial.id]?.letter || null : null}
+        onContentGenerated={(did, type, data) => {
+          setGeneratedContent(prev => ({
+            ...prev,
+            [did]: {
+              ...prev[did],
+              [type]: type === "letter" ? data : true,
+            },
+          }));
+        }}
       />
     </div>
   );
