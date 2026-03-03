@@ -40,6 +40,7 @@ interface DenialRecord {
   denial_date: string;
   service_date: string | null;
   payer_name: string;
+  patient_name: string | null;
   reason_code: string;
   reason_description: string | null;
   classified_category: string | null;
@@ -286,28 +287,91 @@ export default function DenialManagement() {
   };
 
   const finishEobImport = async (result: any) => {
-    const remittanceData = result.data || result;
-    try {
-      const response = await awsApi.invoke('import-denials-from-835', {
-        body: { remittanceData, autoClassify: true }
-      });
-      if (response.error) throw response.error;
-      setImportResult({
-        imported: response.data.imported || 0,
-        skipped: response.data.skipped || 0,
-        errors: response.data.errors || [],
-      });
-      if (response.data.imported > 0) {
-        toast({ title: 'Import Successful', description: `Imported ${response.data.imported} denials` });
-        fetchDenials();
-      } else {
-        toast({ title: 'No Denials Found', description: 'No new denials were found in the file' });
-      }
-    } catch (error) {
-      toast({ title: 'Import Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
-    } finally {
+    const data = result.data || result;
+    const claims = data.claims || [];
+
+    if (!claims.length) {
+      setImportResult({ imported: 0, skipped: 0, errors: ['No claims found in document'] });
       setImporting(false);
+      return;
     }
+
+    const checkDate = data.checkDate || new Date().toISOString().split('T')[0];
+    const payerName = data.payer?.name || 'Unknown Payer';
+    const checkNumber = data.checkNumber || '';
+
+    const classifyPromises = claims.map((claim: any) => {
+      const billedAmount = parseFloat(claim.billedAmount) || 0;
+      const paidAmount = parseFloat(claim.paidAmount) || 0;
+
+      return awsApi.invoke('classify-denial', {
+        body: {
+          patientName: claim.patient?.name || '',
+          providerName: claim.provider?.name || '',
+          payerName,
+          claimNumber: claim.claimNumber || '',
+          referenceId: checkNumber,
+          reasonCode: claim.primaryDenialCode || '',
+          reasonDescription: claim.denialSummary || '',
+          billedAmount,
+          paidAmount,
+          allowedAmount: parseFloat(claim.allowedAmount) || 0,
+          deniedAmount: billedAmount - paidAmount,
+          serviceDate: claim.serviceDateStart || null,
+          denialDate: checkDate,
+          cptCode: claim.serviceLines?.[0]?.cptCode || '',
+          remarkCodes: claim.remarkCodes || [],
+          allDenialCodes: claim.allDenialCodes || [],
+          cptLines: claim.serviceLines || [],
+          denial_codes: claim.allDenialCodes || [],
+          rawExtraction: claim,
+        },
+      });
+    });
+
+    const results = await Promise.allSettled(classifyPromises);
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        const res = r.value;
+        if (res.error) {
+          errors.push(`Claim ${i + 1}: ${res.error.message}`);
+        } else if (res.data?.duplicate || res.data?.conflict) {
+          skipped++;
+        } else if (res.data?.success) {
+          imported++;
+        } else {
+          imported++; // assume success if no error
+        }
+      } else {
+        errors.push(`Claim ${i + 1}: ${r.reason?.message || 'Unknown error'}`);
+      }
+    });
+
+    setImportResult({ imported, skipped, errors });
+
+    if (imported > 0) {
+      toast({ title: 'Import Successful', description: `Imported ${imported} denial${imported > 1 ? 's' : ''}` });
+      fetchDenials();
+    } else if (skipped > 0) {
+      toast({ title: 'All Duplicates', description: `${skipped} denial${skipped > 1 ? 's' : ''} already exist` });
+    } else {
+      toast({ title: 'No Denials Imported', description: 'No new denials were found', variant: 'destructive' });
+    }
+
+    // Auto-close modal after 2 seconds so user can see final counts
+    setTimeout(() => {
+      setShowImportDialog(false);
+      setImportFile(null);
+      setImportResult(null);
+      setDetectedType('');
+    }, 2000);
+
+    setImporting(false);
   };
 
   const handleImport835 = async () => {
@@ -473,6 +537,7 @@ export default function DenialManagement() {
       denial.payer_name?.toLowerCase().includes(search) ||
       denial.reason_code?.toLowerCase().includes(search) ||
       denial.cpt_code?.toLowerCase().includes(search) ||
+      denial.patient_name?.toLowerCase().includes(search) ||
       denial.patient?.first_name?.toLowerCase().includes(search) ||
       denial.patient?.last_name?.toLowerCase().includes(search)
     );
@@ -731,13 +796,14 @@ export default function DenialManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8"></TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Patient</TableHead>
                     <TableHead>Payer</TableHead>
+                    <TableHead>Service Date</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>CPT</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Deadline</TableHead>
+                    <TableHead className="text-right">Billed</TableHead>
+                    <TableHead className="text-right">Denied</TableHead>
                     <TableHead>Priority</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
@@ -759,25 +825,24 @@ export default function DenialManagement() {
                           )}
                         </TableCell>
                         <TableCell className="font-medium">
-                          {format(new Date(denial.denial_date), "MM/dd/yy")}
+                          {denial.patient_name || (denial.patient ? `${denial.patient.first_name} ${denial.patient.last_name}` : "—")}
                         </TableCell>
                         <TableCell>{denial.payer_name}</TableCell>
+                        <TableCell>
+                          {denial.service_date ? format(new Date(denial.service_date), "MM/dd/yy") : "—"}
+                        </TableCell>
                         <TableCell>
                           <code className="text-xs bg-muted px-1 py-0.5 rounded">{denial.reason_code}</code>
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{getCategoryLabel(denial.classified_category)}</span>
                         </TableCell>
-                        <TableCell>{denial.cpt_code || "-"}</TableCell>
+                        <TableCell>{denial.cpt_code || "—"}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          ${denial.billed_amount?.toFixed(2) || "0.00"}
+                        </TableCell>
                         <TableCell className="text-right font-medium">
                           ${denial.denied_amount?.toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          {denial.appeal_deadline ? (
-                            <span className={denial.days_until_deadline !== null && denial.days_until_deadline <= 7 ? "text-destructive font-medium" : ""}>
-                              {denial.days_until_deadline}d
-                            </span>
-                          ) : "-"}
                         </TableCell>
                         <TableCell>{getPriorityBadge(denial.priority)}</TableCell>
                         <TableCell>{getStatusBadge(denial.status)}</TableCell>
@@ -804,27 +869,27 @@ export default function DenialManagement() {
                       {/* Expanded Row */}
                       {expandedId === denial.id && (
                         <TableRow key={`${denial.id}-expanded`}>
-                          <TableCell colSpan={11} className="bg-muted/30 p-4">
-                            <div className="grid grid-cols-6 gap-4 mb-4">
+                          <TableCell colSpan={12} className="bg-muted/30 p-4">
+                            <div className="grid grid-cols-5 gap-4 mb-4">
                               <div>
-                                <p className="text-xs text-muted-foreground">Patient</p>
+                                <p className="text-xs text-muted-foreground">Denial Date</p>
                                 <p className="text-sm font-medium">
-                                  {denial.patient ? `${denial.patient.first_name} ${denial.patient.last_name}` : "N/A"}
+                                  {format(new Date(denial.denial_date), "MM/dd/yyyy")}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-xs text-muted-foreground">Service Date</p>
+                                <p className="text-xs text-muted-foreground">Deadline</p>
                                 <p className="text-sm font-medium">
-                                  {denial.service_date ? format(new Date(denial.service_date), "MM/dd/yyyy") : "N/A"}
+                                  {denial.appeal_deadline ? (
+                                    <span className={denial.days_until_deadline !== null && denial.days_until_deadline <= 7 ? "text-destructive font-medium" : ""}>
+                                      {denial.days_until_deadline}d remaining
+                                    </span>
+                                  ) : "—"}
                                 </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Billed Amount</p>
-                                <p className="text-sm font-medium">${denial.billed_amount?.toFixed(2) || "0.00"}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">AI Confidence</p>
-                                <p className="text-sm font-medium">{denial.ai_confidence || 0}%</p>
+                                <p className="text-sm font-medium">{denial.ai_confidence ? `${denial.ai_confidence}%` : "—"}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">Root Cause</p>
