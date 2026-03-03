@@ -12,12 +12,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, ArrowLeft, FlaskConical, ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from "lucide-react";
+import { Loader2, Upload, User, FileText, CheckCircle, AlertCircle, Send, UserPlus, FlaskConical, ShieldCheck, ShieldAlert, ShieldQuestion, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import Sidebar from "@/components/Sidebar";
 import { useNavigate } from "react-router-dom";
 
 interface ExtractedPatient {
@@ -620,18 +619,11 @@ export default function PatientIntake() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar activeView="patient-intake" onViewChange={(view) => navigate(`/?view=${view}`)} />
-      
-      <div className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                   <UserPlus className="h-6 w-6" />
                   Patient Intake
@@ -1278,8 +1270,6 @@ export default function PatientIntake() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
     </div>
   );
 }

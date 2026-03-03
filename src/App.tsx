@@ -8,6 +8,7 @@ import { RoleProvider } from "@/contexts/RoleContext";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { IdleTimeoutWarning } from "@/components/IdleTimeoutWarning";
 import { supabase } from "@/integrations/supabase/client";
+import AppLayout from "@/components/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -64,28 +65,34 @@ const App = () => (
         <BrowserRouter>
           <PasswordRecoveryHandler />
           <Routes>
-            <Route path="/" element={<Index />} />
+            {/* Auth page - no sidebar */}
             <Route path="/auth" element={<Auth />} />
-            <Route path="/upload" element={<DocumentUpload />} />
-            <Route path="/claims" element={<Claims />} />
-            <Route path="/scrubber" element={<ClaimScrubber />} />
-            <Route path="/scrub-history" element={<ScrubHistory />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/charge-auditor" element={<ChargeAuditor />} />
-            <Route path="/audit-history" element={<AuditHistory />} />
-            <Route path="/denial-management" element={<DenialManagement />} />
-            <Route path="/appeals" element={<AppealsManagement />} />
-            <Route path="/patient-intake" element={<PatientIntake />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/practice-profile" element={<PracticeProfile />} />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedAdminRoute>
-                  <Admin />
-                </ProtectedAdminRoute>
-              }
-            />
+
+            {/* All app pages share the sidebar layout */}
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/upload" element={<DocumentUpload />} />
+              <Route path="/claims" element={<Claims />} />
+              <Route path="/scrubber" element={<ClaimScrubber />} />
+              <Route path="/scrub-history" element={<ScrubHistory />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/charge-auditor" element={<ChargeAuditor />} />
+              <Route path="/audit-history" element={<AuditHistory />} />
+              <Route path="/denial-management" element={<DenialManagement />} />
+              <Route path="/appeals" element={<AppealsManagement />} />
+              <Route path="/patient-intake" element={<PatientIntake />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/practice-profile" element={<PracticeProfile />} />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedAdminRoute>
+                    <Admin />
+                  </ProtectedAdminRoute>
+                }
+              />
+            </Route>
+
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
