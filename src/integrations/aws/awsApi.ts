@@ -12,6 +12,7 @@ const AWS_API_URL = import.meta.env.VITE_AWS_API_URL;
 interface InvokeOptions {
   body?: Record<string, unknown> | unknown;
   headers?: Record<string, string>;
+  [key: string]: unknown;
 }
 
 interface InvokeResult<T = any> {
@@ -37,6 +38,12 @@ async function invoke<T = any>(
       requestBody = { ...(options.body as Record<string, unknown>) };
     } else if (options.body) {
       requestBody = { data: options.body };
+    }
+
+    // Merge any extra keys from options (besides body/headers) into requestBody
+    const { body: _body, headers: _headers, ...extraKeys } = options;
+    if (Object.keys(extraKeys).length > 0) {
+      requestBody = { ...requestBody, ...extraKeys };
     }
 
     // Add user_id if we have a session (don't override if already provided)
