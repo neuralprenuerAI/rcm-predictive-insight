@@ -31,9 +31,11 @@ import {
   Plus,
   Loader2,
   Upload,
-  Sparkles
+  Sparkles,
+  Microscope
 } from "lucide-react";
 import { format } from "date-fns";
+import DenialReviewModal from "@/components/denials/DenialReviewModal";
 
 interface DenialRecord {
   id: string;
@@ -149,6 +151,9 @@ export default function DenialManagement() {
   const [detectedType, setDetectedType] = useState<string>('');
   const [eobJobId, setEobJobId] = useState<string | null>(null);
   const [eobPolling, setEobPolling] = useState(false);
+
+  // Review modal
+  const [reviewDenial, setReviewDenial] = useState<DenialRecord | null>(null);
 
   useEffect(() => {
     fetchDenials();
@@ -903,7 +908,8 @@ export default function DenialManagement() {
                             <div className="flex gap-2">
                               {denial.status !== "resolved" && denial.status !== "written_off" && (
                                 <>
-                                  <Button size="sm" variant="outline" onClick={() => updateStatus(denial.id, "reviewing")}>
+                                  <Button size="sm" variant="outline" onClick={() => setReviewDenial(denial)}>
+                                    <Microscope className="h-4 w-4 mr-2" />
                                     Start Review
                                   </Button>
                                   <Button size="sm" onClick={() => generateAppeal(denial)} disabled={generatingAppeal === denial.id}>
@@ -1074,6 +1080,15 @@ export default function DenialManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Review Modal */}
+      <DenialReviewModal
+        denialId={reviewDenial?.id || null}
+        denial={reviewDenial}
+        open={!!reviewDenial}
+        onClose={() => setReviewDenial(null)}
+        onGenerateAppeal={generateAppeal}
+      />
     </div>
   );
 }
