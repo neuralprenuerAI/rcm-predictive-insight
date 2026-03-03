@@ -136,3 +136,37 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Print-friendly styles for appeal letters */
+@media print {
+  body > *:not(#root) {
+    display: none !important;
+  }
+  
+  /* Hide all UI chrome */
+  .print\\:hidden,
+  [data-radix-portal] > [data-state] > .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Make the dialog content fill the page */
+  [data-radix-portal] {
+    position: static !important;
+  }
+
+  [data-radix-portal] [role="dialog"] {
+    position: static !important;
+    transform: none !important;
+    max-width: none !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide overlay */
+  [data-radix-portal] > [data-state="open"]:first-child {
+    display: none !important;
+  }
+}
