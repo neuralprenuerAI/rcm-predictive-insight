@@ -107,7 +107,7 @@ export default function DenialReviewModal({
     setError(null);
     setAnalysis(null);
     try {
-      const res = await awsApi.invoke("denial-analysis", {
+      const res = await awsApi.invoke("rcm-denial-analysis", {
         body: { denialId },
       });
       if (res.error) throw res.error;
