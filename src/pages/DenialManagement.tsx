@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
+import AppealLetterModal from "@/components/denials/AppealLetterModal";
 
 interface DenialRecord {
   id: string;
@@ -155,6 +156,15 @@ export default function DenialManagement() {
   // Review modal
   const [reviewDenial, setReviewDenial] = useState<DenialRecord | null>(null);
 
+  // Appeal letter modal
+  const [appealLetterData, setAppealLetterData] = useState<{
+    subjectLine: string;
+    letterBody: string;
+    appealNumber?: string;
+    payerName?: string;
+    appealDate?: string;
+  } | null>(null);
+
   useEffect(() => {
     fetchDenials();
   }, [statusFilter, categoryFilter, priorityFilter]);
@@ -245,6 +255,15 @@ export default function DenialManagement() {
 
       if (response.error) throw response.error;
       if (!response.data?.success) throw new Error(response.data?.error || "Failed");
+
+      // Show the generated appeal letter in a modal
+      setAppealLetterData({
+        subjectLine: response.data.subjectLine || response.data.subject_line || `Appeal for Claim - ${denial.claim?.claim_id || ""}`,
+        letterBody: response.data.letterBody || response.data.letter_body || "",
+        appealNumber: response.data.appealNumber || response.data.appeal_number,
+        payerName: denial.payer_name,
+        appealDate: response.data.appealDate || response.data.appeal_date || new Date().toISOString(),
+      });
 
       toast({
         title: "Appeal Generated",
@@ -1088,6 +1107,17 @@ export default function DenialManagement() {
         open={!!reviewDenial}
         onClose={() => setReviewDenial(null)}
         onGenerateAppeal={generateAppeal}
+      />
+
+      {/* Appeal Letter Modal */}
+      <AppealLetterModal
+        open={!!appealLetterData}
+        onClose={() => setAppealLetterData(null)}
+        subjectLine={appealLetterData?.subjectLine || ""}
+        letterBody={appealLetterData?.letterBody || ""}
+        appealNumber={appealLetterData?.appealNumber}
+        payerName={appealLetterData?.payerName}
+        appealDate={appealLetterData?.appealDate}
       />
     </div>
   );
