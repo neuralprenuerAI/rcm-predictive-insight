@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { awsApi } from "@/integrations/aws/awsApi";
-import { supabase } from "@/integrations/supabase/client";
+
 import {
   Loader2,
   CheckCircle,
@@ -107,11 +107,8 @@ export default function DenialReviewModal({
     setError(null);
     setAnalysis(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const res = await awsApi.invoke("denial-analysis", {
-        body: { user_id: user.id, denialId },
+      const res = await awsApi.invoke("rcm-denial-analysis", {
+        body: { denialId },
       });
       if (res.error) throw res.error;
       const d = res.data?.analysis || res.data;
