@@ -252,24 +252,21 @@ export default function DenialManagement() {
       try {
         const profileRes = await awsApi.invoke("practice-profile", { body: { action: "get" } });
         if (profileRes.data && !profileRes.error) {
-          const p = profileRes.data;
+          const p = profileRes.data.profile || profileRes.data;
           practiceInfo = {
-            name: p.practiceName,
-            address: p.practiceStreet,
-            city: p.practiceCity,
-            state: p.practiceState,
-            zip: p.practiceZip,
-            phone: p.practicePhone,
-            fax: p.practiceFax,
-            tin: p.practiceTin,
-            billingContact: { name: p.billingContactName, phone: p.billingContactPhone, email: p.billingContactEmail },
+            name: p.practice_name,
+            address: `${p.practice_address || ""}, ${p.practice_city || ""}, ${p.practice_state || ""} ${p.practice_zip || ""}`.replace(/^,\s*/, "").trim(),
+            phone: p.practice_phone,
+            fax: p.practice_fax,
+            tin: p.practice_tin,
+            billingContact: { name: p.billing_contact_name, phone: p.billing_contact_phone, email: p.billing_contact_email },
           };
           providerInfo = {
-            name: p.providerName,
-            npi: p.providerNpi,
-            specialty: p.providerSpecialty,
-            credentials: p.providerCredentials,
-            placeOfService: p.placeOfService,
+            name: p.provider_name,
+            npi: p.provider_npi,
+            specialty: p.provider_specialty,
+            credentials: p.provider_credentials,
+            placeOfService: p.place_of_service,
           };
         }
       } catch {
