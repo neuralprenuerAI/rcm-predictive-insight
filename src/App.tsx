@@ -22,6 +22,7 @@ import DenialManagement from "./pages/DenialManagement";
 import AppealsManagement from "./pages/AppealsManagement";
 import PatientIntake from "./pages/PatientIntake";
 import Settings from "./pages/Settings";
+import PracticeProfile from "./pages/PracticeProfile";
 import Admin from "./pages/Admin";
 import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
 
@@ -76,6 +77,7 @@ const App = () => (
             <Route path="/appeals" element={<AppealsManagement />} />
             <Route path="/patient-intake" element={<PatientIntake />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/practice-profile" element={<PracticeProfile />} />
             <Route
               path="/admin"
               element={

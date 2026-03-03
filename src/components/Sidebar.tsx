@@ -42,6 +42,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
     { id: "analytics", label: "Analytics", icon: BarChart3, isRoute: true, route: "/analytics" },
     { id: "authorizations", label: "Authorizations", icon: FileText },
     { id: "payment-posting", label: "Payment Posting", icon: DollarSign },
+    { id: "practice-profile", label: "Practice Profile", icon: ClipboardCheck, isRoute: true, route: "/practice-profile" },
     { id: "settings", label: "Settings", icon: Settings }
   ];
 
