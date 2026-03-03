@@ -71,7 +71,7 @@ export default function AppLayout() {
     const viewRoutes: Record<string, string> = {
       dashboard: "/",
       patients: "/?view=patients",
-      "claim-review": "/",
+      "claim-review": "/?view=claim-review",
       analytics: "/analytics",
       denials: "/?view=denials",
       authorizations: "/?view=authorizations",
