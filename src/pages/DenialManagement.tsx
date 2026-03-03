@@ -246,10 +246,42 @@ export default function DenialManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Fetch practice profile for auto-fill
+      let practiceInfo: Record<string, unknown> | undefined;
+      let providerInfo: Record<string, unknown> | undefined;
+      try {
+        const profileRes = await awsApi.invoke("practice-profile", { body: { action: "get" } });
+        if (profileRes.data && !profileRes.error) {
+          const p = profileRes.data;
+          practiceInfo = {
+            name: p.practiceName,
+            address: p.practiceStreet,
+            city: p.practiceCity,
+            state: p.practiceState,
+            zip: p.practiceZip,
+            phone: p.practicePhone,
+            fax: p.practiceFax,
+            tin: p.practiceTin,
+            billingContact: { name: p.billingContactName, phone: p.billingContactPhone, email: p.billingContactEmail },
+          };
+          providerInfo = {
+            name: p.providerName,
+            npi: p.providerNpi,
+            specialty: p.providerSpecialty,
+            credentials: p.providerCredentials,
+            placeOfService: p.placeOfService,
+          };
+        }
+      } catch {
+        // No profile — proceed without
+      }
+
       const response = await awsApi.invoke("generate-appeal", {
         body: {
           user_id: user.id,
           denialQueueId: denial.id,
+          ...(practiceInfo ? { practiceInfo } : {}),
+          ...(providerInfo ? { providerInfo } : {}),
         },
       });
 
