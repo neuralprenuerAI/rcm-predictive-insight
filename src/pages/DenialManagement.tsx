@@ -37,6 +37,16 @@ import {
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
 
+interface CptLine {
+  cptCode?: string;
+  billedAmount?: number;
+  paidAmount?: number;
+  allowedAmount?: number | null;
+  modifier?: string | null;
+  adjustments?: Array<{ amount?: number; groupCode?: string; reasonCode?: string; description?: string }>;
+  remarkCodes?: string[];
+}
+
 interface DenialRecord {
   id: string;
   denial_date: string;
@@ -56,6 +66,7 @@ interface DenialRecord {
   appeal_deadline: string | null;
   days_until_deadline: number | null;
   ai_confidence: number | null;
+  cpt_lines?: CptLine[];
   patient: {
     first_name: string;
     last_name: string;
@@ -64,6 +75,18 @@ interface DenialRecord {
     claim_id: string;
   } | null;
 }
+
+/** Compute the truly denied amount: sum billedAmount for lines where paidAmount === 0 */
+const getTrueDeniedAmount = (denial: DenialRecord): number => {
+  if (denial.cpt_lines && denial.cpt_lines.length > 0) {
+    const fullyDeniedSum = denial.cpt_lines
+      .filter(line => line.paidAmount === 0 || line.paidAmount === null || line.paidAmount === undefined)
+      .reduce((sum, line) => sum + (line.billedAmount || 0), 0);
+    // If we found fully-denied lines, use that; otherwise fall back to denied_amount
+    if (fullyDeniedSum > 0) return fullyDeniedSum;
+  }
+  return denial.denied_amount || 0;
+};
 
 interface Stats {
   total: number;
@@ -171,6 +194,18 @@ export default function DenialManagement() {
       const result = await awsCrud.select('denial_queue', user.id);
       const denialList = (result || []) as DenialRecord[];
       setDenials(denialList);
+
+      // Compute stats from the fetched data
+      console.log("Stats data:", denialList.length, denialList);
+      const newStats: Stats = {
+        total: denialList.length,
+        newCount: denialList.filter(d => d.status === "new").length,
+        appealingCount: denialList.filter(d => d.status === "appealing").length,
+        totalDeniedAmount: denialList.reduce((sum, d) => sum + getTrueDeniedAmount(d), 0),
+        urgentCount: denialList.filter(d => d.days_until_deadline !== null && d.days_until_deadline <= 7 && d.status !== "resolved" && d.status !== "written_off").length,
+      };
+      console.log("Computed stats:", newStats);
+      setStats(newStats);
 
       // Pre-populate content badges for reviewed/appealing denials
       const actionable = denialList.filter(d => d.status === 'reviewed' || d.status === 'appealing');
@@ -963,7 +998,7 @@ export default function DenialManagement() {
                           ${denial.billed_amount?.toFixed(2) || "0.00"}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          ${denial.denied_amount?.toFixed(2)}
+                          ${getTrueDeniedAmount(denial).toFixed(2)}
                         </TableCell>
                         <TableCell>{getPriorityBadge(denial.priority)}</TableCell>
                         <TableCell>{getStatusBadge(denial.status)}</TableCell>
