@@ -59,7 +59,7 @@ interface DenialReviewModalProps {
 }
 
 interface AnalysisData {
-  claim_summary?: { overview?: string; billed_amount?: number; paid_amount?: number; denied_amount?: number; net_recovery_opportunity?: number };
+  claim_summary?: { overview?: string; billed_amount?: number; paid_amount?: number; denied_amount?: number; total_billed?: number; total_paid?: number; total_denied?: number; net_recovery_opportunity?: number };
   code_analysis?: Array<{ code?: string; description?: string; plain_english?: string; is_legitimate?: boolean; challengeable?: boolean; win_probability?: number; action_required?: string }>;
   ncci_analysis?: { applies?: boolean; bundling_explanation?: string; modifier_exception_available?: boolean; applicable_modifiers?: string[]; modifier_guidance?: string };
   modifier_opportunities?: Array<{ modifier_code?: string; description?: string; application_guidance?: string; expected_impact?: string }>;
@@ -542,9 +542,9 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
           {analysis.claim_summary.overview && <p className="text-sm text-foreground mb-3">{analysis.claim_summary.overview}</p>}
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: "Billed", value: analysis.claim_summary.billed_amount },
-              { label: "Paid", value: analysis.claim_summary.paid_amount },
-              { label: "Denied", value: analysis.claim_summary.denied_amount },
+              { label: "Billed", value: analysis.claim_summary.total_billed ?? analysis.claim_summary.billed_amount },
+              { label: "Paid", value: analysis.claim_summary.total_paid ?? analysis.claim_summary.paid_amount },
+              { label: "Denied", value: analysis.claim_summary.total_denied ?? analysis.claim_summary.denied_amount },
               { label: "Recovery Opportunity", value: analysis.claim_summary.net_recovery_opportunity },
             ].map((item) => (
               <Card key={item.label}>
