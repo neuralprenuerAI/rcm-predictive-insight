@@ -88,6 +88,13 @@ interface LetterData {
 
 type ActivePanel = "analysis" | "letter" | "fix";
 
+/** Format snake_case/underscore values for display: replace _ with space, title-case, and handle "&" for "and" */
+const formatLabel = (value: string): string =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\band\b/gi, "&")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 const ACTION_TYPE_COLORS: Record<string, string> = {
   verify: "bg-blue-100 text-blue-800 border-blue-200",
   call: "bg-orange-100 text-orange-800 border-orange-200",
@@ -386,7 +393,7 @@ export default function DenialReviewModal({
                     </div>
                   )}
                   {analysis?.recommended_action && (
-                    <Badge className="bg-primary text-primary-foreground text-sm px-3 py-1.5">{analysis.recommended_action}</Badge>
+                    <Badge className="bg-primary text-primary-foreground text-sm px-3 py-1.5">{formatLabel(analysis.recommended_action)}</Badge>
                   )}
                 </div>
               </div>
@@ -729,7 +736,7 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
                 <div className="flex items-start gap-3">
                   <div className="bg-primary rounded-lg p-2 shrink-0"><Sparkles className="h-5 w-5 text-primary-foreground" /></div>
                   <div>
-                    <h4 className="font-semibold text-foreground mb-1">Recommended: {analysis.recommended_action}</h4>
+                    <h4 className="font-semibold text-foreground mb-1">Recommended: {formatLabel(analysis.recommended_action)}</h4>
                     {analysis.recommended_reasoning && <p className="text-sm text-muted-foreground">{analysis.recommended_reasoning}</p>}
                   </div>
                 </div>
@@ -749,7 +756,7 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
                 <Card key={i}>
                   <CardContent className="py-4 px-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold">{alt.action}</h4>
+                      <h4 className="text-sm font-semibold">{alt.action ? formatLabel(alt.action) : ""}</h4>
                       {alt.success_likelihood !== undefined && <Badge variant="outline" className="text-xs">{alt.success_likelihood}% likelihood</Badge>}
                     </div>
                     {alt.description && <p className="text-sm text-muted-foreground">{alt.description}</p>}
@@ -867,7 +874,7 @@ function FixStepItem({ step, checked, onToggle }: { step: FixStep; checked: bool
         <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-sm font-semibold ${checked ? "line-through text-muted-foreground" : "text-foreground"}`}>{step.title}</span>
-            {step.action_type && <Badge className={`text-[10px] px-1.5 py-0 border ${actionClass}`}>{step.action_type.replace(/_/g, " ")}</Badge>}
+            {step.action_type && <Badge className={`text-[10px] px-1.5 py-0 border ${actionClass}`}>{formatLabel(step.action_type)}</Badge>}
             {step.who && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{step.who}</Badge>}
             {step.urgent && <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0 border-0">URGENT</Badge>}
           </div>
