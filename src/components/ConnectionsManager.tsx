@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ECWTokenDisplay from "./ECWTokenDisplay";
-import { KeyPairGenerator } from "./KeyPairGenerator";
+
 import { searchPractices, type EcwPractice } from "@/data/ecwPractices";
 
 // ECW environment defaults
@@ -838,8 +838,6 @@ export default function ConnectionsManager() {
 
   return (
     <div className="space-y-6">
-      <KeyPairGenerator />
-      
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { KeyPairGenerator } from "@/components/KeyPairGenerator";
 import { useAdminConnections, AdminConnection } from "@/hooks/useAdminConnections";
 import { 
   Table, 
@@ -190,6 +191,8 @@ export function ConnectionsTab() {
 
   return (
     <div className="space-y-6">
+      <KeyPairGenerator />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-card border rounded-lg p-4">
