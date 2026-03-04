@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -188,6 +189,11 @@ export default function DenialManagement() {
   const [deletingDenial, setDeletingDenial] = useState<DenialRecord | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Bulk selection & delete
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+
   useEffect(() => {
     fetchDenials();
   }, [statusFilter, categoryFilter, priorityFilter]);
@@ -342,6 +348,84 @@ export default function DenialManagement() {
     } catch (error) {
       console.error('Error updating status:', error);
       toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
+    }
+  };
+
+  const toggleSelectAll = () => {
+    const visibleIds = filteredDenials.map(d => d.id);
+    const allSelected = visibleIds.every(id => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const recomputeStats = (list: DenialRecord[]) => {
+    setStats({
+      total: list.length,
+      newCount: list.filter(d => d.status === "new").length,
+      appealingCount: list.filter(d => d.status === "appealing").length,
+      totalDeniedAmount: list.reduce((sum, d) => sum + getTrueDeniedAmount(d), 0),
+      urgentCount: list.filter(d => d.days_until_deadline !== null && d.days_until_deadline <= 7 && d.status !== "resolved" && d.status !== "written_off").length,
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleteLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const results = await Promise.allSettled(
+        Array.from(selectedIds).map(id =>
+          awsApi.invoke("crud", {
+            body: {
+              action: "delete",
+              table: "denial_queue",
+              where: { id },
+              user_id: user.id,
+            },
+          }).then(r => { if (r.error) throw r.error; return id; })
+        )
+      );
+
+      const deletedIds = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+        .map(r => r.value);
+      const failedCount = results.filter(r => r.status === "rejected").length;
+
+      const remaining = denials.filter(d => !deletedIds.includes(d.id));
+      setDenials(remaining);
+      setGeneratedContent(prev => {
+        const next = { ...prev };
+        deletedIds.forEach(id => delete next[id]);
+        return next;
+      });
+      recomputeStats(remaining);
+      setSelectedIds(new Set());
+
+      if (failedCount > 0) {
+        toast({ title: "Partial Delete", description: `${deletedIds.length} deleted, ${failedCount} failed`, variant: "destructive" });
+      } else {
+        toast({ title: "Deleted", description: `${deletedIds.length} denial(s) removed successfully` });
+      }
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toast({ title: "Error", description: "Failed to delete denials", variant: "destructive" });
+    } finally {
+      setBulkDeleteLoading(false);
+      setShowBulkDeleteDialog(false);
     }
   };
 
@@ -764,6 +848,15 @@ export default function DenialManagement() {
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowBulkDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected ({selectedIds.size})
+              </Button>
+            )}
             <Button variant="outline" onClick={fetchDenials}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -1000,6 +1093,13 @@ export default function DenialManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={filteredDenials.length > 0 && filteredDenials.every(d => selectedIds.has(d.id))}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Patient</TableHead>
                     <TableHead>Payer</TableHead>
@@ -1022,6 +1122,13 @@ export default function DenialManagement() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => setExpandedId(expandedId === denial.id ? null : denial.id)}
                       >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(denial.id)}
+                            onCheckedChange={() => toggleSelectOne(denial.id)}
+                            aria-label={`Select ${denial.patient_name || "denial"}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           {expandedId === denial.id ? (
                             <ChevronUp className="h-4 w-4" />
@@ -1110,7 +1217,7 @@ export default function DenialManagement() {
                       {/* Expanded Row */}
                       {expandedId === denial.id && (
                         <TableRow key={`${denial.id}-expanded`}>
-                          <TableCell colSpan={12} className="bg-muted/30 p-4">
+                          <TableCell colSpan={13} className="bg-muted/30 p-4">
                             <div className="grid grid-cols-5 gap-4 mb-4">
                               <div>
                                 <p className="text-xs text-muted-foreground">Denial Date</p>
@@ -1355,6 +1462,29 @@ export default function DenialManagement() {
             >
               {deleteLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} denials?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will also remove all associated analysis, appeal letters, and fix instructions. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleteLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete {selectedIds.size} Denials
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
