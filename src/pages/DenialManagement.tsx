@@ -169,12 +169,82 @@ export default function DenialManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const result = await awsCrud.select('denial_queue', user.id);
-      setDenials((result || []) as DenialRecord[]);
+      const denialList = (result || []) as DenialRecord[];
+      setDenials(denialList);
+
+      // Pre-populate content badges for reviewed/appealing denials
+      const actionable = denialList.filter(d => d.status === 'reviewed' || d.status === 'appealing');
+      if (actionable.length > 0) {
+        hydrateGeneratedContent(actionable, user.id);
+      }
     } catch (error) {
       console.error('Error fetching denials:', error);
       toast({ title: 'Error', description: 'Failed to load denials', variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** Check backend for existing appeals & fix instructions for reviewed/appealing denials */
+  const hydrateGeneratedContent = async (denials: DenialRecord[], userId: string) => {
+    try {
+      // Batch: check appeals table for all actionable denial IDs
+      const denialIds = denials.map(d => d.id);
+      const { data: existingAppeals } = await supabase
+        .from("appeals")
+        .select("denial_queue_id, subject_line, letter_body, appeal_number, payer_name, appeal_date")
+        .in("denial_queue_id", denialIds)
+        .eq("user_id", userId);
+
+      // Build a map of denial_id -> letter data
+      const appealMap: Record<string, { subjectLine: string; letterBody: string; appealNumber?: string; payerName?: string; appealDate?: string }> = {};
+      if (existingAppeals) {
+        for (const a of existingAppeals) {
+          if (a.letter_body && a.denial_queue_id) {
+            appealMap[a.denial_queue_id] = {
+              subjectLine: a.subject_line || "",
+              letterBody: a.letter_body,
+              appealNumber: a.appeal_number || undefined,
+              payerName: a.payer_name || undefined,
+              appealDate: a.appeal_date || undefined,
+            };
+          }
+        }
+      }
+
+      // Check fix instructions in parallel (checkOnly = true, no generation)
+      const fixChecks = await Promise.allSettled(
+        denialIds.map(id =>
+          awsApi.invoke("fix-instructions", { body: { denialId: id, checkOnly: true } })
+            .then(res => ({ id, hasFix: !res.error && !!(res.data?.instructions?.phases || res.data?.phases) }))
+        )
+      );
+      const fixMap: Record<string, boolean> = {};
+      for (const result of fixChecks) {
+        if (result.status === "fulfilled" && result.value.hasFix) {
+          fixMap[result.value.id] = true;
+        }
+      }
+
+      // Merge into generatedContent state
+      setGeneratedContent(prev => {
+        const next = { ...prev };
+        for (const id of denialIds) {
+          const hasLetter = appealMap[id];
+          const hasFix = fixMap[id];
+          if (hasLetter || hasFix) {
+            next[id] = {
+              ...next[id],
+              analysis: next[id]?.analysis || (hasLetter || hasFix ? true : undefined),
+              ...(hasLetter ? { letter: hasLetter } : {}),
+              ...(hasFix ? { fix: true } : {}),
+            };
+          }
+        }
+        return next;
+      });
+    } catch (err) {
+      console.error("Error hydrating generated content:", err);
     }
   };
 
