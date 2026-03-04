@@ -355,7 +355,7 @@ export default function DenialManagement() {
         body: {
           action: "delete",
           table: "denial_queue",
-          id: deletingDenial.id,
+          where: { id: deletingDenial.id },
           user_id: user.id,
         },
       });
