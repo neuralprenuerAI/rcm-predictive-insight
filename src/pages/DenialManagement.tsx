@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,8 @@ import {
   Loader2,
   Upload,
   Sparkles,
-  Microscope
+  Microscope,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
@@ -181,6 +183,10 @@ export default function DenialManagement() {
 
   // Track generated content per denial (cached state)
   const [generatedContent, setGeneratedContent] = useState<Record<string, { analysis?: boolean; letter?: { subjectLine: string; letterBody: string; appealNumber?: string; payerName?: string; appealDate?: string }; fix?: boolean }>>({});
+
+  // Delete confirmation
+  const [deletingDenial, setDeletingDenial] = useState<DenialRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     fetchDenials();
@@ -336,6 +342,49 @@ export default function DenialManagement() {
     } catch (error) {
       console.error('Error updating status:', error);
       toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteDenial = async () => {
+    if (!deletingDenial) return;
+    setDeleteLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const result = await awsApi.invoke("crud", {
+        body: {
+          action: "delete",
+          table: "denial_queue",
+          id: deletingDenial.id,
+          user_id: user.id,
+        },
+      });
+      if (result.error) throw result.error;
+      setDenials(prev => prev.filter(d => d.id !== deletingDenial.id));
+      // Clean up generated content cache
+      setGeneratedContent(prev => {
+        const next = { ...prev };
+        delete next[deletingDenial.id];
+        return next;
+      });
+      // Recompute stats
+      setStats(prev => {
+        const remaining = denials.filter(d => d.id !== deletingDenial.id);
+        return {
+          total: remaining.length,
+          newCount: remaining.filter(d => d.status === "new").length,
+          appealingCount: remaining.filter(d => d.status === "appealing").length,
+          totalDeniedAmount: remaining.reduce((sum, d) => sum + getTrueDeniedAmount(d), 0),
+          urgentCount: remaining.filter(d => d.days_until_deadline !== null && d.days_until_deadline <= 7 && d.status !== "resolved" && d.status !== "written_off").length,
+        };
+      });
+      toast({ title: "Deleted", description: "Denial and associated data removed successfully" });
+    } catch (error) {
+      console.error("Error deleting denial:", error);
+      toast({ title: "Error", description: "Failed to delete denial", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setDeletingDenial(null);
     }
   };
 
@@ -1044,6 +1093,16 @@ export default function DenialManagement() {
                                 Review
                               </Button>
                             )}
+                            {/* Delete button */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeletingDenial(denial)}
+                              title="Delete denial"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1277,6 +1336,29 @@ export default function DenialManagement() {
           }));
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingDenial} onOpenChange={(open) => { if (!open) setDeletingDenial(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this denial?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will also delete any associated analysis, appeal letters, and fix instructions. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDenial}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
