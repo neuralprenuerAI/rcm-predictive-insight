@@ -393,8 +393,7 @@ export default function DenialManagement() {
             body: {
               action: "delete",
               table: "denial_queue",
-              where: { id },
-              user_id: user.id,
+              where: { id, user_id: user.id },
             },
           }).then(r => { if (r.error) throw r.error; return id; })
         )
@@ -426,6 +425,7 @@ export default function DenialManagement() {
     } finally {
       setBulkDeleteLoading(false);
       setShowBulkDeleteDialog(false);
+      fetchDenials();
     }
   };
 
