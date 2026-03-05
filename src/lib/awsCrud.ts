@@ -78,8 +78,7 @@ export const awsCrud = {
       body: {
         action: 'delete',
         table,
-        where,
-        user_id: userId
+        where: { ...where, user_id: userId },
       }
     });
     if (result.error) throw result.error;
