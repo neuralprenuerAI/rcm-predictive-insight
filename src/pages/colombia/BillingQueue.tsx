@@ -260,7 +260,7 @@ export default function BillingQueue() {
             </span>
           )}
           <button
-            onClick={() => setLoading(l => !l)}
+            onClick={() => loadEncounters()}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground border border-border rounded-lg hover:bg-muted"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Actualizar
