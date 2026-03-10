@@ -340,7 +340,7 @@ export default function BillingQueue() {
                     <span>·</span>
                     <span>{enc.medico_nombre}</span>
                     <span>·</span>
-                    <span>{fmtDate(enc.fecha_atencion)}</span>
+                    <span className="whitespace-nowrap">{fmtDate(enc.fecha_atencion)}</span>
                   </div>
                 </div>
 
