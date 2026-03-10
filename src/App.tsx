@@ -84,7 +84,7 @@ const App = () => (
               <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
               <Route path="/colombia" element={<ColombiaDashboard />} />
               <Route path="/colombia/pacientes" element={<PatientSearch />} />
-              <Route path="/colombia/agendar" element={<ComingSoon title="Agendar Cita" />} />
+              <Route path="/colombia/agendar" element={<ScheduleAppointment />} />
               <Route path="/colombia/facturacion" element={<ComingSoon title="Cola de Facturación" />} />
               <Route path="/colombia/radicaciones" element={<ComingSoon title="Radicaciones" />} />
               <Route path="/colombia/glosas" element={<ComingSoon title="Glosas" />} />
