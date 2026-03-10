@@ -139,8 +139,8 @@ export default function RadicacionTracker() {
   async function loadRadicaciones() {
     setLoading(true);
     try {
-      const res = await colombiaApi.invoke("mediflow-radicaciones-list", { ips_id: "ips-001" });
-      if (res.success && res.radicaciones?.length > 0) {
+      const { data: res } = await colombiaApi.invoke("mediflow-radicaciones-list", { body: { ips_id: "ips-001" } });
+      if (res?.success && res?.radicaciones?.length > 0) {
         setRadicaciones(res.radicaciones);
         setIsDemo(false);
       } else {
