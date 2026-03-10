@@ -162,17 +162,19 @@ export default function RadicacionTracker() {
       prev.map(r => r.id === radicacion.id ? { ...r, status: "IN_PROGRESS" } : r)
     );
     try {
-      const res = await colombiaApi.invoke("mediflow-factramed-submit", {
-        radicacion_id: radicacion.id,
-        ips_id:        "ips-001",
+      const { data: res } = await colombiaApi.invoke("mediflow-factramed-submit", {
+        body: {
+          radicacion_id: radicacion.id,
+          ips_id:        "ips-001",
+        },
       });
       setRadicaciones(prev =>
         prev.map(r => r.id === radicacion.id ? {
           ...r,
-          status:            res.status || "SUBMITTED",
-          radicacion_number: res.radicacion_number || r.radicacion_number,
-          certificate_pdf_s3:res.certificate_s3 || r.certificate_pdf_s3,
-          error_codes:       res.error_codes || [],
+          status:            res?.status || "SUBMITTED",
+          radicacion_number: res?.radicacion_number || r.radicacion_number,
+          certificate_pdf_s3:res?.certificate_s3 || r.certificate_pdf_s3,
+          error_codes:       res?.error_codes || [],
           submitted_at:      new Date().toISOString(),
         } : r)
       );
