@@ -26,32 +26,32 @@ import Settings from "./pages/Settings";
 import PracticeProfile from "./pages/PracticeProfile";
 import Admin from "./pages/Admin";
 import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
+import ColombiaDashboard from "./pages/colombia/ColombiaDashboard";
+import PatientSearch from "./pages/colombia/PatientSearch";
+
+const ComingSoon = ({ title }: { title: string }) => (
+  <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
+    <span className="text-5xl">🇨🇴</span>
+    <h2 className="text-2xl font-semibold">{title}</h2>
+    <p className="text-sm">Módulo en desarrollo — disponible pronto</p>
+  </div>
+);
 
 const queryClient = new QueryClient();
 
 function IdleTimeoutWrapper() {
   const { showWarning, stayActive, performLogout } = useIdleTimeout();
-  return (
-    <IdleTimeoutWarning
-      open={showWarning}
-      onStayActive={stayActive}
-      onLogout={performLogout}
-    />
-  );
+  return <IdleTimeoutWarning open={showWarning} onStayActive={stayActive} onLogout={performLogout} />;
 }
 
 function PasswordRecoveryHandler() {
   const navigate = useNavigate();
-
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        navigate("/settings");
-      }
+      if (event === "PASSWORD_RECOVERY") navigate("/settings");
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
-
   return null;
 }
 
@@ -65,10 +65,7 @@ const App = () => (
         <BrowserRouter>
           <PasswordRecoveryHandler />
           <Routes>
-            {/* Auth page - no sidebar */}
             <Route path="/auth" element={<Auth />} />
-
-            {/* All app pages share the sidebar layout */}
             <Route element={<AppLayout />}>
               <Route path="/" element={<Index />} />
               <Route path="/upload" element={<DocumentUpload />} />
@@ -83,17 +80,16 @@ const App = () => (
               <Route path="/patient-intake" element={<PatientIntake />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/practice-profile" element={<PracticeProfile />} />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedAdminRoute>
-                    <Admin />
-                  </ProtectedAdminRoute>
-                }
-              />
+              <Route path="/admin" element={<ProtectedAdminRoute><Admin /></ProtectedAdminRoute>} />
+              <Route path="/colombia" element={<ColombiaDashboard />} />
+              <Route path="/colombia/pacientes" element={<PatientSearch />} />
+              <Route path="/colombia/agendar" element={<ComingSoon title="Agendar Cita" />} />
+              <Route path="/colombia/facturacion" element={<ComingSoon title="Cola de Facturación" />} />
+              <Route path="/colombia/radicaciones" element={<ComingSoon title="Radicaciones" />} />
+              <Route path="/colombia/glosas" element={<ComingSoon title="Glosas" />} />
+              <Route path="/colombia/reportes" element={<ComingSoon title="Reportes" />} />
+              <Route path="/colombia/configuracion" element={<ComingSoon title="Configuración" />} />
             </Route>
-
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
