@@ -29,6 +29,7 @@ import { ProtectedAdminRoute } from "@/components/auth/ProtectedAdminRoute";
 import ColombiaDashboard from "./pages/colombia/ColombiaDashboard";
 import PatientSearch from "./pages/colombia/PatientSearch";
 import ScheduleAppointment from "./pages/colombia/ScheduleAppointment";
+import BillingQueue from "./pages/colombia/BillingQueue";
 
 const ComingSoon = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
