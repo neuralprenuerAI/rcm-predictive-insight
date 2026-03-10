@@ -134,14 +134,35 @@ const STATUS_CONFIG: Record<EncounterStatus, { label: string; color: string; bg:
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BillingQueue() {
-  const [encounters,  setEncounters]  = useState<Encounter[]>(DEMO_ENCOUNTERS);
+  const [encounters,  setEncounters]  = useState<Encounter[]>([]);
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
   const [expanded,    setExpanded]    = useState<Set<string>>(new Set());
   const [generating,  setGenerating]  = useState<Set<string>>(new Set());
   const [ripsResults, setRipsResults] = useState<Record<string, RipsResult>>({});
-  const [isDemo,      setIsDemo]      = useState(true);
+  const [isDemo,      setIsDemo]      = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [filter,      setFilter]      = useState<string>("ALL");
+
+  useEffect(() => { loadEncounters(); }, []);
+
+  async function loadEncounters() {
+    setLoading(true);
+    try {
+      const res = await colombiaApi.invoke("mediflow-encounters-list", { ips_id: "ips-001" });
+      if (res.success && res.has_data) {
+        setEncounters(res.encounters);
+        setIsDemo(false);
+      } else {
+        setEncounters(DEMO_ENCOUNTERS);
+        setIsDemo(true);
+      }
+    } catch {
+      setEncounters(DEMO_ENCOUNTERS);
+      setIsDemo(true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Select all pending
   function toggleSelectAll() {
