@@ -148,8 +148,10 @@ export default function BillingQueue() {
   async function loadEncounters() {
     setLoading(true);
     try {
-      const res = await colombiaApi.invoke("mediflow-encounters-list", { ips_id: "ips-001" });
-      if (res.success && res.has_data) {
+      const { data: res, error: apiError } = await colombiaApi.invoke("mediflow-encounters-list", {
+        body: { ips_id: "ips-001" },
+      });
+      if (!apiError && res?.success && res?.has_data) {
         setEncounters(res.encounters);
         setIsDemo(false);
       } else {
