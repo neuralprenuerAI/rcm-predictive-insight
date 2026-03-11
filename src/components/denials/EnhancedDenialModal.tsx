@@ -153,7 +153,10 @@ export default function EnhancedDenialModal({
         body: { master_job_id: masterJobId },
       });
       if (error) throw error;
-      if (data?.status === "complete" && data?.result) return data.result;
+      if (data?.status === "complete" && data?.result) {
+        console.log("ENHANCED RESULT:", JSON.stringify(data, null, 2));
+        return data.result;
+      }
       if (data?.status === "error") throw new Error(data.error || "Analysis failed");
       // Update status text with progress if available
       if (data?.progress) {
