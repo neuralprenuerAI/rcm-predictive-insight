@@ -150,7 +150,7 @@ export default function EnhancedDenialModal({
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 5000));
       const { data, error } = await awsApi.invoke("analyze-denial-enhanced", {
-        body: { user_id: userId, master_job_id: masterJobId },
+        body: { master_job_id: masterJobId },
       });
       if (error) throw error;
       if (data?.status === "complete" && data?.result) return data.result;
