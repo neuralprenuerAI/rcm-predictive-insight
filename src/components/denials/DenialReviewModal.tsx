@@ -178,30 +178,71 @@ export default function DenialReviewModal({
     setOpenPhases(new Set());
     setActivePanel(initialView || "analysis");
 
-    // Run analysis
-    runAnalysis(denialId);
-    // Check cached fix instructions
-    checkCachedFix(denialId);
+    // If raw_extraction exists, build analysis from enhanced data
+    if (denial?.raw_extraction) {
+      const re = denial.raw_extraction;
+      const enhancedAnalysis: AnalysisData = {
+        claim_summary: {
+          overview: re.denialRootCause || undefined,
+          total_billed: denial.billed_amount,
+          total_paid: denial.paid_amount ?? undefined,
+          total_denied: denial.denied_amount,
+          net_recovery_opportunity: denial.denied_amount,
+        },
+        code_analysis: (re.allCarcCodes || denial.denial_codes || []).map((c: any) => ({
+          code: c.code || c.carc || "",
+          description: c.description || c.carcDescription || "",
+          plain_english: c.description || c.carcDescription || "",
+          challengeable: true,
+        })),
+        win_probability: {
+          overall: denial.ai_confidence ?? 0,
+          factors_for: re.appealAssessment?.appealSuccessProbabilityRationale
+            ? [re.appealAssessment.appealSuccessProbabilityRationale]
+            : [],
+          factors_against: [],
+        },
+        recommended_action: re.appealAssessment?.recommendedAction || undefined,
+        full_analysis_text: [
+          re.denialRootCause,
+          re.crossReferenceFindings?.crossReferenceVerdict,
+        ].filter(Boolean).join("\n\n") || undefined,
+        timely_filing: denial.appeal_deadline
+          ? { appeal_deadline: denial.appeal_deadline, days_remaining: Math.ceil((new Date(denial.appeal_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
+          : undefined,
+      };
+      setAnalysis(enhancedAnalysis);
+      if (denialId) onContentGenerated?.(denialId, "analysis");
+
+      // Use raw_extraction.fixInstructions if available
+      if (re.fixInstructions && re.fixInstructions.length > 0) {
+        const enhancedFix: FixData = {
+          summary: `${re.fixInstructions.length} step resolution plan from enhanced analysis`,
+          difficulty: "medium",
+          phases: [{
+            phase_number: 1,
+            title: "Resolution Steps",
+            steps: re.fixInstructions.map((instruction: string, idx: number) => ({
+              step_number: idx + 1,
+              title: instruction,
+            })),
+          }],
+        };
+        setFixData(enhancedFix);
+        setOpenPhases(new Set([0]));
+        if (denialId) onContentGenerated?.(denialId, "fix");
+      } else {
+        checkCachedFix(denialId);
+      }
+    } else {
+      // No raw_extraction — fall back to API call
+      runAnalysis(denialId);
+      checkCachedFix(denialId);
+    }
+
     // Check cached letter
     if (!cachedLetter) checkCachedLetter(denialId);
   }, [open, denialId]);
-
-  const runAnalysis = async (id: string) => {
-    setLoadingAnalysis(true);
-    setAnalysisError(null);
-    try {
-      const res = await awsApi.invoke("rcm-denial-analysis", { body: { denialId: id } });
-      if (res.error) throw res.error;
-      const d = res.data?.analysis || res.data;
-      if (!d) throw new Error("No analysis data returned");
-      setAnalysis(d);
-      if (denialId) onContentGenerated?.(denialId, "analysis");
-    } catch (err: any) {
-      setAnalysisError(err.message || "Analysis failed");
-    } finally {
-      setLoadingAnalysis(false);
-    }
-  };
 
   const checkCachedFix = async (id: string) => {
     try {
