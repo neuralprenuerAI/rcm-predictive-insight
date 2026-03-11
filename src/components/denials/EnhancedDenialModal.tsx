@@ -204,14 +204,16 @@ export default function EnhancedDenialModal({
     setTimeout(poll, intervalMs);
   };
 
-  const processAnalysisResult = async (result: any) => {
-    const denialCount = result?.denialCount || result?.analysis?.denials?.length || 0;
+  const processAnalysisResult = async (response: any) => {
+    const count = response?.result?.denialCount || response?.result?.analysis?.denials?.length || 0;
 
     toast({
       title: "Analysis Complete",
-      description: `${denialCount} denial${denialCount !== 1 ? "s" : ""} imported successfully`,
+      description: `${count} denial${count !== 1 ? "s" : ""} imported successfully`,
     });
 
+    setAnalyzing(false);
+    setStatusText("");
     onImportComplete();
     handleClose();
   };
