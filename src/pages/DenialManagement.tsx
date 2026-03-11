@@ -866,7 +866,7 @@ export default function DenialManagement() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Button variant="outline" onClick={() => setShowEnhancedModal(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import Denials
             </Button>
