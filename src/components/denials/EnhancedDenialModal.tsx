@@ -123,7 +123,7 @@ export default function EnhancedDenialModal({
       // If async, poll
       if (submitRes?.async && submitRes?.master_job_id) {
         setStatusText("Analyzing documents... this takes 30–60 seconds");
-        const result = await pollForCompletion(user.id, submitRes.master_job_id);
+        const result = await pollForCompletion(submitRes.master_job_id);
         await processAnalysisResult(result);
       } else if (submitRes?.status === "complete" && submitRes?.result) {
         await processAnalysisResult(submitRes.result);
