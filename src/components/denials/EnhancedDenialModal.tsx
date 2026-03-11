@@ -23,7 +23,6 @@ interface EnhancedDenialModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImportComplete: () => void;
-  classifyDenial: (claim: any, checkDate: string, payerName: string) => Promise<any>;
 }
 
 function formatFileSize(bytes: number): string {
