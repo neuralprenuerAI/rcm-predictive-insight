@@ -169,8 +169,9 @@ export default function EnhancedDenialModal({
   };
 
   const processAnalysisResult = async (result: any) => {
-    const analysis = result.analysis || result;
-    const denials = analysis.denials || [];
+    // The full data lives at result.analysis
+    const analysis = result?.analysis || result;
+    const denials = analysis?.denials || [];
 
     if (!denials.length) {
       toast({
@@ -196,13 +197,24 @@ export default function EnhancedDenialModal({
             reasonDescription: denial.primaryCarcDescription,
             deniedAmount: denial.deniedAmount,
             billedAmount: denial.billedAmount,
+            allowedAmount: denial.allowedAmount,
             payerName,
             cptCode: denial.serviceLines?.[0]?.cptCode,
             serviceDate: denial.dateOfService,
+            claimId: denial.claimNumber,
+            patientName: denial.patient?.name,
+            // Pass full enhanced data for the review modal
+            allCarcCodes: denial.allCarcCodes,
+            denialRootCause: denial.denialRootCause,
+            denialCategory: denial.denialCategory,
+            paidAmount: denial.paidAmount,
+            serviceLines: denial.serviceLines,
+            appealAssessment: denial.appealAssessment,
             fixInstructions: denial.fixInstructions,
-            appealSuccessProbability: denial.appealAssessment?.appealSuccessProbability,
-            recommendedAction: denial.appealAssessment?.recommendedAction,
+            requiredDocumentation: denial.requiredDocumentation,
             crossReferenceFindings: denial.crossReferenceFindings,
+            executiveSummary: analysis.executiveSummary,
+            totalRecoverable: result?.totalRecoverable,
           },
           denial.dateOfService || new Date().toISOString().split("T")[0],
           payerName
