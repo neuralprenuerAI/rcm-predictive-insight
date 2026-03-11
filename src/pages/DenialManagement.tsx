@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
+import EnhancedDenialModal from "@/components/denials/EnhancedDenialModal";
 
 interface CptLine {
   cptCode?: string;
@@ -177,6 +178,9 @@ export default function DenialManagement() {
   const [detectedType, setDetectedType] = useState<string>('');
   const [eobJobId, setEobJobId] = useState<string | null>(null);
   const [eobPolling, setEobPolling] = useState(false);
+
+  // Enhanced denial modal
+  const [showEnhancedModal, setShowEnhancedModal] = useState(false);
 
   // Review modal
   const [reviewDenial, setReviewDenial] = useState<DenialRecord | null>(null);
@@ -862,7 +866,7 @@ export default function DenialManagement() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Button variant="outline" onClick={() => setShowEnhancedModal(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import Denials
             </Button>
@@ -1442,6 +1446,45 @@ export default function DenialManagement() {
               [type]: type === "letter" ? data : true,
             },
           }));
+        }}
+      />
+
+      {/* Enhanced Denial Analysis Modal */}
+      <EnhancedDenialModal
+        open={showEnhancedModal}
+        onOpenChange={setShowEnhancedModal}
+        onImportComplete={fetchDenials}
+        classifyDenial={async (claim: any, checkDate: string, payerName: string) => {
+          const billedAmount = parseFloat(claim.billedAmount) || 0;
+          const paidAmount = parseFloat(claim.paidAmount) || 0;
+          return awsApi.invoke('classify-denial', {
+            body: {
+              patientName: claim.patient?.name || claim.patientName || '',
+              providerName: claim.provider?.name || claim.providerName || '',
+              payerName,
+              claimNumber: claim.claimNumber || '',
+              reasonCode: claim.primaryDenialCode || '',
+              reasonDescription: claim.denialSummary || '',
+              billedAmount,
+              paidAmount,
+              allowedAmount: parseFloat(claim.allowedAmount) || 0,
+              deniedAmount: billedAmount - paidAmount,
+              serviceDate: claim.serviceDateStart || claim.dateOfService || null,
+              denialDate: checkDate,
+              cptCode: claim.serviceLines?.[0]?.cptCode || '',
+              remarkCodes: claim.remarkCodes || [],
+              allDenialCodes: claim.allDenialCodes || [],
+              cptLines: claim.serviceLines || [],
+              denial_codes: claim.allDenialCodes || [],
+              crossReferenceFindings: claim.crossReferenceFindings || null,
+              fixInstructions: claim.fixInstructions || null,
+              appealSuccessProbability: claim.appealSuccessProbability || null,
+              recommendedAction: claim.recommendedAction || null,
+              carcCodes: claim.carcCodes || [],
+              rarcCodes: claim.rarcCodes || [],
+              rawExtraction: claim,
+            },
+          });
         }}
       />
 
