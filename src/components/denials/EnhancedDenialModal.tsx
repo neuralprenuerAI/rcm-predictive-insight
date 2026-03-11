@@ -109,7 +109,6 @@ export default function EnhancedDenialModal({
 
       const { data: submitRes, error: submitErr } = await awsApi.invoke("analyze-denial-enhanced", {
         body: {
-          user_id: user.id,
           denial_file: denialB64,
           denial_file_name: eobFile!.file.name,
           clinical_file: clinicalB64 || null,
