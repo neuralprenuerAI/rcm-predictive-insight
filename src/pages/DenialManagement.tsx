@@ -179,6 +179,9 @@ export default function DenialManagement() {
   const [eobJobId, setEobJobId] = useState<string | null>(null);
   const [eobPolling, setEobPolling] = useState(false);
 
+  // Enhanced denial modal
+  const [showEnhancedModal, setShowEnhancedModal] = useState(false);
+
   // Review modal
   const [reviewDenial, setReviewDenial] = useState<DenialRecord | null>(null);
   const [reviewInitialView, setReviewInitialView] = useState<"analysis" | "letter" | "fix" | null>(null);
