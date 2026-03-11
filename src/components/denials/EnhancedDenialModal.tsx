@@ -170,7 +170,7 @@ export default function EnhancedDenialModal({
 
   const processAnalysisResult = async (result: any) => {
     const analysis = result.analysis || result;
-    const denials = analysis.denials || analysis.claims || [];
+    const denials = analysis.denials || [];
 
     if (!denials.length) {
       toast({
@@ -183,11 +183,31 @@ export default function EnhancedDenialModal({
 
     setStatusText(`Classifying ${denials.length} denial${denials.length > 1 ? "s" : ""}...`);
 
-    const checkDate = analysis.checkDate || new Date().toISOString().split("T")[0];
-    const payerName = analysis.payer?.name || denials[0]?.payer?.name || "Unknown Payer";
+    const payerName = analysis.payer?.name || "Unknown Payer";
+
+    const { data: { user } } = await supabase.auth.getUser();
 
     const classifyResults = await Promise.allSettled(
-      denials.map((claim: any) => classifyDenial(claim, checkDate, payerName))
+      denials.map((denial: any) =>
+        classifyDenial(
+          {
+            user_id: user?.id,
+            reasonCode: denial.primaryCarcCode,
+            reasonDescription: denial.primaryCarcDescription,
+            deniedAmount: denial.deniedAmount,
+            billedAmount: denial.billedAmount,
+            payerName,
+            cptCode: denial.serviceLines?.[0]?.cptCode,
+            serviceDate: denial.dateOfService,
+            fixInstructions: denial.fixInstructions,
+            appealSuccessProbability: denial.appealAssessment?.appealSuccessProbability,
+            recommendedAction: denial.appealAssessment?.recommendedAction,
+            crossReferenceFindings: denial.crossReferenceFindings,
+          },
+          denial.dateOfService || new Date().toISOString().split("T")[0],
+          payerName
+        )
+      )
     );
 
     let imported = 0;
