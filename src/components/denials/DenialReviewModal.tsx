@@ -44,6 +44,25 @@ interface DenialReviewModalProps {
     id: string;
     patient_name?: string | null;
     payer_name?: string;
+    billed_amount?: number;
+    paid_amount?: number | null;
+    denied_amount?: number;
+    ai_confidence?: number | null;
+    appeal_deadline?: string | null;
+    denial_codes?: Array<{ groupCode?: string; carc?: string; carcDescription?: string; amount?: number }>;
+    cpt_lines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null }>;
+    raw_extraction?: {
+      denialRootCause?: string;
+      crossReferenceFindings?: { crossReferenceVerdict?: string };
+      fixInstructions?: string[];
+      appealAssessment?: {
+        recommendedAction?: string;
+        appealSuccessProbabilityRationale?: string;
+      };
+      allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
+      denialCategory?: string;
+      [key: string]: any;
+    };
     claim?: { claim_id: string } | null;
     patient?: { first_name: string; last_name: string } | null;
   } | null;
