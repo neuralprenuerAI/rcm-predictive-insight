@@ -50,7 +50,6 @@ export default function EnhancedDenialModal({
   open,
   onOpenChange,
   onImportComplete,
-  classifyDenial,
 }: EnhancedDenialModalProps) {
   const { toast } = useToast();
   const [files, setFiles] = useState<TaggedFile[]>([]);
