@@ -643,10 +643,12 @@ export default function DenialManagement() {
     setImportResult({ imported, skipped, errors });
 
     if (imported > 0) {
-      toast({ title: 'Import Successful', description: `Imported ${imported} denial${imported > 1 ? 's' : ''}` });
+      toast({ title: 'Import Successful', description: `Imported ${imported} denial${imported > 1 ? 's' : ''}${skipped ? `, ${skipped} duplicate${skipped > 1 ? 's' : ''}` : ''}` });
       fetchDenials();
     } else if (skipped > 0) {
       toast({ title: 'All Duplicates', description: `${skipped} denial${skipped > 1 ? 's' : ''} already exist` });
+    } else if (errors.length > 0) {
+      toast({ title: 'Import Failed', description: `${errors.length} claim${errors.length > 1 ? 's' : ''} failed to classify: ${errors[0]}`, variant: 'destructive' });
     } else {
       toast({ title: 'No Denials Imported', description: 'No new denials were found', variant: 'destructive' });
     }
