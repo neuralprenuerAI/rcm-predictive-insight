@@ -244,6 +244,23 @@ export default function DenialReviewModal({
     if (!cachedLetter) checkCachedLetter(denialId);
   }, [open, denialId]);
 
+  const runAnalysis = async (id: string) => {
+    setLoadingAnalysis(true);
+    setAnalysisError(null);
+    try {
+      const res = await awsApi.invoke("rcm-denial-analysis", { body: { denialId: id } });
+      if (res.error) throw res.error;
+      const d = res.data?.analysis || res.data;
+      if (!d) throw new Error("No analysis data returned");
+      setAnalysis(d);
+      if (denialId) onContentGenerated?.(denialId, "analysis");
+    } catch (err: any) {
+      setAnalysisError(err.message || "Analysis failed");
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  };
+
   const checkCachedFix = async (id: string) => {
     try {
       const res = await awsApi.invoke("fix-instructions", { body: { denialId: id, checkOnly: true } });
