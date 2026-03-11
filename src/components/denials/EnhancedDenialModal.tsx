@@ -169,91 +169,14 @@ export default function EnhancedDenialModal({
   };
 
   const processAnalysisResult = async (result: any) => {
-    // The full data lives at result.analysis
-    const analysis = result?.analysis || result;
-    const denials = analysis?.denials || [];
+    const denialCount = result?.denialCount || result?.analysis?.denials?.length || 0;
 
-    if (!denials.length) {
-      toast({
-        title: "No Denials Found",
-        description: "The analysis did not find any denial data in the uploaded documents.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setStatusText(`Classifying ${denials.length} denial${denials.length > 1 ? "s" : ""}...`);
-
-    const payerName = analysis.payer?.name || "Unknown Payer";
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const classifyResults = await Promise.allSettled(
-      denials.map((denial: any) =>
-        classifyDenial(
-          {
-            user_id: user?.id,
-            reasonCode: denial.primaryCarcCode,
-            reasonDescription: denial.primaryCarcDescription,
-            deniedAmount: denial.deniedAmount,
-            billedAmount: denial.billedAmount,
-            allowedAmount: denial.allowedAmount,
-            payerName,
-            cptCode: denial.serviceLines?.[0]?.cptCode,
-            serviceDate: denial.dateOfService,
-            claimId: denial.claimNumber,
-            patientName: denial.patient?.name,
-            // Pass full enhanced data for the review modal
-            allCarcCodes: denial.allCarcCodes,
-            denialRootCause: denial.denialRootCause,
-            denialCategory: denial.denialCategory,
-            paidAmount: denial.paidAmount,
-            serviceLines: denial.serviceLines,
-            appealAssessment: denial.appealAssessment,
-            fixInstructions: denial.fixInstructions,
-            requiredDocumentation: denial.requiredDocumentation,
-            crossReferenceFindings: denial.crossReferenceFindings,
-            executiveSummary: analysis.executiveSummary,
-            totalRecoverable: result?.totalRecoverable,
-          },
-          denial.dateOfService || new Date().toISOString().split("T")[0],
-          payerName
-        )
-      )
-    );
-
-    let imported = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    classifyResults.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        const res = r.value;
-        if (res.error) {
-          errors.push(`Denial ${i + 1}: ${res.error.message}`);
-        } else if (res.data?.duplicate || res.data?.conflict) {
-          skipped++;
-        } else {
-          imported++;
-        }
-      } else {
-        errors.push(`Denial ${i + 1}: ${r.reason?.message || "Unknown error"}`);
-      }
+    toast({
+      title: "Analysis Complete",
+      description: `${denialCount} denial${denialCount !== 1 ? "s" : ""} imported successfully`,
     });
 
-    if (imported > 0) {
-      toast({
-        title: "Import Successful",
-        description: `Imported ${imported} denial${imported > 1 ? "s" : ""}${skipped ? `, ${skipped} duplicate${skipped > 1 ? "s" : ""}` : ""}`,
-      });
-      onImportComplete();
-    } else if (skipped > 0) {
-      toast({ title: "All Duplicates", description: `${skipped} denial(s) already exist` });
-    } else if (errors.length > 0) {
-      toast({ title: "Import Failed", description: errors[0], variant: "destructive" });
-    }
-
-    // Close modal
+    onImportComplete();
     handleClose();
   };
 
