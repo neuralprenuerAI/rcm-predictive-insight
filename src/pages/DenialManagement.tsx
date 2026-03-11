@@ -1454,36 +1454,6 @@ export default function DenialManagement() {
         open={showEnhancedModal}
         onOpenChange={setShowEnhancedModal}
         onImportComplete={fetchDenials}
-        classifyDenial={async (claim: any, checkDate: string, payerName: string) => {
-          return awsApi.invoke('rcm-classify-denial', {
-            body: {
-              user_id: claim.user_id,
-              reasonCode: claim.reasonCode || '',
-              reasonDescription: claim.reasonDescription || '',
-              deniedAmount: parseFloat(claim.deniedAmount) || 0,
-              billedAmount: parseFloat(claim.billedAmount) || 0,
-              allowedAmount: parseFloat(claim.allowedAmount) || 0,
-              payerName: claim.payerName || payerName,
-              cptCode: claim.cptCode || '',
-              serviceDate: claim.serviceDate || null,
-              claimId: claim.claimId || '',
-              patientName: claim.patientName || '',
-              denialDate: checkDate,
-              // Enhanced analysis data passed through for storage
-              allCarcCodes: claim.allCarcCodes || [],
-              denialRootCause: claim.denialRootCause || null,
-              denialCategory: claim.denialCategory || null,
-              paidAmount: parseFloat(claim.paidAmount) || 0,
-              serviceLines: claim.serviceLines || [],
-              appealAssessment: claim.appealAssessment || null,
-              fixInstructions: claim.fixInstructions || null,
-              requiredDocumentation: claim.requiredDocumentation || null,
-              crossReferenceFindings: claim.crossReferenceFindings || null,
-              executiveSummary: claim.executiveSummary || null,
-              totalRecoverable: claim.totalRecoverable || null,
-            },
-          });
-        }}
       />
 
       {/* Delete Confirmation Dialog */}

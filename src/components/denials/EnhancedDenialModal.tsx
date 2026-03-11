@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload, X, FileText, FileImage, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+
 import { awsApi } from "@/integrations/aws/awsApi";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,7 +23,6 @@ interface EnhancedDenialModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImportComplete: () => void;
-  classifyDenial: (claim: any, checkDate: string, payerName: string) => Promise<any>;
 }
 
 function formatFileSize(bytes: number): string {
@@ -51,7 +50,6 @@ export default function EnhancedDenialModal({
   open,
   onOpenChange,
   onImportComplete,
-  classifyDenial,
 }: EnhancedDenialModalProps) {
   const { toast } = useToast();
   const [files, setFiles] = useState<TaggedFile[]>([]);
@@ -95,8 +93,6 @@ export default function EnhancedDenialModal({
     setStatusText("Preparing files...");
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
 
       // Build payload
       const eobFile = files.find(f => f.tag === "Denial / EOB");
@@ -113,7 +109,6 @@ export default function EnhancedDenialModal({
 
       const { data: submitRes, error: submitErr } = await awsApi.invoke("analyze-denial-enhanced", {
         body: {
-          user_id: user.id,
           denial_file: denialB64,
           denial_file_name: eobFile!.file.name,
           clinical_file: clinicalB64 || null,
@@ -128,7 +123,7 @@ export default function EnhancedDenialModal({
       // If async, poll
       if (submitRes?.async && submitRes?.master_job_id) {
         setStatusText("Analyzing documents... this takes 30–60 seconds");
-        const result = await pollForCompletion(user.id, submitRes.master_job_id);
+        const result = await pollForCompletion(submitRes.master_job_id);
         await processAnalysisResult(result);
       } else if (submitRes?.status === "complete" && submitRes?.result) {
         await processAnalysisResult(submitRes.result);
@@ -150,12 +145,12 @@ export default function EnhancedDenialModal({
     }
   };
 
-  const pollForCompletion = async (userId: string, masterJobId: string): Promise<any> => {
+  const pollForCompletion = async (masterJobId: string): Promise<any> => {
     const maxAttempts = 24; // 24 * 5s = 2 minutes
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 5000));
       const { data, error } = await awsApi.invoke("analyze-denial-enhanced", {
-        body: { user_id: userId, master_job_id: masterJobId },
+        body: { master_job_id: masterJobId },
       });
       if (error) throw error;
       if (data?.status === "complete" && data?.result) return data.result;
@@ -169,91 +164,14 @@ export default function EnhancedDenialModal({
   };
 
   const processAnalysisResult = async (result: any) => {
-    // The full data lives at result.analysis
-    const analysis = result?.analysis || result;
-    const denials = analysis?.denials || [];
+    const denialCount = result?.denialCount || result?.analysis?.denials?.length || 0;
 
-    if (!denials.length) {
-      toast({
-        title: "No Denials Found",
-        description: "The analysis did not find any denial data in the uploaded documents.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setStatusText(`Classifying ${denials.length} denial${denials.length > 1 ? "s" : ""}...`);
-
-    const payerName = analysis.payer?.name || "Unknown Payer";
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const classifyResults = await Promise.allSettled(
-      denials.map((denial: any) =>
-        classifyDenial(
-          {
-            user_id: user?.id,
-            reasonCode: denial.primaryCarcCode,
-            reasonDescription: denial.primaryCarcDescription,
-            deniedAmount: denial.deniedAmount,
-            billedAmount: denial.billedAmount,
-            allowedAmount: denial.allowedAmount,
-            payerName,
-            cptCode: denial.serviceLines?.[0]?.cptCode,
-            serviceDate: denial.dateOfService,
-            claimId: denial.claimNumber,
-            patientName: denial.patient?.name,
-            // Pass full enhanced data for the review modal
-            allCarcCodes: denial.allCarcCodes,
-            denialRootCause: denial.denialRootCause,
-            denialCategory: denial.denialCategory,
-            paidAmount: denial.paidAmount,
-            serviceLines: denial.serviceLines,
-            appealAssessment: denial.appealAssessment,
-            fixInstructions: denial.fixInstructions,
-            requiredDocumentation: denial.requiredDocumentation,
-            crossReferenceFindings: denial.crossReferenceFindings,
-            executiveSummary: analysis.executiveSummary,
-            totalRecoverable: result?.totalRecoverable,
-          },
-          denial.dateOfService || new Date().toISOString().split("T")[0],
-          payerName
-        )
-      )
-    );
-
-    let imported = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    classifyResults.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        const res = r.value;
-        if (res.error) {
-          errors.push(`Denial ${i + 1}: ${res.error.message}`);
-        } else if (res.data?.duplicate || res.data?.conflict) {
-          skipped++;
-        } else {
-          imported++;
-        }
-      } else {
-        errors.push(`Denial ${i + 1}: ${r.reason?.message || "Unknown error"}`);
-      }
+    toast({
+      title: "Analysis Complete",
+      description: `${denialCount} denial${denialCount !== 1 ? "s" : ""} imported successfully`,
     });
 
-    if (imported > 0) {
-      toast({
-        title: "Import Successful",
-        description: `Imported ${imported} denial${imported > 1 ? "s" : ""}${skipped ? `, ${skipped} duplicate${skipped > 1 ? "s" : ""}` : ""}`,
-      });
-      onImportComplete();
-    } else if (skipped > 0) {
-      toast({ title: "All Duplicates", description: `${skipped} denial(s) already exist` });
-    } else if (errors.length > 0) {
-      toast({ title: "Import Failed", description: errors[0], variant: "destructive" });
-    }
-
-    // Close modal
+    onImportComplete();
     handleClose();
   };
 
