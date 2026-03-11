@@ -1455,34 +1455,32 @@ export default function DenialManagement() {
         onOpenChange={setShowEnhancedModal}
         onImportComplete={fetchDenials}
         classifyDenial={async (claim: any, checkDate: string, payerName: string) => {
-          const billedAmount = parseFloat(claim.billedAmount) || 0;
-          const paidAmount = parseFloat(claim.paidAmount) || 0;
-          return awsApi.invoke('classify-denial', {
+          return awsApi.invoke('rcm-classify-denial', {
             body: {
-              patientName: claim.patient?.name || claim.patientName || '',
-              providerName: claim.provider?.name || claim.providerName || '',
-              payerName,
-              claimNumber: claim.claimNumber || '',
-              reasonCode: claim.primaryDenialCode || '',
-              reasonDescription: claim.denialSummary || '',
-              billedAmount,
-              paidAmount,
+              user_id: claim.user_id,
+              reasonCode: claim.reasonCode || '',
+              reasonDescription: claim.reasonDescription || '',
+              deniedAmount: parseFloat(claim.deniedAmount) || 0,
+              billedAmount: parseFloat(claim.billedAmount) || 0,
               allowedAmount: parseFloat(claim.allowedAmount) || 0,
-              deniedAmount: billedAmount - paidAmount,
-              serviceDate: claim.serviceDateStart || claim.dateOfService || null,
+              payerName: claim.payerName || payerName,
+              cptCode: claim.cptCode || '',
+              serviceDate: claim.serviceDate || null,
+              claimId: claim.claimId || '',
+              patientName: claim.patientName || '',
               denialDate: checkDate,
-              cptCode: claim.serviceLines?.[0]?.cptCode || '',
-              remarkCodes: claim.remarkCodes || [],
-              allDenialCodes: claim.allDenialCodes || [],
-              cptLines: claim.serviceLines || [],
-              denial_codes: claim.allDenialCodes || [],
-              crossReferenceFindings: claim.crossReferenceFindings || null,
+              // Enhanced analysis data passed through for storage
+              allCarcCodes: claim.allCarcCodes || [],
+              denialRootCause: claim.denialRootCause || null,
+              denialCategory: claim.denialCategory || null,
+              paidAmount: parseFloat(claim.paidAmount) || 0,
+              serviceLines: claim.serviceLines || [],
+              appealAssessment: claim.appealAssessment || null,
               fixInstructions: claim.fixInstructions || null,
-              appealSuccessProbability: claim.appealSuccessProbability || null,
-              recommendedAction: claim.recommendedAction || null,
-              carcCodes: claim.carcCodes || [],
-              rarcCodes: claim.rarcCodes || [],
-              rawExtraction: claim,
+              requiredDocumentation: claim.requiredDocumentation || null,
+              crossReferenceFindings: claim.crossReferenceFindings || null,
+              executiveSummary: claim.executiveSummary || null,
+              totalRecoverable: claim.totalRecoverable || null,
             },
           });
         }}
