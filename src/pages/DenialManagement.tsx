@@ -1449,6 +1449,45 @@ export default function DenialManagement() {
         }}
       />
 
+      {/* Enhanced Denial Analysis Modal */}
+      <EnhancedDenialModal
+        open={showEnhancedModal}
+        onOpenChange={setShowEnhancedModal}
+        onImportComplete={fetchDenials}
+        classifyDenial={async (claim: any, checkDate: string, payerName: string) => {
+          const billedAmount = parseFloat(claim.billedAmount) || 0;
+          const paidAmount = parseFloat(claim.paidAmount) || 0;
+          return awsApi.invoke('classify-denial', {
+            body: {
+              patientName: claim.patient?.name || claim.patientName || '',
+              providerName: claim.provider?.name || claim.providerName || '',
+              payerName,
+              claimNumber: claim.claimNumber || '',
+              reasonCode: claim.primaryDenialCode || '',
+              reasonDescription: claim.denialSummary || '',
+              billedAmount,
+              paidAmount,
+              allowedAmount: parseFloat(claim.allowedAmount) || 0,
+              deniedAmount: billedAmount - paidAmount,
+              serviceDate: claim.serviceDateStart || claim.dateOfService || null,
+              denialDate: checkDate,
+              cptCode: claim.serviceLines?.[0]?.cptCode || '',
+              remarkCodes: claim.remarkCodes || [],
+              allDenialCodes: claim.allDenialCodes || [],
+              cptLines: claim.serviceLines || [],
+              denial_codes: claim.allDenialCodes || [],
+              crossReferenceFindings: claim.crossReferenceFindings || null,
+              fixInstructions: claim.fixInstructions || null,
+              appealSuccessProbability: claim.appealSuccessProbability || null,
+              recommendedAction: claim.recommendedAction || null,
+              carcCodes: claim.carcCodes || [],
+              rarcCodes: claim.rarcCodes || [],
+              rawExtraction: claim,
+            },
+          });
+        }}
+      />
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingDenial} onOpenChange={(open) => { if (!open) setDeletingDenial(null); }}>
         <AlertDialogContent>
