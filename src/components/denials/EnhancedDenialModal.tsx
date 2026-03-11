@@ -123,47 +123,85 @@ export default function EnhancedDenialModal({
       // If async, poll
       if (submitRes?.async && submitRes?.master_job_id) {
         setStatusText("Analyzing documents... this takes 30–60 seconds");
-        const result = await pollForCompletion(submitRes.master_job_id);
-        await processAnalysisResult(result);
-      } else if (submitRes?.status === "complete" && submitRes?.result) {
-        await processAnalysisResult(submitRes.result);
+        pollForResult(submitRes.master_job_id);
+      } else if (submitRes?.status === "complete") {
+        console.log("ENHANCED RESULT (immediate):", JSON.stringify(submitRes, null, 2));
+        await processAnalysisResult(submitRes);
       } else {
-        // Treat the response itself as the result
         await processAnalysisResult(submitRes);
       }
 
     } catch (err) {
       console.error("Enhanced analysis error:", err);
+      setAnalyzing(false);
+      setStatusText("");
       toast({
         title: "Analysis Failed",
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
-    } finally {
-      setAnalyzing(false);
-      setStatusText("");
     }
   };
 
-  const pollForCompletion = async (masterJobId: string): Promise<any> => {
-    const maxAttempts = 24; // 24 * 5s = 2 minutes
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const { data, error } = await awsApi.invoke("analyze-denial-enhanced", {
-        body: { master_job_id: masterJobId },
-      });
-      if (error) throw error;
-      if (data?.status === "complete" && data?.result) {
-        console.log("ENHANCED RESULT:", JSON.stringify(data, null, 2));
-        return data.result;
+  const pollForResult = (masterJobId: string) => {
+    const maxAttempts = 24;
+    const intervalMs = 5000;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts++;
+      try {
+        const { data: response, error } = await awsApi.invoke("analyze-denial-enhanced", {
+          body: { master_job_id: masterJobId },
+        });
+
+        console.log(`Poll attempt ${attempts}:`, response?.status, error ? `error: ${error.message}` : "");
+
+        if (error) {
+          setAnalyzing(false);
+          setStatusText("");
+          toast({ title: "Polling Failed", description: error.message, variant: "destructive" });
+          return;
+        }
+
+        if (response?.status === "complete") {
+          console.log("ENHANCED RESULT:", JSON.stringify(response, null, 2));
+          await processAnalysisResult(response);
+          return;
+        }
+
+        if (response?.status === "error") {
+          setAnalyzing(false);
+          setStatusText("");
+          toast({ title: "Analysis Failed", description: response.error || "Unknown error", variant: "destructive" });
+          return;
+        }
+
+        // Still processing — update progress if available
+        if (response?.progress) {
+          setStatusText(`Analyzing documents... ${response.progress}`);
+        }
+
+        if (attempts >= maxAttempts) {
+          setAnalyzing(false);
+          setStatusText("");
+          toast({ title: "Analysis Timed Out", description: "Analysis timed out after 120 seconds. Please try again.", variant: "destructive" });
+          return;
+        }
+
+        // Continue polling
+        setTimeout(poll, intervalMs);
+
+      } catch (err) {
+        console.error("Poll error:", err);
+        setAnalyzing(false);
+        setStatusText("");
+        toast({ title: "Polling Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
       }
-      if (data?.status === "error") throw new Error(data.error || "Analysis failed");
-      // Update status text with progress if available
-      if (data?.progress) {
-        setStatusText(`Analyzing documents... ${data.progress}`);
-      }
-    }
-    throw new Error("Analysis timed out after 2 minutes. Please try again.");
+    };
+
+    // Start first poll after interval
+    setTimeout(poll, intervalMs);
   };
 
   const processAnalysisResult = async (result: any) => {
