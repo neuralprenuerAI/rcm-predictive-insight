@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import DenialReviewModal from "@/components/denials/DenialReviewModal";
+import EnhancedDenialModal from "@/components/denials/EnhancedDenialModal";
 
 interface CptLine {
   cptCode?: string;
