@@ -93,8 +93,6 @@ export default function EnhancedDenialModal({
     setStatusText("Preparing files...");
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
 
       // Build payload
       const eobFile = files.find(f => f.tag === "Denial / EOB");
