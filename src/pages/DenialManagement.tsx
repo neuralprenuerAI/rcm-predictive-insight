@@ -63,6 +63,7 @@ interface DenialRecord {
   root_cause: string | null;
   billed_amount: number;
   denied_amount: number;
+  paid_amount?: number | null;
   cpt_code: string | null;
   icd_codes: string[] | null;
   status: string;
@@ -71,6 +72,19 @@ interface DenialRecord {
   days_until_deadline: number | null;
   ai_confidence: number | null;
   cpt_lines?: CptLine[];
+  denial_codes?: Array<{ groupCode?: string; carc?: string; carcDescription?: string; amount?: number }>;
+  raw_extraction?: {
+    denialRootCause?: string;
+    crossReferenceFindings?: { crossReferenceVerdict?: string };
+    fixInstructions?: string[];
+    appealAssessment?: {
+      recommendedAction?: string;
+      appealSuccessProbabilityRationale?: string;
+    };
+    allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
+    denialCategory?: string;
+    [key: string]: any;
+  };
   patient: {
     first_name: string;
     last_name: string;
