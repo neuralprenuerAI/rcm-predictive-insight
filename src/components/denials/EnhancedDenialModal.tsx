@@ -145,7 +145,7 @@ export default function EnhancedDenialModal({
     }
   };
 
-  const pollForCompletion = async (userId: string, masterJobId: string): Promise<any> => {
+  const pollForCompletion = async (masterJobId: string): Promise<any> => {
     const maxAttempts = 24; // 24 * 5s = 2 minutes
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 5000));
