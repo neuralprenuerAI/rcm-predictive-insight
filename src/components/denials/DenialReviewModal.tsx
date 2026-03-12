@@ -302,11 +302,10 @@ export default function DenialReviewModal({
         setFixData(enhancedFix);
         setOpenPhases(new Set([0]));
         if (denialId) onContentGenerated?.(denialId, "fix");
-      } else {
-        checkCachedFix(denialId);
       }
+      // Enhanced data present — no API calls needed for fix either
     } else {
-      // No raw_extraction — fall back to API call
+      // No enhanced data — fall back to API calls
       runAnalysis(denialId);
       checkCachedFix(denialId);
     }
