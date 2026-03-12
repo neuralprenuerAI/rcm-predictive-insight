@@ -93,7 +93,7 @@ const App = () => (
               <Route path="/colombia/radicaciones" element={<RadicacionTracker />} />
               <Route path="/colombia/glosas" element={<GlosaManagement />} />
               <Route path="/colombia/reportes" element={<ComingSoon title="Reportes" />} />
-              <Route path="/colombia/configuracion" element={<ComingSoon title="Configuración" />} />
+              <Route path="/colombia/configuracion" element={<ColombiaConfig />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
