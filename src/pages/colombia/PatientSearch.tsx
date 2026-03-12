@@ -38,15 +38,15 @@ export default function PatientSearch() {
     const clean = cedula.replace(/\D/g, "").trim();
     if (!clean || clean.length < 5) { setError("Ingrese un número de documento válido (mínimo 5 dígitos)"); return; }
     setLoading(true); setError(null); setResult(null);
-    const { data, error: apiError } = await colombiaApi.invoke<{ body: string }>("mediflow-patient-search", { body: { cedula: clean, tipo_doc: tipoDoc, include_appointments: true } });
-    setLoading(false);
-    if (apiError) { setError(`Error de conexión: ${apiError.message}`); return; }
     let parsed: PatientSearchResult;
     try {
-      const body = typeof data === "string" ? JSON.parse(data) : data;
-      const bodyStr = body?.body;
-      parsed = typeof bodyStr === "string" ? JSON.parse(bodyStr) : bodyStr ?? body;
-    } catch { setError("Error al procesar la respuesta del servidor"); return; }
+      parsed = await colombiaApi.invoke("mediflow-patient-search", { cedula: clean, tipo_doc: tipoDoc, include_appointments: true });
+    } catch (e: any) {
+      setLoading(false);
+      setError(`Error de conexión: ${e.message}`);
+      return;
+    }
+    setLoading(false);
     if (!parsed?.success) { setError(parsed?.alert || "No se encontró información para este documento"); return; }
     setResult(parsed);
   };

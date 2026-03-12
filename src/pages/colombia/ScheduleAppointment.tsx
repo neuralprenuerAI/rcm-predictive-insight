@@ -114,8 +114,9 @@ export default function ScheduleAppointment() {
     try {
       const scheduled_at = `${form.scheduled_date}T${form.scheduled_time}:00`;
 
-      const { data, error: apiError } = await colombiaApi.invoke<ScheduleResult>("mediflow-schedule-appointment", {
-        body: {
+      let parsed: ScheduleResult;
+      try {
+        parsed = await colombiaApi.invoke("mediflow-schedule-appointment", {
           cedula: patient.cedula,
           tipo_doc: patient.tipo_doc,
           especialidad: form.especialidad,
@@ -125,18 +126,9 @@ export default function ScheduleAppointment() {
           sede: form.sede,
           motivo_consulta: form.motivo_consulta,
           send_notification: form.send_notification,
-        },
-      });
-
-      if (apiError) { setError(apiError.message); return; }
-
-      let parsed: ScheduleResult;
-      try {
-        const body = typeof data === "string" ? JSON.parse(data) : data;
-        const bodyStr = (body as any)?.body;
-        parsed = typeof bodyStr === "string" ? JSON.parse(bodyStr) : bodyStr ?? body;
-      } catch {
-        setError("Error al procesar la respuesta del servidor");
+        });
+      } catch (e: any) {
+        setError(e.message || "Error de conexión.");
         return;
       }
 
