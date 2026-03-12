@@ -31,6 +31,7 @@ import PatientSearch from "./pages/colombia/PatientSearch";
 import ScheduleAppointment from "./pages/colombia/ScheduleAppointment";
 import BillingQueue from "./pages/colombia/BillingQueue";
 import RadicacionTracker from "./pages/colombia/RadicacionTracker";
+import GlosaManagement from "./pages/colombia/GlosaManagement";
 
 const ComingSoon = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
