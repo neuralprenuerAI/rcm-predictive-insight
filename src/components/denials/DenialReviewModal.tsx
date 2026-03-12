@@ -189,11 +189,16 @@ export default function DenialReviewModal({
           total_denied: denial.denied_amount,
           net_recovery_opportunity: denial.denied_amount,
         },
-        code_analysis: (re.allCarcCodes || denial.denial_codes || []).map((c: any) => ({
-          code: c.code || c.carc || "",
-          description: c.description || c.carcDescription || "",
-          plain_english: c.description || c.carcDescription || "",
+        code_analysis: (denial.denial_codes && denial.denial_codes.length > 0
+          ? denial.denial_codes
+          : re.allCarcCodes || []
+        ).map((c: any) => ({
+          code: c.carc || c.code || "",
+          description: c.carcDescription || c.description || "",
+          plain_english: c.carcDescription || c.description || "",
           challengeable: true,
+          amount: c.amount,
+          groupCode: c.groupCode,
         })),
         win_probability: {
           overall: denial.ai_confidence ?? 0,
@@ -747,7 +752,13 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
               {analysis.timely_filing.days_remaining !== undefined && (
                 <div>
                   <p className="text-xs text-muted-foreground">Days Remaining</p>
-                  <Badge className={analysis.timely_filing.days_remaining > 30 ? "bg-green-600" : analysis.timely_filing.days_remaining >= 10 ? "bg-yellow-500" : "bg-red-600"}>{analysis.timely_filing.days_remaining} days</Badge>
+                  {analysis.timely_filing.days_remaining < 0 ? (
+                    <Badge className="bg-red-600 text-white">EXPIRED</Badge>
+                  ) : (
+                    <Badge className={analysis.timely_filing.days_remaining > 30 ? "bg-green-600" : "bg-orange-500"}>
+                      {analysis.timely_filing.days_remaining} days
+                    </Badge>
+                  )}
                 </div>
               )}
               {analysis.timely_filing.warning && (
