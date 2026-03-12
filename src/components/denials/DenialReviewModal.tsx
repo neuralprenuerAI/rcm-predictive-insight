@@ -100,6 +100,11 @@ interface AnalysisData {
   recommended_action?: string;
   recommended_reasoning?: string;
   alternative_actions?: Array<{ action?: string; description?: string; pros?: string[]; cons?: string[]; success_likelihood?: number }>;
+  urgency_rationale?: string;
+  required_documentation?: string[];
+  biller_checklist?: string[];
+  service_lines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null; lineDenialSummary?: string }>;
+  notes?: string;
 }
 
 interface FixStep {
