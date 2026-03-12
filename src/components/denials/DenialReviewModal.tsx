@@ -57,15 +57,22 @@ interface DenialReviewModalProps {
       fixInstructions?: string[];
       appealAssessment?: {
         recommendedAction?: string;
+        appealSuccessProbability?: number;
         appealSuccessProbabilityRationale?: string;
+        urgencyRationale?: string;
         isAppealable?: boolean;
         isCorrectableAndResubmittable?: boolean;
         isWriteOff?: boolean;
       };
       allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
+      allAdjustmentCodes?: Array<{ carc?: string; carcDescription?: string; amount?: number; groupCode?: string }>;
       denialCategory?: string;
       netRecoverableAmount?: number;
       estimatedRecovery?: number;
+      requiredDocumentation?: string[];
+      billerChecklist?: string[];
+      serviceLines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null; lineDenialSummary?: string }>;
+      notes?: string;
       [key: string]: any;
     };
     claim?: { claim_id: string } | null;
@@ -93,6 +100,11 @@ interface AnalysisData {
   recommended_action?: string;
   recommended_reasoning?: string;
   alternative_actions?: Array<{ action?: string; description?: string; pros?: string[]; cons?: string[]; success_likelihood?: number }>;
+  urgency_rationale?: string;
+  required_documentation?: string[];
+  biller_checklist?: string[];
+  service_lines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null; lineDenialSummary?: string }>;
+  notes?: string;
 }
 
 interface FixStep {
@@ -192,12 +204,11 @@ export default function DenialReviewModal({
       const recoveryAmount = re.netRecoverableAmount ?? re.estimatedRecovery ?? 
         ((denial.billed_amount ?? 0) - (denial.paid_amount ?? 0));
 
-      // CARC codes: display as CO-{carc}
-      const carcCodes = (denial.denial_codes && denial.denial_codes.length > 0
-        ? denial.denial_codes
-        : re.allCarcCodes || []
-      ).map((c: any) => ({
-        code: c.groupCode ? `${c.groupCode}-${c.carc || c.code || ""}` : (c.carc || c.code || ""),
+      // CARC codes: prefer allAdjustmentCodes, then denial_codes, then allCarcCodes
+      const rawCodes = re.allAdjustmentCodes?.length ? re.allAdjustmentCodes
+        : (denial.denial_codes?.length ? denial.denial_codes : re.allCarcCodes || []);
+      const carcCodes = rawCodes.map((c: any) => ({
+        code: `CO-${c.carc || c.code || ""}`,
         description: c.carcDescription || c.description || "",
         plain_english: c.carcDescription || c.description || "",
         challengeable: true,
@@ -205,15 +216,18 @@ export default function DenialReviewModal({
         groupCode: c.groupCode,
       }));
 
+      // Win probability from appealSuccessProbability (0-100)
+      const winProbValue = assessment.appealSuccessProbability ?? denial.ai_confidence ?? 0;
+
       // Alternative actions from booleans
       const altActions: AnalysisData["alternative_actions"] = [];
       if (assessment.isAppealable) {
         altActions.push({
           action: "appeal",
           description: "File a formal appeal with supporting documentation",
-          pros: ["Strong chance of recovery based on AI analysis"],
-          cons: ["Requires time and documentation"],
-          success_likelihood: denial.ai_confidence ?? undefined,
+          pros: [assessment.urgencyRationale || "Strong chance of recovery based on AI analysis"],
+          cons: ["Requires time and supporting documentation"],
+          success_likelihood: winProbValue,
         });
       }
       if (assessment.isCorrectableAndResubmittable) {
@@ -228,8 +242,8 @@ export default function DenialReviewModal({
       altActions.push({
         action: "write_off",
         description: "Accept the denial and write off the balance",
-        pros: ["Avoids administrative costs"],
-        cons: ["Loss of revenue"],
+        pros: ["Avoids further administrative costs"],
+        cons: [`Loss of revenue of $${(recoveryAmount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`],
         success_likelihood: 0,
       });
 
@@ -243,7 +257,7 @@ export default function DenialReviewModal({
         },
         code_analysis: carcCodes,
         win_probability: {
-          overall: denial.ai_confidence ?? 0,
+          overall: winProbValue,
           factors_for: assessment.appealSuccessProbabilityRationale
             ? [assessment.appealSuccessProbabilityRationale]
             : [],
@@ -259,6 +273,11 @@ export default function DenialReviewModal({
           ? { appeal_deadline: denial.appeal_deadline, days_remaining: Math.ceil((new Date(denial.appeal_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
           : undefined,
         alternative_actions: altActions,
+        urgency_rationale: assessment.urgencyRationale || undefined,
+        required_documentation: re.requiredDocumentation || undefined,
+        biller_checklist: re.billerChecklist || undefined,
+        service_lines: re.serviceLines || undefined,
+        notes: re.notes || undefined,
       };
       setAnalysis(enhancedAnalysis);
       if (denialId) onContentGenerated?.(denialId, "analysis");
@@ -903,6 +922,115 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ── Service Lines ── */}
+      {analysis.service_lines && analysis.service_lines.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Service Lines
+            </h3>
+            <div className="space-y-2">
+              {analysis.service_lines.map((line, i) => (
+                <Card key={i}>
+                  <CardContent className="py-3 px-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <code className="text-sm font-semibold bg-muted px-2 py-0.5 rounded">{line.cptCode}</code>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {line.billedAmount !== undefined && <span>Billed: ${line.billedAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>}
+                        {line.paidAmount !== undefined && <span>Paid: ${line.paidAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>}
+                        {line.modifier && <Badge variant="outline" className="text-[10px]">{line.modifier}</Badge>}
+                      </div>
+                    </div>
+                    {line.lineDenialSummary && <p className="text-sm text-muted-foreground">{line.lineDenialSummary}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ── Urgency ── */}
+      {analysis.urgency_rationale && (
+        <>
+          <Separator />
+          <section>
+            <Card className="border-orange-300 bg-orange-50">
+              <CardContent className="py-4 px-4">
+                <h4 className="text-sm font-semibold text-orange-800 flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4" /> Urgency
+                </h4>
+                <p className="text-sm text-orange-900">{analysis.urgency_rationale}</p>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Required Documentation ── */}
+      {analysis.required_documentation && analysis.required_documentation.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Required Documentation
+            </h3>
+            <Card>
+              <CardContent className="py-4 px-4">
+                <ul className="space-y-1.5">
+                  {analysis.required_documentation.map((doc, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="text-primary mt-0.5 shrink-0 font-bold">{i + 1}.</span>
+                      <span>{doc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Biller Checklist ── */}
+      {analysis.biller_checklist && analysis.biller_checklist.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Biller Checklist
+            </h3>
+            <Card>
+              <CardContent className="py-4 px-4">
+                <ul className="space-y-1.5">
+                  {analysis.biller_checklist.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Notes ── */}
+      {analysis.notes && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Notes
+            </h3>
+            <div className="bg-muted/50 border rounded-lg p-4">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{analysis.notes}</p>
             </div>
           </section>
         </>
