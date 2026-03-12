@@ -57,15 +57,22 @@ interface DenialReviewModalProps {
       fixInstructions?: string[];
       appealAssessment?: {
         recommendedAction?: string;
+        appealSuccessProbability?: number;
         appealSuccessProbabilityRationale?: string;
+        urgencyRationale?: string;
         isAppealable?: boolean;
         isCorrectableAndResubmittable?: boolean;
         isWriteOff?: boolean;
       };
       allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
+      allAdjustmentCodes?: Array<{ carc?: string; carcDescription?: string; amount?: number; groupCode?: string }>;
       denialCategory?: string;
       netRecoverableAmount?: number;
       estimatedRecovery?: number;
+      requiredDocumentation?: string[];
+      billerChecklist?: string[];
+      serviceLines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null; lineDenialSummary?: string }>;
+      notes?: string;
       [key: string]: any;
     };
     claim?: { claim_id: string } | null;
