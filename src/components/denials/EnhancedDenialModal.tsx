@@ -147,6 +147,7 @@ export default function EnhancedDenialModal({
     const maxAttempts = 24;
     const intervalMs = 5000;
     let attempts = 0;
+    let consecutiveErrors = 0;
 
     const poll = async () => {
       attempts++;
@@ -155,14 +156,24 @@ export default function EnhancedDenialModal({
           body: { master_job_id: masterJobId },
         });
 
-        console.log(`Poll attempt ${attempts}:`, response?.status, error ? `error: ${error.message}` : "");
-
+        // Treat awsApi-level errors as retryable
         if (error) {
-          setAnalyzing(false);
-          setStatusText("");
-          toast({ title: "Polling Failed", description: error.message, variant: "destructive" });
+          consecutiveErrors++;
+          console.error(`Poll attempt ${attempts} error (${consecutiveErrors} consecutive):`, error.message);
+
+          if (consecutiveErrors >= 3) {
+            setAnalyzing(false);
+            setStatusText("");
+            toast({ title: "Connection Error", description: "Connection error after multiple retries. Please refresh and try again.", variant: "destructive" });
+            return;
+          }
+
+          setTimeout(poll, intervalMs);
           return;
         }
+
+        consecutiveErrors = 0; // reset on success
+        console.log(`Poll attempt ${attempts}:`, response?.status);
 
         if (response?.status === "complete") {
           console.log("ENHANCED RESULT:", JSON.stringify(response, null, 2));
@@ -193,10 +204,18 @@ export default function EnhancedDenialModal({
         setTimeout(poll, intervalMs);
 
       } catch (err) {
-        console.error("Poll error:", err);
-        setAnalyzing(false);
-        setStatusText("");
-        toast({ title: "Polling Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+        consecutiveErrors++;
+        console.error(`Poll attempt ${attempts} error (${consecutiveErrors} consecutive):`, err instanceof Error ? err.message : err);
+
+        if (consecutiveErrors >= 3) {
+          setAnalyzing(false);
+          setStatusText("");
+          toast({ title: "Connection Error", description: "Connection error after multiple retries. Please refresh and try again.", variant: "destructive" });
+          return;
+        }
+
+        // Retry on transient error
+        setTimeout(poll, intervalMs);
       }
     };
 
