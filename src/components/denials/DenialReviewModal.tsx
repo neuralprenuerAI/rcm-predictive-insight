@@ -368,7 +368,7 @@ export default function DenialReviewModal({
 
   // ── Generate Fix Instructions ──
   const generateFix = async () => {
-    if (!denialId) return;
+    if (!denialId || hasEnhancedData) return; // Skip API when enhanced data exists
     setLoadingFix(true);
     try {
       const res = await awsApi.invoke("fix-instructions", { body: { denialId } });
