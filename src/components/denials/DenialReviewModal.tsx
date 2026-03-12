@@ -177,6 +177,9 @@ export default function DenialReviewModal({
 
   const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
 
+  // Determine if enhanced data is available — skip ALL API calls when true
+  const hasEnhancedData = denial?.raw_extraction?.appealAssessment != null;
+
   // ── On open: run analysis + check cached data ──
   useEffect(() => {
     if (!open || !denialId) return;
@@ -195,8 +198,8 @@ export default function DenialReviewModal({
     setOpenPhases(new Set());
     setActivePanel(initialView || "analysis");
 
-    // If raw_extraction exists, build analysis from enhanced data
-    if (denial?.raw_extraction) {
+    // If enhanced data exists, build analysis from raw_extraction — NO API calls
+    if (hasEnhancedData && denial?.raw_extraction) {
       const re = denial.raw_extraction;
       const assessment = re.appealAssessment || {};
 
