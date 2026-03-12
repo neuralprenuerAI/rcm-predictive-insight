@@ -926,6 +926,115 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
           </section>
         </>
       )}
+
+      {/* ── Service Lines ── */}
+      {analysis.service_lines && analysis.service_lines.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Service Lines
+            </h3>
+            <div className="space-y-2">
+              {analysis.service_lines.map((line, i) => (
+                <Card key={i}>
+                  <CardContent className="py-3 px-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <code className="text-sm font-semibold bg-muted px-2 py-0.5 rounded">{line.cptCode}</code>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {line.billedAmount !== undefined && <span>Billed: ${line.billedAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>}
+                        {line.paidAmount !== undefined && <span>Paid: ${line.paidAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>}
+                        {line.modifier && <Badge variant="outline" className="text-[10px]">{line.modifier}</Badge>}
+                      </div>
+                    </div>
+                    {line.lineDenialSummary && <p className="text-sm text-muted-foreground">{line.lineDenialSummary}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ── Urgency ── */}
+      {analysis.urgency_rationale && (
+        <>
+          <Separator />
+          <section>
+            <Card className="border-orange-300 bg-orange-50">
+              <CardContent className="py-4 px-4">
+                <h4 className="text-sm font-semibold text-orange-800 flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4" /> Urgency
+                </h4>
+                <p className="text-sm text-orange-900">{analysis.urgency_rationale}</p>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Required Documentation ── */}
+      {analysis.required_documentation && analysis.required_documentation.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Required Documentation
+            </h3>
+            <Card>
+              <CardContent className="py-4 px-4">
+                <ul className="space-y-1.5">
+                  {analysis.required_documentation.map((doc, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="text-primary mt-0.5 shrink-0 font-bold">{i + 1}.</span>
+                      <span>{doc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Biller Checklist ── */}
+      {analysis.biller_checklist && analysis.biller_checklist.length > 0 && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Biller Checklist
+            </h3>
+            <Card>
+              <CardContent className="py-4 px-4">
+                <ul className="space-y-1.5">
+                  {analysis.biller_checklist.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      )}
+
+      {/* ── Notes ── */}
+      {analysis.notes && (
+        <>
+          <Separator />
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Notes
+            </h3>
+            <div className="bg-muted/50 border rounded-lg p-4">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{analysis.notes}</p>
+            </div>
+          </section>
+        </>
+      )}
     </>
   );
 }
