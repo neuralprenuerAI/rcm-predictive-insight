@@ -58,9 +58,14 @@ interface DenialReviewModalProps {
       appealAssessment?: {
         recommendedAction?: string;
         appealSuccessProbabilityRationale?: string;
+        isAppealable?: boolean;
+        isCorrectableAndResubmittable?: boolean;
+        isWriteOff?: boolean;
       };
       allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
       denialCategory?: string;
+      netRecoverableAmount?: number;
+      estimatedRecovery?: number;
       [key: string]: any;
     };
     claim?: { claim_id: string } | null;
@@ -181,33 +186,71 @@ export default function DenialReviewModal({
     // If raw_extraction exists, build analysis from enhanced data
     if (denial?.raw_extraction) {
       const re = denial.raw_extraction;
+      const assessment = re.appealAssessment || {};
+
+      // Recovery amount
+      const recoveryAmount = re.netRecoverableAmount ?? re.estimatedRecovery ?? 
+        ((denial.billed_amount ?? 0) - (denial.paid_amount ?? 0));
+
+      // CARC codes: display as CO-{carc}
+      const carcCodes = (denial.denial_codes && denial.denial_codes.length > 0
+        ? denial.denial_codes
+        : re.allCarcCodes || []
+      ).map((c: any) => ({
+        code: c.groupCode ? `${c.groupCode}-${c.carc || c.code || ""}` : (c.carc || c.code || ""),
+        description: c.carcDescription || c.description || "",
+        plain_english: c.carcDescription || c.description || "",
+        challengeable: true,
+        amount: c.amount,
+        groupCode: c.groupCode,
+      }));
+
+      // Alternative actions from booleans
+      const altActions: AnalysisData["alternative_actions"] = [];
+      if (assessment.isAppealable) {
+        altActions.push({
+          action: "appeal",
+          description: "File a formal appeal with supporting documentation",
+          pros: ["Strong chance of recovery based on AI analysis"],
+          cons: ["Requires time and documentation"],
+          success_likelihood: denial.ai_confidence ?? undefined,
+        });
+      }
+      if (assessment.isCorrectableAndResubmittable) {
+        altActions.push({
+          action: "correct_and_resubmit",
+          description: "Correct the claim errors and resubmit to payer",
+          pros: ["Faster resolution than appeal", "Addresses root cause directly"],
+          cons: ["May still be denied if underlying issue persists"],
+        });
+      }
+      // Always show write-off as last resort
+      altActions.push({
+        action: "write_off",
+        description: "Accept the denial and write off the balance",
+        pros: ["Avoids administrative costs"],
+        cons: ["Loss of revenue"],
+        success_likelihood: 0,
+      });
+
       const enhancedAnalysis: AnalysisData = {
         claim_summary: {
           overview: re.denialRootCause || undefined,
           total_billed: denial.billed_amount,
           total_paid: denial.paid_amount ?? undefined,
           total_denied: denial.denied_amount,
-          net_recovery_opportunity: denial.denied_amount,
+          net_recovery_opportunity: recoveryAmount,
         },
-        code_analysis: (denial.denial_codes && denial.denial_codes.length > 0
-          ? denial.denial_codes
-          : re.allCarcCodes || []
-        ).map((c: any) => ({
-          code: c.carc || c.code || "",
-          description: c.carcDescription || c.description || "",
-          plain_english: c.carcDescription || c.description || "",
-          challengeable: true,
-          amount: c.amount,
-          groupCode: c.groupCode,
-        })),
+        code_analysis: carcCodes,
         win_probability: {
           overall: denial.ai_confidence ?? 0,
-          factors_for: re.appealAssessment?.appealSuccessProbabilityRationale
-            ? [re.appealAssessment.appealSuccessProbabilityRationale]
+          factors_for: assessment.appealSuccessProbabilityRationale
+            ? [assessment.appealSuccessProbabilityRationale]
             : [],
           factors_against: [],
         },
-        recommended_action: re.appealAssessment?.recommendedAction || undefined,
+        recommended_action: assessment.recommendedAction || undefined,
+        recommended_reasoning: re.fixInstructions?.[0] || undefined,
         full_analysis_text: [
           re.denialRootCause,
           re.crossReferenceFindings?.crossReferenceVerdict,
@@ -215,6 +258,7 @@ export default function DenialReviewModal({
         timely_filing: denial.appeal_deadline
           ? { appeal_deadline: denial.appeal_deadline, days_remaining: Math.ceil((new Date(denial.appeal_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
           : undefined,
+        alternative_actions: altActions,
       };
       setAnalysis(enhancedAnalysis);
       if (denialId) onContentGenerated?.(denialId, "analysis");
