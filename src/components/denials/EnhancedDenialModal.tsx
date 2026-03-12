@@ -147,7 +147,6 @@ export default function EnhancedDenialModal({
     const maxAttempts = 60;
     const intervalMs = 5000;
     let attempts = 0;
-    let consecutiveErrors = 0;
 
     const poll = async () => {
       attempts++;
@@ -156,23 +155,19 @@ export default function EnhancedDenialModal({
           body: { master_job_id: masterJobId },
         });
 
-        // Treat awsApi-level errors as retryable
+        // Network / awsApi-level error — retry silently, never stop
         if (error) {
-          consecutiveErrors++;
-          console.error(`Poll attempt ${attempts} error (${consecutiveErrors} consecutive):`, error.message);
-
-          if (consecutiveErrors >= 3) {
+          console.warn(`Poll attempt ${attempts} failed, retrying...`, error.message);
+          if (attempts >= maxAttempts) {
             setAnalyzing(false);
             setStatusText("");
-            toast({ title: "Connection Error", description: "Connection error after multiple retries. Please refresh and try again.", variant: "destructive" });
+            toast({ title: "Connection Issue", description: "Connection issue. Please refresh the page to see your results.", variant: "destructive" });
             return;
           }
-
           setTimeout(poll, intervalMs);
           return;
         }
 
-        consecutiveErrors = 0; // reset on success
         console.log(`Poll attempt ${attempts}:`, response?.status);
 
         if (response?.status === "complete") {
@@ -196,25 +191,21 @@ export default function EnhancedDenialModal({
         if (attempts >= maxAttempts) {
           setAnalyzing(false);
           setStatusText("");
-          toast({ title: "Analysis Timed Out", description: "Analysis timed out after 5 minutes. Please try again.", variant: "destructive" });
+          toast({ title: "Analysis Timed Out", description: "Analysis timed out after 5 minutes. Please refresh the page to see results.", variant: "destructive" });
           return;
         }
 
-        // Continue polling
         setTimeout(poll, intervalMs);
 
       } catch (err) {
-        consecutiveErrors++;
-        console.error(`Poll attempt ${attempts} error (${consecutiveErrors} consecutive):`, err instanceof Error ? err.message : err);
-
-        if (consecutiveErrors >= 3) {
+        // Network error — DO NOT stop, just retry silently
+        console.warn(`Poll attempt ${attempts} failed, retrying...`, err instanceof Error ? err.message : err);
+        if (attempts >= maxAttempts) {
           setAnalyzing(false);
           setStatusText("");
-          toast({ title: "Connection Error", description: "Connection error after multiple retries. Please refresh and try again.", variant: "destructive" });
+          toast({ title: "Connection Issue", description: "Connection issue. Please refresh the page to see your results.", variant: "destructive" });
           return;
         }
-
-        // Retry on transient error
         setTimeout(poll, intervalMs);
       }
     };
