@@ -196,7 +196,7 @@ export default function EnhancedDenialModal({
         if (attempts >= maxAttempts) {
           setAnalyzing(false);
           setStatusText("");
-          toast({ title: "Analysis Timed Out", description: "Analysis timed out after 120 seconds. Please try again.", variant: "destructive" });
+          toast({ title: "Analysis Timed Out", description: "Analysis timed out after 5 minutes. Please try again.", variant: "destructive" });
           return;
         }
 
