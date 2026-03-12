@@ -752,7 +752,13 @@ function AnalysisContent({ analysis, winProb, winColor }: { analysis: AnalysisDa
               {analysis.timely_filing.days_remaining !== undefined && (
                 <div>
                   <p className="text-xs text-muted-foreground">Days Remaining</p>
-                  <Badge className={analysis.timely_filing.days_remaining > 30 ? "bg-green-600" : analysis.timely_filing.days_remaining >= 10 ? "bg-yellow-500" : "bg-red-600"}>{analysis.timely_filing.days_remaining} days</Badge>
+                  {analysis.timely_filing.days_remaining < 0 ? (
+                    <Badge className="bg-red-600 text-white">EXPIRED</Badge>
+                  ) : (
+                    <Badge className={analysis.timely_filing.days_remaining > 30 ? "bg-green-600" : "bg-orange-500"}>
+                      {analysis.timely_filing.days_remaining} days
+                    </Badge>
+                  )}
                 </div>
               )}
               {analysis.timely_filing.warning && (
