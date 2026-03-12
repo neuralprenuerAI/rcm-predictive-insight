@@ -58,9 +58,14 @@ interface DenialReviewModalProps {
       appealAssessment?: {
         recommendedAction?: string;
         appealSuccessProbabilityRationale?: string;
+        isAppealable?: boolean;
+        isCorrectableAndResubmittable?: boolean;
+        isWriteOff?: boolean;
       };
       allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
       denialCategory?: string;
+      netRecoverableAmount?: number;
+      estimatedRecovery?: number;
       [key: string]: any;
     };
     claim?: { claim_id: string } | null;
