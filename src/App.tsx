@@ -32,6 +32,7 @@ import ScheduleAppointment from "./pages/colombia/ScheduleAppointment";
 import BillingQueue from "./pages/colombia/BillingQueue";
 import RadicacionTracker from "./pages/colombia/RadicacionTracker";
 import GlosaManagement from "./pages/colombia/GlosaManagement";
+import ColombiaConfig from "./pages/colombia/ColombiaConfig";
 
 const ComingSoon = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
@@ -92,7 +93,7 @@ const App = () => (
               <Route path="/colombia/radicaciones" element={<RadicacionTracker />} />
               <Route path="/colombia/glosas" element={<GlosaManagement />} />
               <Route path="/colombia/reportes" element={<ComingSoon title="Reportes" />} />
-              <Route path="/colombia/configuracion" element={<ComingSoon title="Configuración" />} />
+              <Route path="/colombia/configuracion" element={<ColombiaConfig />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
