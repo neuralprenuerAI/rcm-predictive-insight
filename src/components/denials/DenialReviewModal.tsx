@@ -204,12 +204,11 @@ export default function DenialReviewModal({
       const recoveryAmount = re.netRecoverableAmount ?? re.estimatedRecovery ?? 
         ((denial.billed_amount ?? 0) - (denial.paid_amount ?? 0));
 
-      // CARC codes: display as CO-{carc}
-      const carcCodes = (denial.denial_codes && denial.denial_codes.length > 0
-        ? denial.denial_codes
-        : re.allCarcCodes || []
-      ).map((c: any) => ({
-        code: c.groupCode ? `${c.groupCode}-${c.carc || c.code || ""}` : (c.carc || c.code || ""),
+      // CARC codes: prefer allAdjustmentCodes, then denial_codes, then allCarcCodes
+      const rawCodes = re.allAdjustmentCodes?.length ? re.allAdjustmentCodes
+        : (denial.denial_codes?.length ? denial.denial_codes : re.allCarcCodes || []);
+      const carcCodes = rawCodes.map((c: any) => ({
+        code: `CO-${c.carc || c.code || ""}`,
         description: c.carcDescription || c.description || "",
         plain_english: c.carcDescription || c.description || "",
         challengeable: true,
@@ -217,15 +216,18 @@ export default function DenialReviewModal({
         groupCode: c.groupCode,
       }));
 
+      // Win probability from appealSuccessProbability (0-100)
+      const winProbValue = assessment.appealSuccessProbability ?? denial.ai_confidence ?? 0;
+
       // Alternative actions from booleans
       const altActions: AnalysisData["alternative_actions"] = [];
       if (assessment.isAppealable) {
         altActions.push({
           action: "appeal",
           description: "File a formal appeal with supporting documentation",
-          pros: ["Strong chance of recovery based on AI analysis"],
-          cons: ["Requires time and documentation"],
-          success_likelihood: denial.ai_confidence ?? undefined,
+          pros: [assessment.urgencyRationale || "Strong chance of recovery based on AI analysis"],
+          cons: ["Requires time and supporting documentation"],
+          success_likelihood: winProbValue,
         });
       }
       if (assessment.isCorrectableAndResubmittable) {
@@ -240,8 +242,8 @@ export default function DenialReviewModal({
       altActions.push({
         action: "write_off",
         description: "Accept the denial and write off the balance",
-        pros: ["Avoids administrative costs"],
-        cons: ["Loss of revenue"],
+        pros: ["Avoids further administrative costs"],
+        cons: [`Loss of revenue of $${(recoveryAmount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`],
         success_likelihood: 0,
       });
 
@@ -255,7 +257,7 @@ export default function DenialReviewModal({
         },
         code_analysis: carcCodes,
         win_probability: {
-          overall: denial.ai_confidence ?? 0,
+          overall: winProbValue,
           factors_for: assessment.appealSuccessProbabilityRationale
             ? [assessment.appealSuccessProbabilityRationale]
             : [],
@@ -271,6 +273,11 @@ export default function DenialReviewModal({
           ? { appeal_deadline: denial.appeal_deadline, days_remaining: Math.ceil((new Date(denial.appeal_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
           : undefined,
         alternative_actions: altActions,
+        urgency_rationale: assessment.urgencyRationale || undefined,
+        required_documentation: re.requiredDocumentation || undefined,
+        biller_checklist: re.billerChecklist || undefined,
+        service_lines: re.serviceLines || undefined,
+        notes: re.notes || undefined,
       };
       setAnalysis(enhancedAnalysis);
       if (denialId) onContentGenerated?.(denialId, "analysis");
