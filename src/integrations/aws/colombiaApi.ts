@@ -4,39 +4,60 @@
  * Same pattern as awsApi.ts — uses API Gateway prod stage.
  */
 
-const API_BASE = import.meta.env.VITE_AWS_API_URL || "https://c7hp082ru5.execute-api.us-east-2.amazonaws.com/prod";
+import { supabase } from "@/integrations/supabase/client";
+import { registerApiCall, unregisterApiCall } from "@/hooks/useIdleTimeout";
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  try {
-    const { supabase } = await import("@/integrations/supabase/client");
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token
-      ? { Authorization: `Bearer ${session.access_token}` }
-      : {};
-  } catch {
-    return {};
-  }
-}
+const API_BASE = import.meta.env.VITE_AWS_API_URL || "https://c7hp082ru5.execute-api.us-east-2.amazonaws.com/prod";
 
 export const colombiaApi = {
   /**
    * invoke(functionName, body)
    * POST /functions/v1/{functionName}
    * Returns parsed JSON body from Lambda response.
+   * Injects user_id + Authorization from Supabase session (same as awsApi).
    */
   async invoke(functionName: string, body: Record<string, unknown> = {}): Promise<any> {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/functions/v1/${functionName}`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body:    JSON.stringify(body),
-    });
-    const json = await res.json();
-    // Unwrap Lambda proxy response if needed
-    if (json?.body && typeof json.body === "string") {
-      try { return JSON.parse(json.body); } catch { return json; }
+    const url = `${API_BASE}/functions/v1/${functionName}`;
+
+    registerApiCall();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      // Inject user_id if we have a session (don't override if already provided)
+      const requestBody: Record<string, unknown> = { ...body };
+      if (userId && !requestBody.user_id) {
+        requestBody.user_id = userId;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `HTTP ${res.status}: ${res.statusText}`;
+        try {
+          const errJson = JSON.parse(text);
+          msg = errJson.error || errJson.message || msg;
+        } catch { /* use default msg */ }
+        throw new Error(msg);
+      }
+
+      const json = await res.json();
+      // Unwrap Lambda proxy response if needed
+      if (json?.body && typeof json.body === "string") {
+        try { return JSON.parse(json.body); } catch { return json; }
+      }
+      return json;
+    } finally {
+      unregisterApiCall();
     }
-    return json;
   },
 };
 
@@ -86,14 +107,14 @@ export const getDashboardStats = (ips_id: string) =>
 export const sendNotification = (payload: Record<string, unknown>) =>
   colombiaApi.invoke("mediflow-notifications", payload);
 
-/** mediflow-glosa-fetcher (Week 3 Day 4) */
+/** mediflow-glosa-fetcher */
 export const fetchGlosas = (ips_id: string) =>
   colombiaApi.invoke("mediflow-glosa-fetcher", { ips_id });
 
-/** mediflow-glosa-classifier (Week 3 Day 5) */
+/** mediflow-glosa-classifier */
 export const classifyGlosa = (glosa_id: string, ips_id: string) =>
   colombiaApi.invoke("mediflow-glosa-classifier", { glosa_id, ips_id });
 
-/** mediflow-glosa-responder (Week 4) */
+/** mediflow-glosa-responder */
 export const respondGlosa = (glosa_id: string, ips_id: string, auto_submit = false) =>
   colombiaApi.invoke("mediflow-glosa-responder", { glosa_id, ips_id, auto_submit });
