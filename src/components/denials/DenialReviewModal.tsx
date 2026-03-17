@@ -49,6 +49,9 @@ interface DenialReviewModalProps {
     denied_amount?: number;
     ai_confidence?: number | null;
     appeal_deadline?: string | null;
+    allCarcCodes?: string[];
+    primaryCarcCode?: string | null;
+    primaryCarcDescription?: string | null;
     denial_codes?: Array<{ groupCode?: string; carc?: string; carcDescription?: string; amount?: number }>;
     cpt_lines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null }>;
     raw_extraction?: {
@@ -64,7 +67,9 @@ interface DenialReviewModalProps {
         isCorrectableAndResubmittable?: boolean;
         isWriteOff?: boolean;
       };
-      allCarcCodes?: Array<{ code?: string; description?: string; amount?: number; groupCode?: string }>;
+      allCarcCodes?: string[] | Array<{ code?: string; carc?: string; description?: string; carcDescription?: string; amount?: number; groupCode?: string }>;
+      primaryCarcCode?: string | null;
+      primaryCarcDescription?: string | null;
       allAdjustmentCodes?: Array<{ carc?: string; carcDescription?: string; amount?: number; groupCode?: string }>;
       denialCategory?: string;
       netRecoverableAmount?: number;
@@ -106,6 +111,71 @@ interface AnalysisData {
   service_lines?: Array<{ cptCode?: string; billedAmount?: number; paidAmount?: number; modifier?: string | null; lineDenialSummary?: string }>;
   notes?: string;
 }
+
+const normalizeCarcCode = (value: unknown): string => String(value ?? "").trim().replace(/^CO-/i, "");
+
+const buildCarcCodeAnalysis = (denial: DenialReviewModalProps["denial"]) => {
+  if (!denial) return [];
+
+  const rawExtraction = denial.raw_extraction;
+  const primaryCarcCode = normalizeCarcCode(denial.primaryCarcCode ?? rawExtraction?.primaryCarcCode);
+  const primaryCarcDescription = denial.primaryCarcDescription ?? rawExtraction?.primaryCarcDescription ?? "";
+
+  const allCarcCodesSource: any[] = Array.isArray(denial.allCarcCodes) && denial.allCarcCodes.length > 0
+    ? denial.allCarcCodes
+    : Array.isArray(rawExtraction?.allCarcCodes) && rawExtraction.allCarcCodes.length > 0
+      ? rawExtraction.allCarcCodes
+      : [];
+
+  const extractedDescriptions = new Map(
+    allCarcCodesSource
+      .map((item: any) => {
+        const code = normalizeCarcCode(typeof item === "string" ? item : item?.code ?? item?.carc);
+        const description = typeof item === "string" ? "" : item?.description ?? item?.carcDescription ?? "";
+        return [code, description] as const;
+      })
+      .filter(([code]) => Boolean(code))
+  );
+
+  const denialCodeDescriptions = new Map(
+    (denial.denial_codes ?? [])
+      .map((item) => [normalizeCarcCode(item.carc), item.carcDescription ?? ""] as const)
+      .filter(([code]) => Boolean(code))
+  );
+
+  const normalizedCarcCodes = allCarcCodesSource
+    .map((item: any) => normalizeCarcCode(typeof item === "string" ? item : item?.code ?? item?.carc))
+    .filter(Boolean);
+
+  if (normalizedCarcCodes.length > 0) {
+    return normalizedCarcCodes.map((codeNum) => {
+      const description = codeNum === primaryCarcCode
+        ? primaryCarcDescription || extractedDescriptions.get(codeNum) || denialCodeDescriptions.get(codeNum) || ""
+        : extractedDescriptions.get(codeNum) || denialCodeDescriptions.get(codeNum) || "";
+
+      return {
+        code: `CO-${codeNum}`,
+        description,
+        plain_english: description,
+        challengeable: true,
+      };
+    });
+  }
+
+  return (denial.denial_codes ?? [])
+    .map((item) => {
+      const codeNum = normalizeCarcCode(item.carc);
+      const description = item.carcDescription ?? "";
+
+      return {
+        code: codeNum ? `CO-${codeNum}` : "",
+        description,
+        plain_english: description,
+        challengeable: true,
+      };
+    })
+    .filter((item) => Boolean(item.code));
+};
 
 interface FixStep {
   step_number?: number; title: string; description?: string; action_type?: string; who?: string; urgent?: boolean; details?: string; if_blocked?: string;
@@ -183,11 +253,21 @@ export default function DenialReviewModal({
   // ── On open: run analysis + check cached data ──
   useEffect(() => {
     if (!open || !denialId) return;
+
+    console.log("[DenialReviewModal] allCarcCodes contains:", {
+      denialId,
+      allCarcCodes: denial?.allCarcCodes,
+      rawExtractionAllCarcCodes: denial?.raw_extraction?.allCarcCodes,
+      primaryCarcCode: denial?.primaryCarcCode ?? denial?.raw_extraction?.primaryCarcCode,
+      primaryCarcDescription: denial?.primaryCarcDescription ?? denial?.raw_extraction?.primaryCarcDescription,
+    });
+
     if (denialId === lastOpenedId) {
       // Same denial, just switch view if needed
       if (initialView) setActivePanel(initialView);
       return;
     }
+
     setLastOpenedId(denialId);
     // Reset state
     setAnalysis(null);
@@ -207,20 +287,7 @@ export default function DenialReviewModal({
       const recoveryAmount = re.netRecoverableAmount ?? re.estimatedRecovery ?? 
         ((denial.billed_amount ?? 0) - (denial.paid_amount ?? 0));
 
-      // CARC codes: prefer allCarcCodes, then denial_codes
-      const rawCodes = re.allCarcCodes?.length ? re.allCarcCodes
-        : (denial.denial_codes?.length ? denial.denial_codes : []);
-      const carcCodes = rawCodes.map((c: any) => {
-        const codeNum = typeof c === "string" ? c : (c.code || c.carc || "");
-        return {
-          code: `CO-${codeNum}`,
-          description: c.carcDescription || c.description || "",
-          plain_english: c.carcDescription || c.description || "",
-          challengeable: true,
-          amount: c.amount,
-          groupCode: c.groupCode,
-        };
-      });
+      const carcCodes = buildCarcCodeAnalysis(denial);
 
       // Win probability from appealSuccessProbability (0-100)
       const winProbValue = assessment.appealSuccessProbability ?? denial.ai_confidence ?? 0;
@@ -325,7 +392,10 @@ export default function DenialReviewModal({
       if (res.error) throw res.error;
       const d = res.data?.analysis || res.data;
       if (!d) throw new Error("No analysis data returned");
-      setAnalysis(d);
+
+      const carcCodes = buildCarcCodeAnalysis(denial);
+      setAnalysis(carcCodes.length > 0 ? { ...d, code_analysis: carcCodes } : d);
+
       if (denialId) onContentGenerated?.(denialId, "analysis");
     } catch (err: any) {
       setAnalysisError(err.message || "Analysis failed");
