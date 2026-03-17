@@ -207,17 +207,20 @@ export default function DenialReviewModal({
       const recoveryAmount = re.netRecoverableAmount ?? re.estimatedRecovery ?? 
         ((denial.billed_amount ?? 0) - (denial.paid_amount ?? 0));
 
-      // CARC codes: prefer allAdjustmentCodes, then denial_codes, then allCarcCodes
-      const rawCodes = re.allAdjustmentCodes?.length ? re.allAdjustmentCodes
-        : (denial.denial_codes?.length ? denial.denial_codes : re.allCarcCodes || []);
-      const carcCodes = rawCodes.map((c: any) => ({
-        code: `CO-${c.carc || c.code || ""}`,
-        description: c.carcDescription || c.description || "",
-        plain_english: c.carcDescription || c.description || "",
-        challengeable: true,
-        amount: c.amount,
-        groupCode: c.groupCode,
-      }));
+      // CARC codes: prefer allCarcCodes, then denial_codes
+      const rawCodes = re.allCarcCodes?.length ? re.allCarcCodes
+        : (denial.denial_codes?.length ? denial.denial_codes : []);
+      const carcCodes = rawCodes.map((c: any) => {
+        const codeNum = typeof c === "string" ? c : (c.code || c.carc || "");
+        return {
+          code: `CO-${codeNum}`,
+          description: c.carcDescription || c.description || "",
+          plain_english: c.carcDescription || c.description || "",
+          challengeable: true,
+          amount: c.amount,
+          groupCode: c.groupCode,
+        };
+      });
 
       // Win probability from appealSuccessProbability (0-100)
       const winProbValue = assessment.appealSuccessProbability ?? denial.ai_confidence ?? 0;
