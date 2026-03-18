@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { awsCrud } from "@/lib/awsCrud";
-import { awsApi } from "@/integrations/aws/awsApi";
+
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
