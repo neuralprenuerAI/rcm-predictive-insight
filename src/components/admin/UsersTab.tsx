@@ -169,7 +169,7 @@ export function UsersTab() {
         description: `User role changed to ${newRole.replace("_", " ")}`,
       });
 
-      fetchUsers();
+      setTimeout(() => fetchUsers(), 500);
     } catch (err: any) {
       toast({
         title: "Error",
