@@ -153,7 +153,16 @@ export function UsersTab() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      await awsCrud.update("user_roles", { role: newRole, updated_at: new Date().toISOString() }, { user_id: userId }, user.id);
+      await awsApi.invoke("crud", {
+        body: {
+          action: "update",
+          table: "user_roles",
+          data: { role: newRole },
+          where: { user_id: userId },
+          user_id: user.id,
+          caller_role: "super_admin"
+        }
+      });
 
       toast({
         title: "Role Updated",
