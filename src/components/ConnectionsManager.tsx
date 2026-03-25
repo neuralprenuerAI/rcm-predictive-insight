@@ -412,8 +412,9 @@ export default function ConnectionsManager() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      const resolved = await resolveAsyncResponse(data);
       // Add connectionId to result for saving
-      return { ...data, connectionId };
+      return { ...resolved, connectionId };
     },
     onSuccess: (data) => {
       setSyncResult(data);
@@ -450,7 +451,7 @@ export default function ConnectionsManager() {
     while (hasMore) {
       try {
         const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
-        const { data, error } = await awsApi.invoke('ecw-sync-data', {
+        const { data: rawData, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
             resource: 'ServiceRequest', 
@@ -463,7 +464,8 @@ export default function ConnectionsManager() {
         });
         
         if (error) throw error;
-        if (data?.error) throw new Error(data.error);
+        if (rawData?.error) throw new Error(rawData.error);
+        const data = await resolveAsyncResponse(rawData);
         
         // Collect results
         if (data.data?.entry) {
@@ -569,7 +571,7 @@ export default function ConnectionsManager() {
     while (hasMore) {
       try {
         const connEnvironment = (apiConnections.find((c: any) => c.id === connectionId)?.credentials as any)?.environment || 'sandbox';
-        const { data, error } = await awsApi.invoke('ecw-sync-data', {
+        const { data: rawData, error } = await awsApi.invoke('ecw-sync-data', {
           body: { 
             connectionId, 
             resource: 'Procedure', 
@@ -581,7 +583,8 @@ export default function ConnectionsManager() {
         });
         
         if (error) throw error;
-        if (data?.error) throw new Error(data.error);
+        if (rawData?.error) throw new Error(rawData.error);
+        const data = await resolveAsyncResponse(rawData);
         
         // Collect results
         if (data.data?.entry) {

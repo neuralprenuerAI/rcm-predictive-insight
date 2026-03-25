@@ -86,7 +86,7 @@ export default function Authorizations() {
         body: { connectionId }
       });
       if (error) throw error;
-      return data;
+      return await resolveAsyncResponse(data);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['authorizations'] });
