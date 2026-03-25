@@ -141,7 +141,7 @@ export default function PatientIntake() {
 
     setIsTestingEcw(true);
     try {
-      const testAccountNumber = `TEST${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      const testAccountNumber = `RCM-${Date.now().toString().slice(-8)}`;
       const response = await awsApi.invoke("ecw-patient-create", {
         body: {
           connectionId: ecwConnectionId,
