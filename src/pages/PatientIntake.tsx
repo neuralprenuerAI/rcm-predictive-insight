@@ -3,6 +3,7 @@ import { useDropzone } from "react-dropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
 import { isOxpsFile, convertOxpsIfNeeded } from "@/lib/oxpsConverter";
+import { resolveAsyncResponse } from "@/lib/asyncJobPoller";
 import { awsCrud } from "@/lib/awsCrud";
 import { findEcwConnectionByScope } from "@/lib/ecwConnectionResolver";
 import { Button } from "@/components/ui/button";
@@ -205,11 +206,20 @@ export default function PatientIntake() {
         body: { content: base64, filename, mimeType, provider: "aws" }
       });
 
-      if (ocrResponse.error || !ocrResponse.data?.success) {
-        throw new Error(ocrResponse.data?.error || "OCR failed");
+      if (ocrResponse.error) {
+        throw new Error("OCR failed");
       }
 
-      const extractedText = ocrResponse.data.ocr.text;
+      const ocrResult = await resolveAsyncResponse<{ success?: boolean; error?: string; ocr?: { text: string } }>(
+        ocrResponse.data,
+        (attempt) => setProgress(30 + Math.min(attempt, 15)),
+      );
+
+      if (!ocrResult?.success) {
+        throw new Error(ocrResult?.error || "OCR failed");
+      }
+
+      const extractedText = ocrResult.ocr?.text || "";
       setOcrText(extractedText);
       setProgress(50);
       setStep("extracting");
