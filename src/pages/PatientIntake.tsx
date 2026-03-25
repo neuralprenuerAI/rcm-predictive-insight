@@ -119,9 +119,13 @@ export default function PatientIntake() {
     if (!user) return;
     
     const allConnections = await awsCrud.select('api_connections', user.id);
-    const data = (allConnections || []).filter((c: any) =>
-      c.connection_type === 'ecw' && c.is_active === true
-    );
+    const data = (allConnections || []).filter((c: any) => {
+      if (c.connection_type !== 'ecw' || c.is_active !== true) return false;
+      const creds = c.credentials || {};
+      const hasSelectedScope = Array.isArray(creds.selected_scopes) && creds.selected_scopes.includes('patientCreate');
+      const hasScopeStr = typeof creds.scope === 'string' && creds.scope.includes('system/Patient.create');
+      return hasSelectedScope || hasScopeStr;
+    });
     
     if (data.length > 0) {
       setEcwConnections(data);
