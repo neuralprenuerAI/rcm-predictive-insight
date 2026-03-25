@@ -408,7 +408,7 @@ export default function PatientIntake() {
           throw new Error(`No ECW connection found with ${requiredScope} scope. Please create one in Connections.`);
         }
 
-        const accountNumber = `DOC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        const accountNumber = editedData.accountNumber || `RCM-${Date.now().toString().slice(-8)}`;
         const ecwFunction = isNewPatient ? "ecw-patient-create" : "ecw-patient-update";
         
         const ecwResponse = await awsApi.invoke(ecwFunction, {
