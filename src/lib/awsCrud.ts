@@ -85,12 +85,12 @@ export const awsCrud = {
     return result.data;
   },
 
-  bulkInsert: async <T = any>(table: string, data: Record<string, any>[], userId: string): Promise<CrudResponse<T>> => {
+  bulkInsert: async <T = any>(table: string, records: Record<string, any>[], userId: string): Promise<CrudResponse<T>> => {
     const result = await awsApi.invoke('crud', {
       body: {
         action: 'bulk_insert',
         table,
-        data,
+        records,
         user_id: userId
       }
     });
@@ -98,14 +98,14 @@ export const awsCrud = {
     return result.data;
   },
 
-  bulkUpsert: async <T = any>(table: string, data: Record<string, any>[], userId: string, onConflict?: string): Promise<CrudResponse<T>> => {
+  bulkUpsert: async <T = any>(table: string, records: Record<string, any>[], userId: string, conflictColumns?: string): Promise<CrudResponse<T>> => {
     const result = await awsApi.invoke('crud', {
       body: {
         action: 'bulk_upsert',
         table,
-        data,
-        user_id: userId,
-        on_conflict: onConflict
+        records,
+        conflict_columns: conflictColumns,
+        user_id: userId
       }
     });
     if (result.error) throw result.error;
