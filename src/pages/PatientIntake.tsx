@@ -210,7 +210,7 @@ export default function PatientIntake() {
         throw new Error("OCR failed");
       }
 
-      const ocrResult = await resolveAsyncResponse<{ success?: boolean; error?: string; ocr?: { text: string } }>(
+      const ocrResult = await resolveAsyncResponse<Record<string, any>>(
         ocrResponse.data,
         (attempt) => setProgress(30 + Math.min(attempt, 15)),
       );
@@ -219,7 +219,8 @@ export default function PatientIntake() {
         throw new Error(ocrResult?.error || "OCR failed");
       }
 
-      const extractedText = ocrResult.ocr?.text || "";
+      // Async result returns text at result.text; sync returns at ocr.text
+      const extractedText = ocrResult.text || ocrResult.ocr?.text || "";
       setOcrText(extractedText);
       setProgress(50);
       setStep("extracting");
