@@ -681,8 +681,11 @@ export default function ConnectionsManager() {
         const p = entry.resource;
         const name = p.name?.[0];
         const phone = p.telecom?.find((t: any) => t.system === 'phone')?.value;
+        const mobilePhone = p.telecom?.find((t: any) => t.system === 'phone' && t.use === 'mobile')?.value;
+        const homePhone = p.telecom?.find((t: any) => t.system === 'phone' && t.use === 'home')?.value;
         const email = p.telecom?.find((t: any) => t.system === 'email')?.value;
         const addr = p.address?.[0];
+        const mrn = p.identifier?.find((i: any) => i.use === 'secondary')?.value;
         
         return {
           external_id: p.id,
@@ -693,15 +696,18 @@ export default function ConnectionsManager() {
           date_of_birth: p.birthDate || null,
           gender: p.gender || null,
           phone: phone || null,
+          mobile_phone: mobilePhone || null,
+          home_phone: homePhone || null,
           email: email || null,
-          address_line1: addr?.line?.[0] || null,
+          address: addr?.line?.[0] || null,
           address_line2: addr?.line?.[1] || null,
           city: addr?.city || null,
           state: addr?.state || null,
           postal_code: addr?.postalCode || null,
+          mrn: mrn || null,
+          raw_fhir_data: p,
           user_id: user.id,
           last_synced_at: new Date().toISOString(),
-          raw_fhir_data: p,
         };
       });
       
