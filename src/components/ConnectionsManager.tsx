@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { awsApi } from "@/integrations/aws/awsApi";
 import { awsCrud } from "@/lib/awsCrud";
+import { resolveAsyncResponse } from "@/lib/asyncJobPoller";
 import { toast } from "sonner";
 import { 
   Plus, Plug, Trash2, Key, RefreshCw, ChevronDown, CheckCircle,
