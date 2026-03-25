@@ -226,6 +226,10 @@ export default function PatientIntake() {
       setStep("extracting");
       setProgress(60);
 
+      console.log('DEBUG OCR result:', JSON.stringify(ocrResult));
+      console.log('DEBUG extractedText length:', extractedText?.length);
+      console.log('DEBUG extractedText preview:', extractedText?.substring(0, 100));
+
       const extractResponse = await awsApi.invoke("extract-patient-from-document", {
         body: { ocrText: extractedText, documentType }
       });
