@@ -358,7 +358,7 @@ export default function PatientIntake() {
           city: editedData.city || null,
           state: editedData.state || null,
           postal_code: editedData.postalCode || null,
-          country: editedData.country || null,
+          
           marital_status: editedData.maritalStatus || null,
           race: editedData.race || null,
           ethnicity: editedData.ethnicity || null,
