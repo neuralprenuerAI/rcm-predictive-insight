@@ -140,6 +140,10 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
   "preferredLanguage": string | null,
   "race": string | null,
   "ethnicity": string | null,
+  "mrn": string | null,
+  "accountNumber": string | null,
+  "employer": string | null,
+  "employerStatus": string | null,
   "confidence": number,
   "extractedFields": string[]
 }`;
