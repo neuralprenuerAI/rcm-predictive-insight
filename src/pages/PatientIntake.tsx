@@ -242,8 +242,13 @@ export default function PatientIntake() {
         throw new Error(extractResponse.data?.error || "Extraction failed");
       }
 
-      setPatientData(extractResponse.data.patient);
-      setEditedData(extractResponse.data.patient);
+      // Map ssn to ssnLast4 if not already set
+      const patientResult = {
+        ...extractResponse.data.patient,
+        ssnLast4: extractResponse.data.patient.ssnLast4 || extractResponse.data.patient.ssn || null,
+      };
+      setPatientData(patientResult);
+      setEditedData(patientResult);
 
       // Capture eligibility data from response
       if (extractResponse.data.eligibility) {

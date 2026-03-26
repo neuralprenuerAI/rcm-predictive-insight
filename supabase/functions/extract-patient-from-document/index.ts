@@ -89,6 +89,9 @@ IMPORTANT RULES:
 6. For SSN, extract ONLY the last 4 digits for privacy
 7. Be conservative - if unsure, return null rather than guess
 8. Calculate a confidence score (0-1) based on how clear the extracted data is
+9. Look for MRN, URN, Unit #, or Medical Record Number fields
+10. Look for Account # or Account Number fields
+11. Look for employer name and employment status (employed, unemployed, retired, self-employed, student)
 
 DOCUMENT TYPE HINTS:
 - "patient_intake" = Patient registration/intake form
@@ -137,6 +140,10 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
   "preferredLanguage": string | null,
   "race": string | null,
   "ethnicity": string | null,
+  "mrn": string | null,
+  "accountNumber": string | null,
+  "employer": string | null,
+  "employerStatus": string | null,
   "confidence": number,
   "extractedFields": string[]
 }`;
@@ -261,6 +268,10 @@ function cleanExtractedData(data: any): ExtractedPatient {
     preferredLanguage: cleanString(data.preferredLanguage),
     race: cleanString(data.race),
     ethnicity: cleanString(data.ethnicity),
+    mrn: cleanString(data.mrn),
+    accountNumber: cleanString(data.accountNumber),
+    employer: cleanString(data.employer),
+    employerStatus: cleanString(data.employerStatus),
     confidence: typeof data.confidence === "number" ? Math.min(1, Math.max(0, data.confidence)) : 0.5,
     extractedFields: Array.isArray(data.extractedFields) ? data.extractedFields : [],
     rawText: data.rawText || ""
