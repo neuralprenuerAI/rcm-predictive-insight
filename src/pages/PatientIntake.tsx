@@ -20,6 +20,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 
+interface InsuranceItem {
+  rank: number;
+  insuranceName: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceGroupNumber: string | null;
+  insuranceSubscriberId: string | null;
+  insuranceSubscriberName: string | null;
+  insuranceSubscriberDob: string | null;
+  insuranceRelationship: string | null;
+  eligibility?: EligibilityData;
+}
+
 interface ExtractedPatient {
   firstName: string | null;
   middleName: string | null;
@@ -49,6 +61,7 @@ interface ExtractedPatient {
   insuranceSubscriberName: string | null;
   insuranceSubscriberDob: string | null;
   insuranceRelationship: string | null;
+  insurances?: InsuranceItem[];
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   emergencyContactRelationship: string | null;
@@ -109,6 +122,8 @@ export default function PatientIntake() {
   // Eligibility state
   const [eligibilityData, setEligibilityData] = useState<EligibilityData | null>(null);
   const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+  const [insurances, setInsurances] = useState<InsuranceItem[]>([]);
+  const [activeInsuranceTab, setActiveInsuranceTab] = useState("ins-0");
 
   useEffect(() => {
     loadEcwConnections();
@@ -250,6 +265,15 @@ export default function PatientIntake() {
       setPatientData(patientResult);
       setEditedData(patientResult);
 
+      // Populate multi-insurance state
+      const extractedInsurances: InsuranceItem[] = patientResult.insurances?.length > 0
+        ? patientResult.insurances.map((ins: any) => ({ ...ins, eligibility: undefined }))
+        : patientResult.insuranceName
+          ? [{ rank: 1, insuranceName: patientResult.insuranceName, insurancePolicyNumber: patientResult.insurancePolicyNumber, insuranceGroupNumber: patientResult.insuranceGroupNumber, insuranceSubscriberId: patientResult.insuranceSubscriberId, insuranceSubscriberName: patientResult.insuranceSubscriberName, insuranceSubscriberDob: patientResult.insuranceSubscriberDob, insuranceRelationship: patientResult.insuranceRelationship }]
+          : [];
+      setInsurances(extractedInsurances);
+      setActiveInsuranceTab("ins-0");
+
       // Capture eligibility data from response
       if (extractResponse.data.eligibility) {
         setEligibilityData(extractResponse.data.eligibility);
@@ -377,15 +401,27 @@ export default function PatientIntake() {
           employer_status: editedData.employerStatus || null,
           account_number: editedData.accountNumber || null,
           source: "document_intake",
-          insurance_info: {
-            name: editedData.insuranceName,
-            policyNumber: editedData.insurancePolicyNumber,
-            groupNumber: editedData.insuranceGroupNumber,
-            subscriberId: editedData.insuranceSubscriberId,
-            subscriberName: editedData.insuranceSubscriberName,
-            subscriberDob: editedData.insuranceSubscriberDob,
-            relationship: editedData.insuranceRelationship
-          }
+          insurance_info: insurances.length > 0
+            ? insurances.map(ins => ({
+                rank: ins.rank,
+                name: ins.insuranceName,
+                policyNumber: ins.insurancePolicyNumber,
+                groupNumber: ins.insuranceGroupNumber,
+                subscriberId: ins.insuranceSubscriberId,
+                subscriberName: ins.insuranceSubscriberName,
+                subscriberDob: ins.insuranceSubscriberDob,
+                relationship: ins.insuranceRelationship,
+                eligible: ins.eligibility?.eligible ?? null,
+              }))
+            : {
+                name: editedData.insuranceName,
+                policyNumber: editedData.insurancePolicyNumber,
+                groupNumber: editedData.insuranceGroupNumber,
+                subscriberId: editedData.insuranceSubscriberId,
+                subscriberName: editedData.insuranceSubscriberName,
+                subscriberDob: editedData.insuranceSubscriberDob,
+                relationship: editedData.insuranceRelationship
+              }
         };
 
         const result = await awsCrud.insert("patients", patientRecord, user.id);
@@ -475,6 +511,8 @@ export default function PatientIntake() {
     setPatientData(null);
     setEditedData({});
     setEligibilityData(null);
+    setInsurances([]);
+    setActiveInsuranceTab("ins-0");
   }
 
   function fileToBase64(file: File): Promise<string> {
@@ -1076,81 +1114,204 @@ export default function PatientIntake() {
 
                   {/* Insurance Tab */}
                   <TabsContent value="insurance" className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Insurance Name</Label>
-                        <Input
-                          value={editedData.insuranceName || ""}
-                          onChange={(e) => handleFieldChange("insuranceName", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Policy Number</Label>
-                        <Input
-                          value={editedData.insurancePolicyNumber || ""}
-                          onChange={(e) => handleFieldChange("insurancePolicyNumber", e.target.value)}
-                        />
-                      </div>
-                    </div>
+                    {insurances.length > 0 ? (
+                      <Tabs value={activeInsuranceTab} onValueChange={setActiveInsuranceTab}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <TabsList>
+                            {insurances.map((ins, idx) => (
+                              <TabsTrigger key={`ins-${idx}`} value={`ins-${idx}`} className="gap-1.5">
+                                Insurance {idx + 1}
+                                {ins.eligibility?.checked && ins.eligibility?.eligible && (
+                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                )}
+                                {ins.eligibility?.checked && !ins.eligibility?.eligible && (
+                                  <AlertCircle className="h-3 w-3 text-destructive" />
+                                )}
+                                {(!ins.eligibility || !ins.eligibility.checked) && (
+                                  <ShieldQuestion className="h-3 w-3 text-yellow-600" />
+                                )}
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const newIns: InsuranceItem = {
+                                rank: insurances.length + 1,
+                                insuranceName: null, insurancePolicyNumber: null, insuranceGroupNumber: null,
+                                insuranceSubscriberId: null, insuranceSubscriberName: null,
+                                insuranceSubscriberDob: null, insuranceRelationship: null,
+                              };
+                              setInsurances([...insurances, newIns]);
+                              setActiveInsuranceTab(`ins-${insurances.length}`);
+                            }}
+                          >
+                            + Add Insurance
+                          </Button>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Group Number</Label>
-                        <Input
-                          value={editedData.insuranceGroupNumber || ""}
-                          onChange={(e) => handleFieldChange("insuranceGroupNumber", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Subscriber ID</Label>
-                        <Input
-                          value={editedData.insuranceSubscriberId || ""}
-                          onChange={(e) => handleFieldChange("insuranceSubscriberId", e.target.value)}
-                        />
-                      </div>
-                    </div>
+                        {insurances.map((ins, idx) => {
+                          const updateInsField = (field: keyof InsuranceItem, value: string | null) => {
+                            setInsurances(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+                          };
+                          return (
+                            <TabsContent key={`ins-${idx}`} value={`ins-${idx}`} className="space-y-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium">
+                                  {idx === 0 ? "Primary" : idx === 1 ? "Secondary" : `Tertiary`} Insurance
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  {ins.eligibility?.checked && ins.eligibility?.eligible && (
+                                    <Badge className="bg-green-600 hover:bg-green-700 text-white">
+                                      <CheckCircle className="h-3 w-3 mr-1" /> Active ✅
+                                    </Badge>
+                                  )}
+                                  {ins.eligibility?.checked && !ins.eligibility?.eligible && (
+                                    <Badge variant="destructive">
+                                      <AlertCircle className="h-3 w-3 mr-1" /> Inactive ❌
+                                    </Badge>
+                                  )}
+                                  {(!ins.eligibility || !ins.eligibility.checked) && (
+                                    <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white">
+                                      <ShieldQuestion className="h-3 w-3 mr-1" /> Pending ⚠️
+                                    </Badge>
+                                  )}
+                                  {idx > 0 && (
+                                    <Button variant="ghost" size="sm" className="text-destructive"
+                                      onClick={() => {
+                                        setInsurances(prev => prev.filter((_, i) => i !== idx));
+                                        setActiveInsuranceTab("ins-0");
+                                      }}>Remove</Button>
+                                  )}
+                                </div>
+                              </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>Subscriber Name</Label>
-                        <Input
-                          value={editedData.insuranceSubscriberName || ""}
-                          onChange={(e) => handleFieldChange("insuranceSubscriberName", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Subscriber DOB</Label>
-                        <Input
-                          type={editedData.insuranceSubscriberDob ? "date" : "text"}
-                          value={editedData.insuranceSubscriberDob || ""}
-                          placeholder="YYYY-MM-DD"
-                          onFocus={(e) => { if (e.target.type === "text") e.target.type = "date"; }}
-                          onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
-                          onChange={(e) => handleFieldChange("insuranceSubscriberDob", e.target.value || null)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Relationship to Subscriber</Label>
-                        <Select
-                          value={editedData.insuranceRelationship || "none"}
-                          onValueChange={(v) => handleFieldChange("insuranceRelationship", v === "none" ? null : v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select relationship" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Not specified</SelectItem>
-                            <SelectItem value="self">Self</SelectItem>
-                            <SelectItem value="spouse">Spouse</SelectItem>
-                            <SelectItem value="child">Child</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Insurance Name</Label>
+                                  <Input value={ins.insuranceName || ""} onChange={(e) => updateInsField("insuranceName", e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Policy Number</Label>
+                                  <Input value={ins.insurancePolicyNumber || ""} onChange={(e) => updateInsField("insurancePolicyNumber", e.target.value)} />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Group Number</Label>
+                                  <Input value={ins.insuranceGroupNumber || ""} onChange={(e) => updateInsField("insuranceGroupNumber", e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Subscriber ID</Label>
+                                  <Input value={ins.insuranceSubscriberId || ""} onChange={(e) => updateInsField("insuranceSubscriberId", e.target.value)} />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Subscriber Name</Label>
+                                  <Input value={ins.insuranceSubscriberName || ""} onChange={(e) => updateInsField("insuranceSubscriberName", e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Subscriber DOB</Label>
+                                  <Input
+                                    type={ins.insuranceSubscriberDob ? "date" : "text"}
+                                    value={ins.insuranceSubscriberDob || ""}
+                                    placeholder="YYYY-MM-DD"
+                                    onFocus={(e) => { if (e.target.type === "text") e.target.type = "date"; }}
+                                    onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                                    onChange={(e) => updateInsField("insuranceSubscriberDob", e.target.value || null)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Relationship</Label>
+                                  <Select
+                                    value={ins.insuranceRelationship || "none"}
+                                    onValueChange={(v) => updateInsField("insuranceRelationship", v === "none" ? null : v)}
+                                  >
+                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Not specified</SelectItem>
+                                      <SelectItem value="self">Self</SelectItem>
+                                      <SelectItem value="spouse">Spouse</SelectItem>
+                                      <SelectItem value="child">Child</SelectItem>
+                                      <SelectItem value="other">Other</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
 
-                    {/* Eligibility Section */}
-                    {renderEligibilitySection()}
+                              {/* Per-insurance eligibility check */}
+                              <div className="border-t pt-4 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={isCheckingEligibility || !editedData.dateOfBirth}
+                                  onClick={async () => {
+                                    setIsCheckingEligibility(true);
+                                    try {
+                                      const resp = await awsApi.invoke("rcm-availity-eligibility", {
+                                        body: {
+                                          action: "check_eligibility",
+                                          memberId: ins.insuranceSubscriberId || ins.insurancePolicyNumber,
+                                          patientFirstName: editedData.firstName,
+                                          patientLastName: editedData.lastName,
+                                          patientBirthDate: editedData.dateOfBirth,
+                                          payerId: "BCBSTX",
+                                          use_demo: true
+                                        }
+                                      });
+                                      if (resp.data?.eligibility) {
+                                        setInsurances(prev => prev.map((item, i) => i === idx ? { ...item, eligibility: resp.data.eligibility } : item));
+                                        toast({
+                                          title: resp.data.eligibility.eligible ? "Coverage Verified ✅" : "Coverage Issue ❌",
+                                          description: resp.data.eligibility.status || "Check complete",
+                                        });
+                                      }
+                                    } catch (err: unknown) {
+                                      toast({ title: "Eligibility Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+                                    } finally {
+                                      setIsCheckingEligibility(false);
+                                    }
+                                  }}
+                                >
+                                  {isCheckingEligibility ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+                                  Verify Coverage
+                                </Button>
+                                {!editedData.dateOfBirth && (
+                                  <p className="text-xs text-muted-foreground mt-1">Enter DOB on Demographics tab first</p>
+                                )}
+                              </div>
+                            </TabsContent>
+                          );
+                        })}
+                      </Tabs>
+                    ) : (
+                      /* Fallback: single insurance from editedData */
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Insurance Name</Label>
+                            <Input value={editedData.insuranceName || ""} onChange={(e) => handleFieldChange("insuranceName", e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Policy Number</Label>
+                            <Input value={editedData.insurancePolicyNumber || ""} onChange={(e) => handleFieldChange("insurancePolicyNumber", e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Group Number</Label>
+                            <Input value={editedData.insuranceGroupNumber || ""} onChange={(e) => handleFieldChange("insuranceGroupNumber", e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Subscriber ID</Label>
+                            <Input value={editedData.insuranceSubscriberId || ""} onChange={(e) => handleFieldChange("insuranceSubscriberId", e.target.value)} />
+                          </div>
+                        </div>
+                        {renderEligibilitySection()}
+                      </>
+                    )}
                   </TabsContent>
 
                   {/* Other Tab */}
