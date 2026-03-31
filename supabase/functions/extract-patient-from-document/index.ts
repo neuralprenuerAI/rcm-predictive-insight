@@ -5,35 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-interface ExtractedPatient {
-  // Name
-  firstName: string | null;
-  middleName: string | null;
-  lastName: string | null;
-  prefix: string | null;
-  suffix: string | null;
-  
-  // Demographics
-  dateOfBirth: string | null;
-  gender: "male" | "female" | "other" | "unknown" | null;
-  ssn: string | null;
-  maritalStatus: string | null;
-  
-  // Contact
-  email: string | null;
-  phoneHome: string | null;
-  phoneWork: string | null;
-  phoneMobile: string | null;
-  
-  // Address
-  addressLine1: string | null;
-  addressLine2: string | null;
-  city: string | null;
-  state: string | null;
-  postalCode: string | null;
-  country: string | null;
-  
-  // Insurance
+interface InsuranceItem {
+  rank: number;
   insuranceName: string | null;
   insurancePolicyNumber: string | null;
   insuranceGroupNumber: string | null;
@@ -41,18 +14,46 @@ interface ExtractedPatient {
   insuranceSubscriberName: string | null;
   insuranceSubscriberDob: string | null;
   insuranceRelationship: string | null;
-  
-  // Emergency Contact
+}
+
+interface ExtractedPatient {
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  prefix: string | null;
+  suffix: string | null;
+  dateOfBirth: string | null;
+  gender: "male" | "female" | "other" | "unknown" | null;
+  ssn: string | null;
+  maritalStatus: string | null;
+  email: string | null;
+  phoneHome: string | null;
+  phoneWork: string | null;
+  phoneMobile: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  insuranceName: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceGroupNumber: string | null;
+  insuranceSubscriberId: string | null;
+  insuranceSubscriberName: string | null;
+  insuranceSubscriberDob: string | null;
+  insuranceRelationship: string | null;
+  insurances: InsuranceItem[];
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   emergencyContactRelationship: string | null;
-  
-  // Medical
   preferredLanguage: string | null;
   race: string | null;
   ethnicity: string | null;
-  
-  // Metadata
+  mrn: string | null;
+  accountNumber: string | null;
+  employer: string | null;
+  employerStatus: string | null;
   confidence: number;
   extractedFields: string[];
   rawText: string;
@@ -92,6 +93,7 @@ IMPORTANT RULES:
 9. Look for MRN, URN, Unit #, or Medical Record Number fields
 10. Look for Account # or Account Number fields
 11. Look for employer name and employment status (employed, unemployed, retired, self-employed, student)
+12. If the document contains MULTIPLE insurance plans (primary, secondary, tertiary), extract ALL of them into the "insurances" array with rank 1=primary, 2=secondary, 3=tertiary
 
 DOCUMENT TYPE HINTS:
 - "patient_intake" = Patient registration/intake form
@@ -106,7 +108,9 @@ DOCUMENT TYPE HINTS:
 ${ocrText}
 ---
 
-Return ONLY a valid JSON object with these fields (use null for missing fields):
+Return ONLY a valid JSON object with these fields (use null for missing fields).
+IMPORTANT: Extract ALL insurance plans found into the "insurances" array. Keep top-level insurance fields for the PRIMARY insurance.
+
 {
   "firstName": string | null,
   "middleName": string | null,
@@ -134,6 +138,18 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
   "insuranceSubscriberName": string | null,
   "insuranceSubscriberDob": string | null,
   "insuranceRelationship": string | null,
+  "insurances": [
+    {
+      "rank": 1,
+      "insuranceName": string | null,
+      "insurancePolicyNumber": string | null,
+      "insuranceGroupNumber": string | null,
+      "insuranceSubscriberId": string | null,
+      "insuranceSubscriberName": string | null,
+      "insuranceSubscriberDob": string | null,
+      "insuranceRelationship": string | null
+    }
+  ],
   "emergencyContactName": string | null,
   "emergencyContactPhone": string | null,
   "emergencyContactRelationship": string | null,
@@ -148,7 +164,6 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
   "extractedFields": string[]
 }`;
 
-    // Call Lovable AI Gateway
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -162,7 +177,7 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
           { role: "user", content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 2048,
+        max_tokens: 4096,
       }),
     });
 
@@ -182,7 +197,6 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
 
     console.log("AI extraction complete, parsing response...");
 
-    // Parse the JSON from AI response
     let extractedData: ExtractedPatient;
     try {
       let cleanJson = aiText.trim();
@@ -204,10 +218,9 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
       throw new Error("Failed to parse extracted data from AI response");
     }
 
-    // Validate and clean the data
     const cleanedData = cleanExtractedData(extractedData);
 
-    console.log(`Extracted ${cleanedData.extractedFields.length} fields with ${(cleanedData.confidence * 100).toFixed(0)}% confidence`);
+    console.log(`Extracted ${cleanedData.extractedFields.length} fields with ${(cleanedData.confidence * 100).toFixed(0)}% confidence, ${cleanedData.insurances.length} insurance(s)`);
 
     return new Response(
       JSON.stringify({
@@ -233,8 +246,30 @@ Return ONLY a valid JSON object with these fields (use null for missing fields):
   }
 });
 
-// Helper function to clean and validate extracted data
+function cleanInsuranceItem(item: any): InsuranceItem {
+  return {
+    rank: typeof item.rank === "number" ? item.rank : 1,
+    insuranceName: cleanString(item.insuranceName),
+    insurancePolicyNumber: cleanString(item.insurancePolicyNumber),
+    insuranceGroupNumber: cleanString(item.insuranceGroupNumber),
+    insuranceSubscriberId: cleanString(item.insuranceSubscriberId),
+    insuranceSubscriberName: cleanString(item.insuranceSubscriberName),
+    insuranceSubscriberDob: cleanDate(item.insuranceSubscriberDob),
+    insuranceRelationship: cleanString(item.insuranceRelationship),
+  };
+}
+
 function cleanExtractedData(data: any): ExtractedPatient {
+  // Build insurances array
+  let insurances: InsuranceItem[] = [];
+  if (Array.isArray(data.insurances) && data.insurances.length > 0) {
+    insurances = data.insurances.map((ins: any) => cleanInsuranceItem(ins));
+  } else if (data.insuranceName) {
+    // Fallback: build from top-level fields
+    insurances = [cleanInsuranceItem({ rank: 1, ...data })];
+  }
+  insurances.sort((a: InsuranceItem, b: InsuranceItem) => a.rank - b.rank);
+
   return {
     firstName: cleanString(data.firstName),
     middleName: cleanString(data.middleName),
@@ -262,6 +297,7 @@ function cleanExtractedData(data: any): ExtractedPatient {
     insuranceSubscriberName: cleanString(data.insuranceSubscriberName),
     insuranceSubscriberDob: cleanDate(data.insuranceSubscriberDob),
     insuranceRelationship: cleanString(data.insuranceRelationship),
+    insurances,
     emergencyContactName: cleanString(data.emergencyContactName),
     emergencyContactPhone: cleanPhone(data.emergencyContactPhone),
     emergencyContactRelationship: cleanString(data.emergencyContactRelationship),
@@ -287,25 +323,19 @@ function cleanString(value: any): string | null {
 function cleanDate(value: any): string | null {
   if (!value) return null;
   const dateStr = String(value).trim();
-  
   const formats = [
     /^(\d{4})-(\d{2})-(\d{2})$/,
     /^(\d{2})\/(\d{2})\/(\d{4})$/,
     /^(\d{2})-(\d{2})-(\d{4})$/,
   ];
-  
   for (const format of formats) {
     const match = dateStr.match(format);
     if (match) {
-      if (format === formats[0]) {
-        return dateStr;
-      } else {
-        const [_, month, day, year] = match;
-        return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-      }
+      if (format === formats[0]) return dateStr;
+      const [_, month, day, year] = match;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
     }
   }
-  
   return null;
 }
 
@@ -322,39 +352,27 @@ function cleanGender(value: any): "male" | "female" | "other" | "unknown" | null
 function cleanSSN(value: any): string | null {
   if (!value) return null;
   const digits = String(value).replace(/\D/g, "");
-  if (digits.length >= 4) {
-    return digits.slice(-4);
-  }
-  return null;
+  return digits.length >= 4 ? digits.slice(-4) : null;
 }
 
 function cleanEmail(value: any): string | null {
   if (!value) return null;
   const email = String(value).trim().toLowerCase();
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return email;
-  }
-  return null;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
 
 function cleanPhone(value: any): string | null {
   if (!value) return null;
   const digits = String(value).replace(/\D/g, "");
-  if (digits.length === 10) {
-    return digits;
-  }
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return digits.slice(1);
-  }
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
   return digits.length >= 10 ? digits.slice(-10) : null;
 }
 
 function cleanState(value: any): string | null {
   if (!value) return null;
   const state = String(value).trim().toUpperCase();
-  if (/^[A-Z]{2}$/.test(state)) {
-    return state;
-  }
+  if (/^[A-Z]{2}$/.test(state)) return state;
   const stateMap: Record<string, string> = {
     "ALABAMA": "AL", "ALASKA": "AK", "ARIZONA": "AZ", "ARKANSAS": "AR",
     "CALIFORNIA": "CA", "COLORADO": "CO", "CONNECTICUT": "CT", "DELAWARE": "DE",
