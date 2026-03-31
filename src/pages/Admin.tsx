@@ -171,6 +171,26 @@ export default function Admin() {
             <AnalyticsTab />
           </TabsContent>
 
+          {/* Organizations Tab */}
+          <TabsContent value="organizations" className="mt-6">
+            <OrganizationsTab />
+          </TabsContent>
+
+          {/* Feature Access Tab */}
+          <TabsContent value="feature-access" className="mt-6">
+            <FeatureAccessTab />
+          </TabsContent>
+
+          {/* Usage & Billing Tab */}
+          <TabsContent value="usage" className="mt-6">
+            <UsageBillingTab />
+          </TabsContent>
+
+          {/* Org Users Tab */}
+          <TabsContent value="org-users" className="mt-6">
+            <OrgUsersTab />
+          </TabsContent>
+
           {/* Security Tab - Super Admin Only */}
           {isSuperAdmin && (
             <TabsContent value="security" className="mt-6">
