@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { awsApi } from "@/integrations/aws/awsApi";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, Activity, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, Activity, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+
+const AWS_API_URL = import.meta.env.VITE_AWS_API_URL;
 
 interface UsageSummary {
   total_calls: number;
@@ -46,23 +47,43 @@ export function UsageBillingTab() {
 
       console.log("UsageBillingTab: Fetching usage for user", userId, "month", selectedMonth);
 
-      const [summaryRes, recentRes] = await Promise.all([
-        awsApi.invoke("rcm-usage-query", {
-          body: { action: "get_summary", user_id: userId, month: selectedMonth },
+      const [summaryResponse, recentResponse] = await Promise.all([
+        fetch(`${AWS_API_URL}/functions/v1/rcm-usage-query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_summary', user_id: userId, month_year: selectedMonth }),
         }),
-        awsApi.invoke("rcm-usage-query", {
-          body: { action: "get_recent", user_id: userId },
+        fetch(`${AWS_API_URL}/functions/v1/rcm-usage-query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_recent', user_id: userId }),
         }),
       ]);
 
-      console.log("UsageBillingTab: summary response", JSON.stringify(summaryRes));
-      console.log("UsageBillingTab: recent response", JSON.stringify(recentRes));
+      const summaryData = await summaryResponse.json();
+      const recentData = await recentResponse.json();
 
-      if (summaryRes.error) throw summaryRes.error;
-      if (recentRes.error) throw recentRes.error;
+      console.log("UsageBillingTab: summary response", JSON.stringify(summaryData));
+      console.log("UsageBillingTab: recent response", JSON.stringify(recentData));
 
-      setSummary(summaryRes.data);
-      setRecent(recentRes.data?.records || recentRes.data?.data || []);
+      if (!summaryResponse.ok) throw new Error(summaryData.error || `HTTP ${summaryResponse.status}`);
+      if (!recentResponse.ok) throw new Error(recentData.error || `HTTP ${recentResponse.status}`);
+
+      // Lambda returns { success, summary, total_this_month } directly
+      const byEventType: Record<string, number> = {};
+      if (Array.isArray(summaryData.summary)) {
+        summaryData.summary.forEach((item: any) => {
+          byEventType[item.event_type || item.name || 'unknown'] = item.count || item.total || 0;
+        });
+      }
+
+      setSummary({
+        total_calls: summaryData.total_this_month ?? 0,
+        by_event_type: byEventType,
+        period: selectedMonth,
+      });
+
+      setRecent(recentData.records || recentData.data || []);
     } catch (err: any) {
       console.error("UsageBillingTab: fetch failed", err);
       toast.error("Failed to load usage data: " + err.message);
