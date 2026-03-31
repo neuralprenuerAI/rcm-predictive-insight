@@ -944,24 +944,6 @@ export default function PatientIntake() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label>MRN</Label>
-                        <Input
-                          value={editedData.mrn || ""}
-                          onChange={(e) => handleFieldChange("mrn", e.target.value)}
-                          placeholder="Medical Record Number"
-                          className={patientData.extractedFields.includes("mrn") ? "border-green-500" : ""}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Account Number</Label>
-                        <Input
-                          value={editedData.accountNumber || ""}
-                          onChange={(e) => handleFieldChange("accountNumber", e.target.value)}
-                          placeholder="Account #"
-                          className={patientData.extractedFields.includes("accountNumber") ? "border-green-500" : ""}
-                        />
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-4">
