@@ -20,6 +20,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 
+interface InsuranceItem {
+  rank: number;
+  insuranceName: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceGroupNumber: string | null;
+  insuranceSubscriberId: string | null;
+  insuranceSubscriberName: string | null;
+  insuranceSubscriberDob: string | null;
+  insuranceRelationship: string | null;
+  eligibility?: EligibilityData;
+}
+
 interface ExtractedPatient {
   firstName: string | null;
   middleName: string | null;
@@ -49,6 +61,7 @@ interface ExtractedPatient {
   insuranceSubscriberName: string | null;
   insuranceSubscriberDob: string | null;
   insuranceRelationship: string | null;
+  insurances?: InsuranceItem[];
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   emergencyContactRelationship: string | null;
