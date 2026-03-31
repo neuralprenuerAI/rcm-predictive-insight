@@ -86,7 +86,7 @@ export default function Admin() {
       {/* Tabs Navigation */}
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-8 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-12 h-auto p-1">
             <TabsTrigger value="overview" className="flex items-center gap-2 py-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
