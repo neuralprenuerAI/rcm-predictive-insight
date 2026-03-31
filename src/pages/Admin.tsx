@@ -9,6 +9,10 @@ import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 import { DevToolsTab } from "@/components/admin/DevToolsTab";
 import { DocumentsTab } from "@/components/admin/DocumentsTab";
 import { SecurityAuditTab } from "@/components/admin/SecurityAuditTab";
+import { OrganizationsTab } from "@/components/admin/OrganizationsTab";
+import { FeatureAccessTab } from "@/components/admin/FeatureAccessTab";
+import { UsageBillingTab } from "@/components/admin/UsageBillingTab";
+import { OrgUsersTab } from "@/components/admin/OrgUsersTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -23,7 +27,11 @@ import {
   ArrowLeft,
   UserPlus,
   LayoutDashboard,
-  FileText
+  FileText,
+  Building2,
+  ToggleRight,
+  Activity,
+  Users2
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -78,7 +86,7 @@ export default function Admin() {
       {/* Tabs Navigation */}
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-8 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-12 h-auto p-1">
             <TabsTrigger value="overview" className="flex items-center gap-2 py-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -102,6 +110,22 @@ export default function Admin() {
             <TabsTrigger value="analytics" className="flex items-center gap-2 py-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="organizations" className="flex items-center gap-2 py-2">
+              <Building2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Orgs</span>
+            </TabsTrigger>
+            <TabsTrigger value="feature-access" className="flex items-center gap-2 py-2">
+              <ToggleRight className="h-4 w-4" />
+              <span className="hidden sm:inline">Features</span>
+            </TabsTrigger>
+            <TabsTrigger value="usage" className="flex items-center gap-2 py-2">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Usage</span>
+            </TabsTrigger>
+            <TabsTrigger value="org-users" className="flex items-center gap-2 py-2">
+              <Users2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Org Users</span>
             </TabsTrigger>
             {isSuperAdmin && (
               <TabsTrigger value="security" className="flex items-center gap-2 py-2">
@@ -145,6 +169,26 @@ export default function Admin() {
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="mt-6">
             <AnalyticsTab />
+          </TabsContent>
+
+          {/* Organizations Tab */}
+          <TabsContent value="organizations" className="mt-6">
+            <OrganizationsTab />
+          </TabsContent>
+
+          {/* Feature Access Tab */}
+          <TabsContent value="feature-access" className="mt-6">
+            <FeatureAccessTab />
+          </TabsContent>
+
+          {/* Usage & Billing Tab */}
+          <TabsContent value="usage" className="mt-6">
+            <UsageBillingTab />
+          </TabsContent>
+
+          {/* Org Users Tab */}
+          <TabsContent value="org-users" className="mt-6">
+            <OrgUsersTab />
           </TabsContent>
 
           {/* Security Tab - Super Admin Only */}
