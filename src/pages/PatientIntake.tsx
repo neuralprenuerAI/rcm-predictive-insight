@@ -499,6 +499,8 @@ export default function PatientIntake() {
     setPatientData(null);
     setEditedData({});
     setEligibilityData(null);
+    setInsurances([]);
+    setActiveInsuranceTab("ins-0");
   }
 
   function fileToBase64(file: File): Promise<string> {
