@@ -37,6 +37,15 @@ export function UsageBillingTab() {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
 
+      if (!userId) {
+        console.error("UsageBillingTab: No authenticated user found");
+        toast.error("You must be logged in to view usage data");
+        setLoading(false);
+        return;
+      }
+
+      console.log("UsageBillingTab: Fetching usage for user", userId, "month", selectedMonth);
+
       const [summaryRes, recentRes] = await Promise.all([
         awsApi.invoke("rcm-usage-query", {
           body: { action: "get_summary", user_id: userId, month: selectedMonth },
@@ -46,12 +55,16 @@ export function UsageBillingTab() {
         }),
       ]);
 
+      console.log("UsageBillingTab: summary response", JSON.stringify(summaryRes));
+      console.log("UsageBillingTab: recent response", JSON.stringify(recentRes));
+
       if (summaryRes.error) throw summaryRes.error;
       if (recentRes.error) throw recentRes.error;
 
       setSummary(summaryRes.data);
       setRecent(recentRes.data?.records || recentRes.data?.data || []);
     } catch (err: any) {
+      console.error("UsageBillingTab: fetch failed", err);
       toast.error("Failed to load usage data: " + err.message);
     } finally {
       setLoading(false);
