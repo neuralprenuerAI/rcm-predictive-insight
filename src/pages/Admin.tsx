@@ -9,6 +9,10 @@ import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 import { DevToolsTab } from "@/components/admin/DevToolsTab";
 import { DocumentsTab } from "@/components/admin/DocumentsTab";
 import { SecurityAuditTab } from "@/components/admin/SecurityAuditTab";
+import { OrganizationsTab } from "@/components/admin/OrganizationsTab";
+import { FeatureAccessTab } from "@/components/admin/FeatureAccessTab";
+import { UsageBillingTab } from "@/components/admin/UsageBillingTab";
+import { OrgUsersTab } from "@/components/admin/OrgUsersTab";
 import { InviteUserModal } from "@/components/admin/InviteUserModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -23,7 +27,11 @@ import {
   ArrowLeft,
   UserPlus,
   LayoutDashboard,
-  FileText
+  FileText,
+  Building2,
+  ToggleRight,
+  Activity,
+  Users2
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
