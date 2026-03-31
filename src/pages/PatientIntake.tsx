@@ -265,6 +265,15 @@ export default function PatientIntake() {
       setPatientData(patientResult);
       setEditedData(patientResult);
 
+      // Populate multi-insurance state
+      const extractedInsurances: InsuranceItem[] = patientResult.insurances?.length > 0
+        ? patientResult.insurances.map((ins: any) => ({ ...ins, eligibility: undefined }))
+        : patientResult.insuranceName
+          ? [{ rank: 1, insuranceName: patientResult.insuranceName, insurancePolicyNumber: patientResult.insurancePolicyNumber, insuranceGroupNumber: patientResult.insuranceGroupNumber, insuranceSubscriberId: patientResult.insuranceSubscriberId, insuranceSubscriberName: patientResult.insuranceSubscriberName, insuranceSubscriberDob: patientResult.insuranceSubscriberDob, insuranceRelationship: patientResult.insuranceRelationship }]
+          : [];
+      setInsurances(extractedInsurances);
+      setActiveInsuranceTab("ins-0");
+
       // Capture eligibility data from response
       if (extractResponse.data.eligibility) {
         setEligibilityData(extractResponse.data.eligibility);
