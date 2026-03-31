@@ -401,15 +401,27 @@ export default function PatientIntake() {
           employer_status: editedData.employerStatus || null,
           account_number: editedData.accountNumber || null,
           source: "document_intake",
-          insurance_info: {
-            name: editedData.insuranceName,
-            policyNumber: editedData.insurancePolicyNumber,
-            groupNumber: editedData.insuranceGroupNumber,
-            subscriberId: editedData.insuranceSubscriberId,
-            subscriberName: editedData.insuranceSubscriberName,
-            subscriberDob: editedData.insuranceSubscriberDob,
-            relationship: editedData.insuranceRelationship
-          }
+          insurance_info: insurances.length > 0
+            ? insurances.map(ins => ({
+                rank: ins.rank,
+                name: ins.insuranceName,
+                policyNumber: ins.insurancePolicyNumber,
+                groupNumber: ins.insuranceGroupNumber,
+                subscriberId: ins.insuranceSubscriberId,
+                subscriberName: ins.insuranceSubscriberName,
+                subscriberDob: ins.insuranceSubscriberDob,
+                relationship: ins.insuranceRelationship,
+                eligible: ins.eligibility?.eligible ?? null,
+              }))
+            : {
+                name: editedData.insuranceName,
+                policyNumber: editedData.insurancePolicyNumber,
+                groupNumber: editedData.insuranceGroupNumber,
+                subscriberId: editedData.insuranceSubscriberId,
+                subscriberName: editedData.insuranceSubscriberName,
+                subscriberDob: editedData.insuranceSubscriberDob,
+                relationship: editedData.insuranceRelationship
+              }
         };
 
         const result = await awsCrud.insert("patients", patientRecord, user.id);
