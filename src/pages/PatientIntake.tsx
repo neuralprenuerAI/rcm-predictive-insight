@@ -257,10 +257,15 @@ export default function PatientIntake() {
         throw new Error(extractResponse.data?.error || "Extraction failed");
       }
 
-      // Map ssn to ssnLast4 if not already set
+      // Map Lambda field names to frontend state field names
+      const patient = extractResponse.data.patient;
       const patientResult = {
-        ...extractResponse.data.patient,
-        ssnLast4: extractResponse.data.patient.ssnLast4 || extractResponse.data.patient.ssn || null,
+        ...patient,
+        ssnLast4: patient.ssnLast4 || patient.ssn || null,
+        // Lambda returns homePhone/workPhone/mobilePhone, frontend uses phoneHome/phoneWork/phoneMobile
+        phoneHome: patient.homePhone || patient.phoneHome || null,
+        phoneWork: patient.workPhone || patient.phoneWork || null,
+        phoneMobile: patient.mobilePhone || patient.phoneMobile || null,
       };
       setPatientData(patientResult);
       setEditedData(patientResult);
