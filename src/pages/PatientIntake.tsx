@@ -122,6 +122,8 @@ export default function PatientIntake() {
   // Eligibility state
   const [eligibilityData, setEligibilityData] = useState<EligibilityData | null>(null);
   const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+  const [insurances, setInsurances] = useState<InsuranceItem[]>([]);
+  const [activeInsuranceTab, setActiveInsuranceTab] = useState("ins-0");
 
   useEffect(() => {
     loadEcwConnections();
