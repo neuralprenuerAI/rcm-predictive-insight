@@ -111,6 +111,22 @@ export default function Admin() {
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Analytics</span>
             </TabsTrigger>
+            <TabsTrigger value="organizations" className="flex items-center gap-2 py-2">
+              <Building2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Orgs</span>
+            </TabsTrigger>
+            <TabsTrigger value="feature-access" className="flex items-center gap-2 py-2">
+              <ToggleRight className="h-4 w-4" />
+              <span className="hidden sm:inline">Features</span>
+            </TabsTrigger>
+            <TabsTrigger value="usage" className="flex items-center gap-2 py-2">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Usage</span>
+            </TabsTrigger>
+            <TabsTrigger value="org-users" className="flex items-center gap-2 py-2">
+              <Users2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Org Users</span>
+            </TabsTrigger>
             {isSuperAdmin && (
               <TabsTrigger value="security" className="flex items-center gap-2 py-2">
                 <Shield className="h-4 w-4" />
